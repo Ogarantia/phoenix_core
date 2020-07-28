@@ -18,6 +18,8 @@ class upstride::UpstrideConv2DFunctor<upstride::device::CPU, float>::Backend {
     dnnl::convolution_forward::primitive_desc convPrimDesc;
     dnnl::convolution_forward convPrim;
 
+    const Shape inputShape, filterShape, outputShape;
+
    public:
     /**
      * @brief Configures convolution operation
@@ -47,7 +49,21 @@ class upstride::UpstrideConv2DFunctor<upstride::device::CPU, float>::Backend {
                                             dnnl::memory::dims{0, 0}, dnnl::memory::dims{0, 0}),
                                    // fixme: pass actual convolution parameters
                                    convPrimDesc(convDesc, context.getEngine()),
-                                   convPrim(convPrimDesc) {}
+                                   convPrim(convPrimDesc),
+                                   inputShape(inputShape),
+                                   filterShape(filterShape),
+                                   outputShape(outputShape) {}
+
+    /**
+     * @brief Checks whether the backend is up-to-date
+     * @param inputShape        Input tensor shape
+     * @param filterShape       Filter tensor shape
+     * @param outputTensor      Output tensor shape
+     * @return true if the backend is up-to-date, false otherwise.
+     */
+    const bool isUpToDate(const Shape& inputShape, const Shape& filterShape, const Shape& outputTensor) const {
+        return this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape;
+    }
 
     /**
      * @brief Executes convolution operation
@@ -67,13 +83,15 @@ class upstride::UpstrideConv2DFunctor<upstride::device::CPU, float>::Backend {
     }
 };
 
-
 void upstride::UpstrideConv2DFunctor<upstride::device::CPU, float>::operator()(
     const Tensor<const float>& inputTensor,
     const Tensor<const float>& filterTensor,
     Tensor<float>& outputTensor,
     DataFormat dataFormat) {
-    // fixme: check if the backend is up-to-date
+    if (backend && !backend->isUpToDate(inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape())) {
+        delete backend;
+        backend = nullptr;
+    }
     if (!backend) {
         backend = new upstride::UpstrideConv2DFunctor<upstride::device::CPU, float>::Backend(
             inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape(),

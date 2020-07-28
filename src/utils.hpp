@@ -45,7 +45,7 @@ inline int getDepthDimensionNumber(const DataFormat& dataFormat) {
  * 
  */
 class Shape {
-    uint8_t size;
+    const uint8_t size;
     int* shape;
 
    public:
@@ -69,6 +69,16 @@ class Shape {
         for (int i = 0; i < s; i++) {
             shape[i] = 0;
         }
+    }
+
+    /**
+     * @brief Copy constructor
+     * @param another       A shape instance to copy from
+     */
+    Shape(const Shape& another) : size(another.size) {
+        shape = new int[size];
+        for (int i = 0; i < size; i++)
+            shape[i] = another.shape[i];
     }
 
     /**
@@ -240,7 +250,9 @@ inline std::ostream& operator<<(std::ostream& str, const upstride::Shape& shape)
  * @return false 
  */
 inline bool operator==(const upstride::Shape& a, const upstride::Shape& b) {
-    if(! (a.getSize() == b.getSize())) return false;
-    for(size_t i = 0; i < a.getSize();i++) { if(a[i] != b[i]) return false;}
+    if (!(a.getSize() == b.getSize())) return false;
+    for (size_t i = 0; i < a.getSize(); i++) {
+        if (a[i] != b[i]) return false;
+    }
     return true;
 }
