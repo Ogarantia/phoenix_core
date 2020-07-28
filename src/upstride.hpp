@@ -1,8 +1,6 @@
 #pragma once
 
 #include "utils.hpp"
-#include <cstdint>
-#include <vector>
 
 namespace upstride {
 

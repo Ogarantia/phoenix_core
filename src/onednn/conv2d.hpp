@@ -50,7 +50,6 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
         outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
 
         // set up convolution operation-related descriptors
-        // fixme: pass actual convolution parameters
         convPrim = dnnl::convolution_forward(dnnl::convolution_forward::primitive_desc(
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_inference,
                                             dnnl::algorithm::convolution_auto,
@@ -65,6 +64,12 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
    public:
     UpstrideConv2DFunctor() {}
 
+    /**
+     * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
+     * @param dataFormat    Expected tensors format
+     * @param stride        Convolution stride
+     * @param dilation      Convolution dilation
+     */
     void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation) {
         this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
         getSpatialStep(stride, 1, this->stride);
