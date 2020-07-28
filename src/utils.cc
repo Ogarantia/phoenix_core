@@ -18,7 +18,7 @@ using namespace upstride;
  * @param paddingAfter      Zero padding at the end; in case of explicit padding the value is taken as input, otherwise it is computed
  * @return number of samples resulting from the operation.
  */
-int computeWindowedOutputSizeAndPadding(int inputSize, int filterSize,
+inline int computeWindowedOutputSizeAndPadding(int inputSize, int filterSize,
                                         int dilation, int stride,
                                         Padding padding,
                                         int& paddingBefore,
@@ -48,6 +48,23 @@ int computeWindowedOutputSizeAndPadding(int inputSize, int filterSize,
     return outputSize;
 }
 
+bool upstride::getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal, IntPair& result) {
+    switch (tuple.size()) {
+        case 1:
+            result.x = result.y = tuple[0];
+            return true;
+        case 2:
+            result.x = tuple[1];
+            result.y = tuple[0];
+            return true;
+        case 4:
+            result.x = tuple[2];
+            result.y = tuple[1];
+            return tuple[0] == validBatchAndChannelVal && tuple[3] == validBatchAndChannelVal;
+    };
+    return false;
+}
+
 Padding upstride::paddingFromString(std::string paddingString) {
     if (paddingString == "SAME")
         return Padding::SAME;
@@ -69,10 +86,10 @@ DataFormat upstride::dataFormatFromString(std::string dataFormatString) {
 Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
                                       const Shape& inputShape, const Shape& filterShape,
                                       Padding paddingPreset,
-                                      const IntTuple& explicitPadding,
-                                      const IntTuple& stride,
-                                      const IntTuple& dilation,
-                                      IntTuple& padBefore, IntTuple& padAfter) {
+                                      const IntTuple& explicitPaddings,
+                                      const IntTuple& strides,
+                                      const IntTuple& dilations,
+                                      IntPair& padBefore, IntPair& padAfter) {
     // Perform shape checks
     if (inputShape.getSize() != 4)
         throw std::invalid_argument("Four-dimensional input tensor expected");
@@ -83,6 +100,13 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
             throw std::invalid_argument("First filter dimension mismatch, got " + std::to_string(filterShape[0]));
     } else if (filterShape.getSize() != 4)
         throw std::invalid_argument("Four-dimensional filter tensor expected");
+
+    // Grab strides and dilations, check
+    IntPair stride, dilation;
+    if (!getSpatialStep(strides, 1, stride))
+        throw std::invalid_argument("Invalid stides.");
+    if (!getSpatialStep(dilations, 1, dilation))
+        throw std::invalid_argument("Invalid dilations.");
 
     // For scalar tensors (typeDim == 1), work with usual 4D filters. Otherwise the filter tensor is 5D.
     //fixme: heavily disabled for testing due to oneDNN specificities
@@ -101,22 +125,23 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
     outputShape.depth(dataFormat) = filterShape[filterOutChannelDim];
 
     // init padding
-    if (paddingPreset == Padding::EXPLICIT)
-        padBefore = padAfter = explicitPadding;
+    if (paddingPreset == Padding::EXPLICIT) {
+        // fixme: this is pretty much not how explicit padding must be implemented
+        if (!getSpatialStep(explicitPaddings, 1, padBefore))
+            throw std::invalid_argument("Invalid explicit paddings.");
+        padAfter = padBefore;
+    }
 
     // compute output size
-    //fixme: dilation is not taken into account properly
-    padBefore.resize(2);
-    padAfter.resize(2);
     outputShape.width(dataFormat) = computeWindowedOutputSizeAndPadding(
         inputShape.width(dataFormat), filterShape[filterWidthDim],
-        dilation[0], stride[0], paddingPreset,
-        padBefore[0], padAfter[0]);
+        dilation.x, stride.x, paddingPreset,
+        padBefore.x, padAfter.x);
 
     outputShape.height(dataFormat) = computeWindowedOutputSizeAndPadding(
         inputShape.height(dataFormat), filterShape[filterHeightDim],
-        dilation[1], stride[1], paddingPreset,
-        padBefore[1], padAfter[1]);
+        dilation.y, stride.y, paddingPreset,
+        padBefore.y, padAfter.y);
 
     return outputShape;
 }

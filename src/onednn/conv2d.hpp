@@ -3,6 +3,10 @@
 
 namespace upstride {
 
+/**
+ * @brief Regular 2D convolution implementation using oneDNN
+ * @tparam T    scalar datatype
+ */
 template <typename T>
 class UpstrideConv2DFunctor<upstride::device::CPU, T> {
    private:
@@ -10,7 +14,9 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
     dnnl::convolution_forward convPrim;
     dnnl::memory::format_tag formatTag;
     Shape inputShape, filterShape, outputShape;
-    IntTuple stride, padBefore, padAfter;
+    IntPair padBefore;      //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
+    IntPair padAfter;       //!< zero padding: number of zeros to add at the end to every input spatial dimension
+    IntPair stride, dilation;
 
     /**
      * @brief Performs backend-related operation configuration
@@ -20,7 +26,7 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      */
-    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntTuple& padBefore, const IntTuple& padAfter) {
+    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -44,18 +50,20 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_inference,
                                             dnnl::algorithm::convolution_auto,
                                             inputMemDesc, filterMemDesc, outputMemDesc,
-                                            dnnl::memory::dims(stride.begin(), stride.end()),
-                                            dnnl::memory::dims(padBefore.begin(), padBefore.end()),
-                                            dnnl::memory::dims(padAfter.begin(), padAfter.end())),
+                                            dnnl::memory::dims({stride.y, stride.x}),
+                                            dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
+                                            dnnl::memory::dims({padBefore.y, padBefore.x}),
+                                            dnnl::memory::dims({padAfter.y, padAfter.x})),
             onednn::Context::getInstance().getEngine()));
     }
 
    public:
     UpstrideConv2DFunctor() {}
 
-    void configure(DataFormat dataFormat, const IntTuple& stride) {
+    void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation) {
         this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
-        this->stride = stride;
+        getSpatialStep(stride, 1, this->stride);
+        getSpatialStep(dilation, 1, this->dilation);
     }
 
     /**
@@ -67,8 +75,8 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& filterTensor,
                     Tensor<T>& outputTensor,
-                    const IntTuple& padBefore,
-                    const IntTuple& padAfter) {
+                    const IntPair& padBefore,
+                    const IntPair& padAfter) {
         // configure oneDNN-related stuff in a deferred fashion
         configureBackend(inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape(), padBefore, padAfter);
 

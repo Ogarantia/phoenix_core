@@ -14,6 +14,20 @@ namespace upstride {
 typedef std::vector<int32_t> IntTuple;
 
 /**
+ * @brief A lightweight pair of integer numbers
+ */
+class IntPair {
+   public:
+    int x, y;
+
+    IntPair() : x(0), y(0) {}
+
+    inline bool operator==(const IntPair& another) const {
+        return x == another.x && y == another.y;
+    }
+};
+
+/**
  * @brief Padding preset specification
  */
 enum class Padding {
@@ -210,6 +224,16 @@ Padding paddingFromString(std::string paddingString);
 DataFormat dataFormatFromString(std::string dataFormatString);
 
 /**
+ * @brief Retrieves a spatial step information (stride, dilation) along width and height from a tuple.
+ * @param tuple                         The tuple to look at
+ * @param validBatchAndChannelVal       A valid value expected for channel and batch dimensions
+ * @param result                        The resulting spatial step
+ * @return true if the tuple is successfully interpreted.
+ * @return false otherwise.
+ */
+bool getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal, IntPair& result);
+
+/**
  * @brief Computes convolution output shape
  * The filter memory layout is assumed as follows: [blade, filter height, filter_width, input channels, output channels]
  * @param typeDim           Dimensionality of a specific UpStride datatype (e.g., 4 for quaternions)
@@ -218,19 +242,19 @@ DataFormat dataFormatFromString(std::string dataFormatString);
  * @param filterShape       Kernel tensor shape
  * @param paddingPreset     Padding preset
  * @param padding           Explicit padding value if the padding preset is explicit
- * @param stride            Convolution stride
- * @param dilation          Convolution dilation
- * @param padBefore         Number of zero samples to add at the beginning of every spatial input dimension (computed in function of other inputs)
- * @param padAfter          Number of zero samples to add at the end of every spatial input dimension (computed in function of other inputs)
+ * @param strides           Convolution stride
+ * @param dilations         Convolution dilation rate
+ * @param padBefore         Number of zero samples to add at the beginning to height and width input dimensions (computed in function of other parameters)
+ * @param padAfter          Number of zero samples to add at the end to height and width input dimensions (computed in function of other parameters)
  * @return the output tensor shape.
  */
 Shape computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
                             const Shape& inputShape, const Shape& filterShape,
                             Padding paddingPreset,
-                            const IntTuple& explicitPadding,
-                            const IntTuple& stride,
-                            const IntTuple& dilation,
-                            IntTuple& padBefore, IntTuple& padAfter);
+                            const IntTuple& explicitPaddings,
+                            const IntTuple& strides,
+                            const IntTuple& dilations,
+                            IntPair& padBefore, IntPair& padAfter);
 
 }  // namespace upstride
 
@@ -288,4 +312,3 @@ inline bool operator==(const upstride::Shape& a, const upstride::Shape& b) {
     }
     return true;
 }
-

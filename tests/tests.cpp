@@ -162,7 +162,7 @@ TEST_CASE("Test:Utils") {
         const std::vector<int32_t>& explicitPadding = {0, 0};
         const std::vector<int32_t>& stride = {1, 1};
         const std::vector<int32_t>& dilation = {0, 0};
-        upstride::IntTuple padBefore, padAfter;
+        upstride::IntPair padBefore, padAfter;
 
         upstride::Shape outputShape = upstride::computeConvOutputSize(typeDim,
                                                                       df,
