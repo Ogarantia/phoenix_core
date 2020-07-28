@@ -1,5 +1,4 @@
-#ifndef KERNEL_UPSTRIDE_OPS_H_
-#define KERNEL_UPSTRIDE_OPS_H_
+#pragma once
 
 #include "utils.hpp"
 
@@ -21,35 +20,13 @@ class Context {
     Context(const int td) : typeDimensions(td){};
 };
 
+/**
+ * @brief Operation functors declarations
+ * The operations are only declared here. They are specialized further on for every backend.
+ * @tparam Device       A device the specific implementation is designed for
+ * @tparam T            A scalar datatype
+ */
 template <typename Device, typename T>
-struct UpstrideConv2DFunctor {
-    /**
-     * @brief Computes regular D convolution
-     * @param input     The input tensor
-     * @param kernel    The tensor containing convolution filters
-     * @param output    The output tensor
-     * @param format    Dimension orders specification in input and output tensors
-     */
-    void operator()(const Tensor<const T>& input,
-                    const Tensor<const T>& kernel,
-                    Tensor<T>& output,
-                    DataFormat format);
-};
-
-template <>
-struct UpstrideConv2DFunctor<device::CPU, float> {
-    class Backend;
-    Backend* backend;
-
-    UpstrideConv2DFunctor() : backend(nullptr) {}
-    ~UpstrideConv2DFunctor();
-
-    void operator()(const Tensor<const float>& input,
-                    const Tensor<const float>& kernel,
-                    Tensor<float>& output,
-                    DataFormat format);
-};
+class UpstrideConv2DFunctor;
 
 }  // namespace upstride
-
-#endif  //KERNEL_TIME_TWO_H_

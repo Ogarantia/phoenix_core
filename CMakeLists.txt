@@ -25,18 +25,13 @@ set(CPP_SOURCES_FOLDER "${CMAKE_CURRENT_LIST_DIR}/src")
 set(SOURCES ${SOURCES} 
     ${CPP_SOURCES_FOLDER}/utils.cc
 )
-if (WITH_ONEDNN)
-  set(SOURCES ${SOURCES}
-      ${CPP_SOURCES_FOLDER}/onednn/conv2d.cc
-  )
-endif()
 
 #######################
 #    ONEDNN SETUP     #
 #######################
 
-# bring up oneDNN
 if (WITH_ONEDNN)
+  # add dependency to oneDNN
   set(ONEDNN_SUBMODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/thirdparty/onednn")
   option(DNNL_BUILD_TESTS "Build DNLL tests" OFF)
   option(DNNL_BUILD_EXAMPLES "Build DNLL examples" OFF)
@@ -44,8 +39,16 @@ if (WITH_ONEDNN)
   add_subdirectory(${ONEDNN_SUBMODULE_PATH})
   include_directories("${ONEDNN_SUBMODULE_PATH}/include")
   link_libraries(dnnl)
+
+  # add oneDNN-specific sources
+  set(SOURCES ${SOURCES}
+      ${CPP_SOURCES_FOLDER}/onednn/onednn.cc
+  )
 endif()
 
+#######################
+#        TESTS        #
+#######################
 
 if (BUILD_TESTS)
   enable_testing()

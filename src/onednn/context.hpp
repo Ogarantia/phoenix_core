@@ -13,16 +13,17 @@ namespace onednn {
  * @return oneDNN data type
  */
 template <typename T>
-dnnl::memory::data_type getDataType();
+static inline dnnl::memory::data_type getDataType();
+
 template <>
-dnnl::memory::data_type getDataType<float>() { return dnnl::memory::data_type::f32; }
+inline dnnl::memory::data_type getDataType<float>() { return dnnl::memory::data_type::f32; }
 
 /**
  * @brief Retrieves oneDNN memory format tag corresponding to a given data format.
  * @param df the data format.
  * @return dnnl::memory::format_tag 
  */
-dnnl::memory::format_tag convertDataFormatToFormatTag(DataFormat df) {
+static inline dnnl::memory::format_tag convertDataFormatToFormatTag(DataFormat df) {
     switch (df) {
         case DataFormat::NCHW:
             return dnnl::memory::format_tag::nchw;
@@ -33,12 +34,21 @@ dnnl::memory::format_tag convertDataFormatToFormatTag(DataFormat df) {
     }
 }
 
+/**
+ * @brief OneDNN-specific shareable singleton context
+ */
 class Context : public upstride::Context {
     dnnl::engine oneEngine;
     dnnl::stream oneStream;
 
-   public:
     Context(const int typeDim) : upstride::Context(typeDim), oneEngine(dnnl::engine::kind::cpu, 0), oneStream(oneEngine) {}
+
+   public:
+    /**
+     * @brief Provides the instance of oneDNN context.
+     * @return the context.
+     */
+    static Context& getInstance();
 
     /**
      * @brief Retrieves oneDNN engine instance associated with the current context.
@@ -47,10 +57,12 @@ class Context : public upstride::Context {
     const dnnl::engine& getEngine() const { return oneEngine; }
     dnnl::engine& getEngine() { return oneEngine; }
 
-    void execute(dnnl::primitive& prim, std::unordered_map<int, dnnl::memory>&& args) {
-        prim.execute(oneStream, args);
-        oneStream.wait();
-    }
+    /**
+     * @brief Executes a oneDNN operation primitive.
+     * @param prim      The operation primitive to execute
+     * @param args      A map of arguments (tensors) to pass to the operation
+     */
+    void execute(dnnl::primitive& prim, std::unordered_map<int, dnnl::memory>&& args);
 };
 
 }  // namespace onednn

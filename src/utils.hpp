@@ -45,10 +45,15 @@ inline int getDepthDimensionNumber(const DataFormat& dataFormat) {
  * 
  */
 class Shape {
-    const uint8_t size;
+    uint8_t size;
     int* shape;
 
    public:
+    /**
+     * @brief Constructs a zero Shape object
+     */
+    Shape() : size(0), shape(nullptr) {}
+
     /**
     * @brief Construct a new Shape object
     * @param s Size of the shape array
@@ -60,6 +65,7 @@ class Shape {
             shape[i] = _shape[i];
         }
     }
+
     /**
      * @brief Construct a new Shape object that creates a s size shape with all dimension to 0
      * @param s 
@@ -77,6 +83,20 @@ class Shape {
      */
     Shape(const Shape& another) : size(another.size) {
         shape = new int[size];
+        for (int i = 0; i < size; i++)
+            shape[i] = another.shape[i];
+    }
+
+    /**
+     * @brief Assignment operator
+     * @param another       A shape instance to copy from
+     */
+    Shape& operator=(const Shape& another) {
+        if (size != another.size) {
+            delete[] shape;
+            size = another.size;
+            shape = new int[size];
+        }
         for (int i = 0; i < size; i++)
             shape[i] = another.shape[i];
     }
