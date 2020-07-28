@@ -10,7 +10,7 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
     dnnl::convolution_forward convPrim;
     dnnl::memory::format_tag formatTag;
     Shape inputShape, filterShape, outputShape;
-    IntTuple padBefore, padAfter;
+    IntTuple stride, padBefore, padAfter;
 
     /**
      * @brief Performs backend-related operation configuration
@@ -44,7 +44,7 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_inference,
                                             dnnl::algorithm::convolution_auto,
                                             inputMemDesc, filterMemDesc, outputMemDesc,
-                                            dnnl::memory::dims{1, 1},
+                                            dnnl::memory::dims(stride.begin(), stride.end()),
                                             dnnl::memory::dims(padBefore.begin(), padBefore.end()),
                                             dnnl::memory::dims(padAfter.begin(), padAfter.end())),
             onednn::Context::getInstance().getEngine()));
@@ -53,8 +53,9 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
    public:
     UpstrideConv2DFunctor() {}
 
-    void configure(DataFormat dataFormat) {
-        formatTag = onednn::dataFormatToFormatTag(dataFormat);
+    void configure(DataFormat dataFormat, const IntTuple& stride) {
+        this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
+        this->stride = stride;
     }
 
     /**
