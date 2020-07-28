@@ -23,7 +23,7 @@ inline dnnl::memory::data_type getDataType<float>() { return dnnl::memory::data_
  * @param df the data format.
  * @return dnnl::memory::format_tag 
  */
-static inline dnnl::memory::format_tag convertDataFormatToFormatTag(DataFormat df) {
+static inline dnnl::memory::format_tag dataFormatToFormatTag(DataFormat df) {
     switch (df) {
         case DataFormat::NCHW:
             return dnnl::memory::format_tag::nchw;
@@ -32,6 +32,15 @@ static inline dnnl::memory::format_tag convertDataFormatToFormatTag(DataFormat d
         default:
             throw std::invalid_argument("Unimplemented valid DataFormat.");
     }
+}
+
+/**
+ * @brief Handy conversion of upstride::Shape to oneDNN memory dims
+ * @param shape The shape to convert
+ * @return dnnl::memory::dims of the given shape
+ */
+static inline dnnl::memory::dims shapeToDims(const Shape& shape) {
+    return dnnl::memory::dims(shape.getShapePtr(), shape.getShapePtr() + shape.getSize());
 }
 
 /**

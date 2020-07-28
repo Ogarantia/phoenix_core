@@ -18,10 +18,7 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
      * @param filterShape       Filter tensor shape
      * @param outputTensor      Output tensor shape
      */
-    void configureBackend(
-        const Shape& inputShape,
-        const Shape& filterShape,
-        const Shape& outputTensor) {
+    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape)
             return;
@@ -32,12 +29,9 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
         this->outputShape = outputShape;
 
         // set up oneDNN memory descriptors
-        inputMemDesc = dnnl::memory::desc(dnnl::memory::dims(inputShape.getShapePtr(), inputShape.getShapePtr() + inputShape.getSize()),
-                                          dataType, formatTag);
-        filterMemDesc = dnnl::memory::desc(dnnl::memory::dims(filterShape.getShapePtr(), filterShape.getShapePtr() + filterShape.getSize()),
-                                           dataType, dnnl::memory::format_tag::oihw);
-        outputMemDesc = dnnl::memory::desc(dnnl::memory::dims(outputTensor.getShapePtr(), outputTensor.getShapePtr() + outputTensor.getSize()),
-                                           dataType, formatTag);
+        inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), dataType, formatTag);
+        filterMemDesc = dnnl::memory::desc(onednn::shapeToDims(filterShape), dataType, dnnl::memory::format_tag::oihw);
+        outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), dataType, formatTag);
 
         // set up convolution operation-related descriptors
         // fixme: pass actual convolution parameters
@@ -54,7 +48,7 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
     UpstrideConv2DFunctor() : dataType(onednn::getDataType<T>()) {}
 
     void configure(DataFormat dataFormat) {
-        formatTag = onednn::convertDataFormatToFormatTag(dataFormat);
+        formatTag = onednn::dataFormatToFormatTag(dataFormat);
     }
 
     /**
