@@ -8,30 +8,35 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
    private:
     dnnl::memory::desc inputMemDesc, filterMemDesc, outputMemDesc;
     dnnl::convolution_forward convPrim;
-    const dnnl::memory::data_type dataType;
     dnnl::memory::format_tag formatTag;
     Shape inputShape, filterShape, outputShape;
+    IntTuple padBefore, padAfter;
 
     /**
      * @brief Performs backend-related operation configuration
      * @param inputShape        Input tensor shape
      * @param filterShape       Filter tensor shape
      * @param outputTensor      Output tensor shape
+     * @param padBefore         Number of zero samples to add to the input tensor on top/left
+     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      */
-    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape) {
+    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntTuple& padBefore, const IntTuple& padAfter) {
         // check if up-to-date
-        if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape)
+        if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape &&
+            this->padBefore == padBefore && this->padAfter == padAfter)
             return;
 
         // cache shapes for further up-to-dateness checks
         this->inputShape = inputShape;
         this->filterShape = filterShape;
         this->outputShape = outputShape;
+        this->padBefore = padBefore;
+        this->padAfter = padAfter;
 
         // set up oneDNN memory descriptors
-        inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), dataType, formatTag);
-        filterMemDesc = dnnl::memory::desc(onednn::shapeToDims(filterShape), dataType, dnnl::memory::format_tag::oihw);
-        outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), dataType, formatTag);
+        inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), onednn::getDataType<T>(), formatTag);
+        filterMemDesc = dnnl::memory::desc(onednn::shapeToDims(filterShape), onednn::getDataType<T>(), dnnl::memory::format_tag::oihw);
+        outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
 
         // set up convolution operation-related descriptors
         // fixme: pass actual convolution parameters
@@ -40,12 +45,13 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
                                             dnnl::algorithm::convolution_auto,
                                             inputMemDesc, filterMemDesc, outputMemDesc,
                                             dnnl::memory::dims{1, 1},
-                                            dnnl::memory::dims{0, 0}, dnnl::memory::dims{0, 0}),
+                                            dnnl::memory::dims(padBefore.begin(), padBefore.end()),
+                                            dnnl::memory::dims(padAfter.begin(), padAfter.end())),
             onednn::Context::getInstance().getEngine()));
     }
 
    public:
-    UpstrideConv2DFunctor() : dataType(onednn::getDataType<T>()) {}
+    UpstrideConv2DFunctor() {}
 
     void configure(DataFormat dataFormat) {
         formatTag = onednn::dataFormatToFormatTag(dataFormat);
@@ -59,9 +65,11 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& filterTensor,
-                    Tensor<T>& outputTensor) {
+                    Tensor<T>& outputTensor,
+                    const IntTuple& padBefore,
+                    const IntTuple& padAfter) {
         // configure oneDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape());
+        configureBackend(inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape(), padBefore, padAfter);
 
         // instantiate DNNL memory
         auto& engine = onednn::Context::getInstance().getEngine();

@@ -156,12 +156,13 @@ TEST_CASE("Test:Utils") {
         const upstride::Shape kernelShape(5, shapesK);
 
         const int shapesE[4] = {1, 3, 224, 3};
-        const upstride::Shape ExpectedShape(4, shapesE);
+        const upstride::Shape expectedShape(4, shapesE);
 
         upstride::Padding paddingPreset = upstride::Padding::SAME;
         const std::vector<int32_t>& explicitPadding = {0, 0};
         const std::vector<int32_t>& stride = {1, 1};
         const std::vector<int32_t>& dilation = {0, 0};
+        upstride::IntTuple padBefore, padAfter;
 
         upstride::Shape outputShape = upstride::computeConvOutputSize(typeDim,
                                                                       df,
@@ -170,11 +171,12 @@ TEST_CASE("Test:Utils") {
                                                                       paddingPreset,
                                                                       explicitPadding,
                                                                       stride,
-                                                                      dilation);
+                                                                      dilation,
+                                                                      padBefore, padAfter);
 
         std::cout << outputShape << std::endl;
 
-        CHECK((outputShape == ExpectedShape));
+        CHECK((outputShape == expectedShape));
         std::cout << std::endl;
     }
 }

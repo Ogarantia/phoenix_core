@@ -66,8 +66,13 @@ DataFormat upstride::dataFormatFromString(std::string dataFormatString) {
     throw std::invalid_argument("Invalid data format encountered: " + dataFormatString);
 }
 
-Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFormat, const Shape& inputShape, const Shape& filterShape,
-                                      Padding paddingPreset, const std::vector<int32_t>& explicitPadding, const std::vector<int32_t>& stride, const std::vector<int32_t>& dilation) {
+Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
+                                      const Shape& inputShape, const Shape& filterShape,
+                                      Padding paddingPreset,
+                                      const IntTuple& explicitPadding,
+                                      const IntTuple& stride,
+                                      const IntTuple& dilation,
+                                      IntTuple& padBefore, IntTuple& padAfter) {
     // Perform shape checks
     if (inputShape.getSize() != 4)
         throw std::invalid_argument("Four-dimensional input tensor expected");
@@ -76,15 +81,13 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
             throw std::invalid_argument("Five-dimensional filter tensor expected");
         if (filterShape[0] != typeDim)
             throw std::invalid_argument("First filter dimension mismatch, got " + std::to_string(filterShape[0]));
-    }
-    else
-        if (filterShape.getSize() != 4)
-            throw std::invalid_argument("Four-dimensional filter tensor expected");
+    } else if (filterShape.getSize() != 4)
+        throw std::invalid_argument("Four-dimensional filter tensor expected");
 
     // For scalar tensors (typeDim == 1), work with usual 4D filters. Otherwise the filter tensor is 5D.
     //fixme: heavily disabled for testing due to oneDNN specificities
     const int firstFilterDim = typeDim > 1 ? 1 : 0;
-    const int filterWidthDim = firstFilterDim +3;
+    const int filterWidthDim = firstFilterDim + 3;
     const int filterHeightDim = firstFilterDim + 2;
     const int filterInChannelDim = firstFilterDim + 1;
     const int filterOutChannelDim = firstFilterDim + 0;
@@ -98,23 +101,22 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
     outputShape.depth(dataFormat) = filterShape[filterOutChannelDim];
 
     // init padding
-    int padLeft, padRight, padTop, padBottom;
-    if (paddingPreset == Padding::EXPLICIT) {
-        padLeft = padRight = explicitPadding[0];
-        padTop = padBottom = explicitPadding[1];
-    }
+    if (paddingPreset == Padding::EXPLICIT)
+        padBefore = padAfter = explicitPadding;
 
     // compute output size
     //fixme: dilation is not taken into account properly
+    padBefore.resize(2);
+    padAfter.resize(2);
     outputShape.width(dataFormat) = computeWindowedOutputSizeAndPadding(
         inputShape.width(dataFormat), filterShape[filterWidthDim],
         dilation[0], stride[0], paddingPreset,
-        padLeft, padRight);
+        padBefore[0], padAfter[0]);
 
     outputShape.height(dataFormat) = computeWindowedOutputSizeAndPadding(
         inputShape.height(dataFormat), filterShape[filterHeightDim],
         dilation[1], stride[1], paddingPreset,
-        padTop, padBottom);
+        padBefore[1], padAfter[1]);
 
     return outputShape;
 }

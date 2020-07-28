@@ -1,6 +1,8 @@
 #pragma once
 
 #include "utils.hpp"
+#include <cstdint>
+#include <vector>
 
 namespace upstride {
 
@@ -12,6 +14,7 @@ typedef struct {
 } GPU;
 
 }  // namespace device
+
 
 class Context {
     const int typeDimensions;

@@ -9,6 +9,11 @@
 namespace upstride {
 
 /**
+ * @brief A fairly generic integer tuple
+ */
+typedef std::vector<int32_t> IntTuple;
+
+/**
  * @brief Padding preset specification
  */
 enum class Padding {
@@ -215,10 +220,17 @@ DataFormat dataFormatFromString(std::string dataFormatString);
  * @param padding           Explicit padding value if the padding preset is explicit
  * @param stride            Convolution stride
  * @param dilation          Convolution dilation
+ * @param padBefore         Number of zero samples to add at the beginning of every spatial input dimension (computed in function of other inputs)
+ * @param padAfter          Number of zero samples to add at the end of every spatial input dimension (computed in function of other inputs)
  * @return the output tensor shape.
  */
-Shape computeConvOutputSize(const int typeDim, const DataFormat dataFormat, const Shape& inputShape, const Shape& filterShape,
-                            Padding paddingPreset, const std::vector<int32_t>& explicitPadding, const std::vector<int32_t>& stride, const std::vector<int32_t>& dilation);
+Shape computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
+                            const Shape& inputShape, const Shape& filterShape,
+                            Padding paddingPreset,
+                            const IntTuple& explicitPadding,
+                            const IntTuple& stride,
+                            const IntTuple& dilation,
+                            IntTuple& padBefore, IntTuple& padAfter);
 
 }  // namespace upstride
 
@@ -276,3 +288,4 @@ inline bool operator==(const upstride::Shape& a, const upstride::Shape& b) {
     }
     return true;
 }
+
