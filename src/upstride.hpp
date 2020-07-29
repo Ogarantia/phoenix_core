@@ -32,4 +32,12 @@ class Context {
 template <typename Device, typename T>
 class UpstrideConv2DFunctor;
 
+/**
+ * @brief Operation functors declarations for the convolution 2D backward propagation  
+ * The operations are only declared here. They are specialized further on for every backend.
+ * @tparam Device       A device the specific implementation is designed for
+ * @tparam T            A scalar datatype
+ */
+template <typename Device, typename T>
+class UpstrideConv2DGradFunctor;
 }  // namespace upstride
