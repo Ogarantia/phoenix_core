@@ -118,6 +118,7 @@ class Shape {
         }
         for (int i = 0; i < size; i++)
             shape[i] = another.shape[i];
+        return *this;
     }
 
     /**
