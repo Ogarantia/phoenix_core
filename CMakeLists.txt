@@ -3,21 +3,13 @@ cmake_minimum_required(VERSION 2.8)
 project(UpStride)
 
 option(BUILD_TESTS "Build tests" ON)
-option(WITH_CUDA "With CUDA" OFF)
-option(WITH_ONEDNN "With oneDNN" ON)
+option(WITH_ONEDNN "Enable oneDNN backend (CPU)" ON)
+option(WITH_CUDNN "Enable cuDNN backend (GPU)" OFF)
 
 message("-- BUILD_TESTS: ${BUILD_TESTS}")
-message("-- WITH_ONEDNN: ${WITH_ONEDNN}")
-message("-- WITH_CUDA: ${WITH_CUDA}")
-
-# CUDA-related stuff
-if (WITH_CUDA)
-  set(CMAKE_CXX_FLAGS "-DNDEBUG ${CMAKE_CXX_FLAGS}")
-  find_package(CUDA)
-  set(EXTENSION "cu.cc")
-else()
-  set(EXTENSION "cc")
-endif()
+message("-- Used backends:")
+message("     oneDNN: ${WITH_ONEDNN}")
+message("     cuDNN: ${WITH_CUDNN}")
 
 # list source code files
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
@@ -36,7 +28,9 @@ if (WITH_ONEDNN)
   option(DNNL_BUILD_TESTS "Build DNLL tests" OFF)
   option(DNNL_BUILD_EXAMPLES "Build DNLL examples" OFF)
   set(DNNL_ARCH_OPT_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize -ftree-vectorize -msse4.1" CACHE INTERNAL "" )
+  message("**************** Compiling oneDNN: ****************")
   add_subdirectory(${ONEDNN_SUBMODULE_PATH})
+  message("**************** ***************** ****************")
   include_directories("${ONEDNN_SUBMODULE_PATH}/include")
   link_libraries(dnnl)
 
@@ -44,6 +38,15 @@ if (WITH_ONEDNN)
   set(SOURCES ${SOURCES}
       ${CPP_SOURCES_FOLDER}/onednn/onednn.cc
   )
+endif()
+
+#######################
+#     CUDNN SETUP     #
+#######################
+
+if (WITH_CUDNN)
+  set(CMAKE_CXX_FLAGS "-DNDEBUG ${CMAKE_CXX_FLAGS}")
+  find_package(cuDNN)
 endif()
 
 #######################
