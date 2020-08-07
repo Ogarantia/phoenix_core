@@ -21,6 +21,12 @@ class IntPair {
     int x, y;
 
     IntPair() : x(0), y(0) {}
+    IntPair(int val): x(val), y(val) {}
+    IntPair(int x, int y): x(x), y(y) {}
+
+    inline IntPair operator+(const IntPair & another) const {
+        return IntPair(x + another.x, y + another.y);
+    }
 
     inline bool operator==(const IntPair& another) const {
         return x == another.x && y == another.y;
@@ -170,6 +176,16 @@ class Shape {
     }
     int depth(const DataFormat& fmt) const {
         return shape[getDepthDimensionNumber(fmt)];
+    }
+
+    /**
+     * @return the number of elements in the tensor.
+     */
+    int numel() const {
+        int numel = shape[0];
+        for (int i = 1; i < size; i++)
+            numel *= shape[i];
+        return numel;
     }
 };
 

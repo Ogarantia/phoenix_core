@@ -45,8 +45,12 @@ endif()
 #######################
 
 if (WITH_CUDNN)
-  set(CMAKE_CXX_FLAGS "-DNDEBUG ${CMAKE_CXX_FLAGS}")
-  find_package(cuDNN)
+  set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${CMAKE_CXX_FLAGS}")
+  set(SOURCES ${SOURCES}
+      ${CPP_SOURCES_FOLDER}/cudnn/cudnn.cc
+      ${CPP_SOURCES_FOLDER}/cudnn/kernels.cu
+  )
+  link_libraries(cudnn)
 endif()
 
 #######################
