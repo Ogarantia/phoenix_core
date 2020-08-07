@@ -96,5 +96,21 @@ class Context : public upstride::Context {
     const cudnnHandle_t& getHandle() const { return handle; }
 };
 
+/**
+ * @brief Fills a cuDNN tensor descriptor
+ * 
+ * @tparam T scalar datatype
+ * @param descriptor    the descriptor to fill
+ * @param shape         tensor shape
+ * @param dataFormat    tensor data format
+ */
+template <typename T>
+static inline void setTensorDescriptor(cudnnTensorDescriptor_t& descriptor, const Shape& shape, DataFormat dataFormat) {
+    cudnn::Context::raiseIfError(cudnnSetTensor4dDescriptor(
+        descriptor,
+        cudnn::dataFormatToTensorFormat(dataFormat), cudnn::getDataType<T>(),
+        shape[0], shape.depth(dataFormat), shape.height(dataFormat), shape.width(dataFormat)));
+}
+
 }  // namespace cudnn
 }  // namespace upstride
