@@ -13,6 +13,43 @@
 
 namespace upstride {
 
+namespace cudnn {
+/**
+ * @brief Given a potentially spatially asymmetric padding, computes symmetric padding allowing to have the same output tensor as for the original asymmetric padding, up to a crop.
+ *
+ * @param padBefore         padding at the beginning of spatial dimensions
+ * @param padAfter          padding at thg end of spatial dimensions
+ * @param stride            stride
+ * @param repaddingOffset   the offset value of the output after the repadding
+ * @return the symmetric padding.
+ */
+inline IntPair symmetrizePadding(const IntPair& padBefore, const IntPair& padAfter, const IntPair& stride, IntPair& repaddingOffset) {
+    // Proceed with the symmetric padding covering the requested padding.
+    // Adding one step (stride) to padBefore is equivalent to add an entry to output at the beginning of every dimension.
+    // This is be cropped further on after the convolution is computed.
+    IntPair actualPad;
+    if (padBefore.x != padAfter.x) {
+        actualPad.x = padBefore.x + stride.x;
+        repaddingOffset.x = 1;
+    } else {
+        actualPad.x = padBefore.x;
+        repaddingOffset.x = 0;
+    }
+
+    if (padBefore.y != padAfter.y) {
+        actualPad.y = padBefore.y + stride.y;
+        repaddingOffset.y = 1;
+    } else {
+        actualPad.y = padBefore.y;
+        repaddingOffset.y = 0;
+    }
+
+    if (padAfter.x > actualPad.x || padAfter.y > actualPad.y)
+        throw std::runtime_error("Cannot handle asymmetric padding");
+    return actualPad;
+}
+}  // namespace cudnn
+
 /**
  * @brief Regular 2D convolution implementation using cuDNN.
  * @tparam T    A scalar datatype for the tensor content
@@ -59,34 +96,13 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
 
         // check for padding symmetry
         if (padBefore == padAfter) {
+            actualPad = padBefore;
             if (buffer) {
                 cudaFree(buffer);
                 buffer = nullptr;
             }
-            actualPad = padBefore;
         } else {
-            // Proceed with the symmetric padding covering the requested padding.
-            // Adding one step (stride) to padBefore is equivalent to add an entry to output at the beginning of every dimension.
-            // This is be cropped further on after the convolution is computed.
-            if (padBefore.x != padAfter.x) {
-                actualPad.x = padBefore.x + stride.x;
-                repaddingOffset.x = 1;
-            } else {
-                actualPad.x = padBefore.x;
-                repaddingOffset.x = 0;
-            }
-
-            if (padBefore.y != padAfter.y) {
-                actualPad.y = padBefore.y + stride.y;
-                repaddingOffset.y = 1;
-            } else {
-                actualPad.y = padBefore.y;
-                repaddingOffset.y = 0;
-            }
-
-            if (padAfter.x > actualPad.x || padAfter.y > actualPad.y)
-                throw std::runtime_error("Cannot handle asymmetric padding");
-
+            actualPad = cudnn::symmetrizePadding(padBefore, padAfter, stride, repaddingOffset);
             repaddedOutputShape.width(dataFormat) += repaddingOffset.x;
             repaddedOutputShape.height(dataFormat) += repaddingOffset.y;
 
