@@ -64,7 +64,7 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
     IntPair actualPad;          //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
     IntPair repaddingOffset;    //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
     IntPair stride, dilation;
-    void* buffer;  //!< buffer in device memory used to store the uncropped output when dealing with the asymmetric padding
+    cudnn::Memory buffer;  //!< buffer in device memory used to store the uncropped output when dealing with the asymmetric padding
 
     DataFormat dataFormat;
     cudnnConvolutionDescriptor_t convDesc;
@@ -97,19 +97,14 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
         // check for padding symmetry
         if (padBefore == padAfter) {
             actualPad = padBefore;
-            if (buffer) {
-                cudaFree(buffer);
-                buffer = nullptr;
-            }
+            buffer.free();
         } else {
             actualPad = cudnn::symmetrizePadding(padBefore, padAfter, stride, repaddingOffset);
             repaddedOutputShape.width(dataFormat) += repaddingOffset.x;
             repaddedOutputShape.height(dataFormat) += repaddingOffset.y;
 
             // allocate intermediate buffer to fit the output into
-            if (buffer)
-                cudaFree(buffer);
-            cudnn::Context::raiseIfError(cudaMalloc(&buffer, repaddedOutputShape.numel() * sizeof(T)));
+            buffer = cudnn::Memory(repaddedOutputShape.numel() * sizeof(T));
         }
 
         // setup convolution descriptor
@@ -133,7 +128,7 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
     }
 
    public:
-    UpstrideConv2DFunctor() : buffer(nullptr) {
+    UpstrideConv2DFunctor() {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
@@ -145,7 +140,6 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
         cudnnDestroyTensorDescriptor(inputDesc);
         cudnnDestroyTensorDescriptor(outputDesc);
         cudnnDestroyFilterDescriptor(filterDesc);
-        cudaFree(buffer);
     }
 
     /**

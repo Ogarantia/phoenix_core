@@ -97,6 +97,43 @@ class Context : public upstride::Context {
 };
 
 /**
+ * @brief Pointer to a device memory and its allocation/disposition routines
+ * Often acts as a pointer due to conversion operators.
+ */
+class Memory {
+   private:
+    void* ptr;
+    size_t size;
+
+    Memory(const Memory&) = delete;  // deleting copying constructor
+   public:
+    Memory() : ptr(nullptr), size(0) {}
+    Memory(size_t sizeBytes);
+    Memory(Memory&&);
+    Memory& operator=(Memory&&);
+    ~Memory();
+
+    /**
+     * @brief Frees the pointed memory if any.
+     */
+    void free();
+
+    /**
+     * @brief Checks pointer validity.
+     *
+     * @return true if the pointer points to a valid memory.
+     * @return false otherwise
+     */
+    inline operator bool() const { return ptr != nullptr; }
+
+    template <typename T>
+    inline operator T*() { return static_cast<T*>(ptr); }
+
+    template <typename T>
+    inline operator const T*() const { return static_cast<const T*>(ptr); }
+};
+
+/**
  * @brief Fills a cuDNN tensor descriptor
  * 
  * @tparam T scalar datatype
