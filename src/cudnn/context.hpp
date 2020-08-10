@@ -97,8 +97,8 @@ class Context : public upstride::Context {
 };
 
 /**
- * @brief Pointer to a device memory and its allocation/disposition routines
- * Often acts as a pointer due to conversion operators.
+ * @brief A device memory buffer and its allocation/disposition routines
+ * Often acts as a pointer due to the nicely defined conversion operators.
  */
 class Memory {
    private:
@@ -112,6 +112,11 @@ class Memory {
     Memory(Memory&&);
     Memory& operator=(Memory&&);
     ~Memory();
+
+    /**
+     * @brief Fills the memory buffer with zeros.
+     */
+    void zero();
 
     /**
      * @brief Frees the pointed memory if any.

@@ -33,6 +33,11 @@ Memory::~Memory() {
 }
 
 
+void Memory::zero() {
+    Context::getInstance().raiseIfError(cudaMemset(ptr, 0, size));
+}
+
+
 void Memory::free() {
     Context::getInstance().raiseIfError(cudaFree(ptr));
     ptr = nullptr;

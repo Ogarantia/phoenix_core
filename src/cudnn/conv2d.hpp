@@ -181,7 +181,7 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
             &beta,
             outputDesc, buffer ? buffer : outputTensor.getDataPtr()));
 
-        // crop
+        // crop, if needed
         if (buffer)
             cudnn::crop(
                 Tensor<const T>(repaddedOutputShape, (const T*)buffer),
@@ -200,16 +200,19 @@ template <typename T>
 class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
    private:
     Shape inputShape, kernelShape, gradShape;
-    IntPair padBefore;  //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
-    IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
-    IntPair actualPad;  //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
+    Shape repaddedGradShape;  //!< gradient tensor (dy) shape for symmetrically padded input to handle the asymmetric padding
+    IntPair padBefore;        //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
+    IntPair padAfter;         //!< zero padding: number of zeros to add at the end to every input spatial dimension
+    IntPair actualPad;        //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
+    IntPair repaddingOffset;  //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
     IntPair stride, dilation;
     DataFormat dataFormat;
+    cudnn::Memory buffer;  //!< intermediate buffer to store repadded output gradient
 
-    cudnnConvolutionDescriptor_t convDesc;      //!< convolution operation descriptor, as in forward
-    cudnnTensorDescriptor_t inputDesc;          //!< input (x) descriptor
-    cudnnTensorDescriptor_t gradDesc;           //!< output value gradient (dy) descriptor (which is an input of this operation)
-    cudnnFilterDescriptor_t kernelGradDesc;     //!< kernel gradient (dw) descriptor (output of this operation)
+    cudnnConvolutionDescriptor_t convDesc;   //!< convolution operation descriptor, as in forward
+    cudnnTensorDescriptor_t inputDesc;       //!< input (x) descriptor
+    cudnnTensorDescriptor_t gradDesc;        //!< output value gradient (dy) descriptor (which is an input of this operation)
+    cudnnFilterDescriptor_t kernelGradDesc;  //!< kernel gradient (dw) descriptor (output of this operation)
 
     /**
      * @brief Performs backend-related operation configuration
@@ -236,11 +239,20 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
         this->padBefore = padBefore;
         this->padAfter = padAfter;
 
+        repaddedGradShape = gradShape;
+
         // check for padding symmetry
         if (padBefore == padAfter) {
             actualPad = padBefore;
+            buffer.free();
         } else {
-            throw std::runtime_error("Asymmetric padding is not yet mastered");
+            actualPad = cudnn::symmetrizePadding(padBefore, padAfter, stride, repaddingOffset);
+            repaddedGradShape.width(dataFormat) += repaddingOffset.x;
+            repaddedGradShape.height(dataFormat) += repaddingOffset.y;
+
+            // allocate the intermediate buffer
+            buffer = cudnn::Memory(repaddedGradShape.numel() * sizeof(T));
+            buffer.zero();
         }
 
         // setup convolution descriptor
@@ -254,7 +266,7 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
 
         // setup tensors
         cudnn::setTensorDescriptor<T>(inputDesc, inputShape, dataFormat);
-        cudnn::setTensorDescriptor<T>(gradDesc, gradShape, dataFormat);
+        cudnn::setTensorDescriptor<T>(gradDesc, repaddedGradShape, dataFormat);
 
         cudnn::Context::raiseIfError(cudnnSetFilter4dDescriptor(
             kernelGradDesc,
@@ -302,13 +314,19 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
         // configure oneDNN-related stuff in a deferred fashion
         configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter);
 
+        // pad if needed
+        if (buffer) {
+            Tensor<T> repaddedGradTensor(repaddedGradShape, (T*)buffer);
+            cudnn::insert(gradTensor, repaddedGradTensor, dataFormat, repaddingOffset);
+        }
+
         // perform the gradient computation
         const T alpha = 1, beta = 0;
         cudnn::Context::raiseIfError(cudnnConvolutionBackwardFilter(
             cudnn::Context::getInstance().getHandle(),
             &alpha,
             inputDesc, inputTensor.getDataPtr(),
-            gradDesc, gradTensor.getDataPtr(),
+            gradDesc, buffer ? buffer : gradTensor.getDataPtr(),
             convDesc,
             CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
             nullptr, 0,
