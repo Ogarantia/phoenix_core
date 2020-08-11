@@ -78,8 +78,9 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
      * @param outputTensor      Output tensor shape
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter) {
+    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, int groups) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -116,6 +117,10 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
             CUDNN_CROSS_CORRELATION,
             cudnn::getDataType<T>()));
 
+        // enable groups
+        if (groups > 1)
+            cudnn::Context::raiseIfError(cudnnSetConvolutionGroupCount(convDesc, groups));
+
         // setup tensors
         cudnn::setTensorDescriptor<T>(outputDesc, repaddedOutputShape, dataFormat);
         cudnn::setTensorDescriptor<T>(inputDesc, inputShape, dataFormat);
@@ -124,7 +129,9 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
             filterDesc,
             cudnn::getDataType<T>(),
             CUDNN_TENSOR_NCHW,  // OIHW according to the docs
-            filterShape[0], filterShape[1], filterShape[2], filterShape[3]));
+            filterShape[groups > 1 ? 1 : 0],    // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
+            filterShape[groups > 1 ? 0 : 1],
+            filterShape[2], filterShape[3]));
     }
 
    public:
@@ -161,14 +168,16 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
      * @param outputTensor      Output tensor
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups for depthwise / grouped convolutions
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& filterTensor,
                     Tensor<T>& outputTensor,
                     const IntPair& padBefore,
-                    const IntPair& padAfter) {
+                    const IntPair& padAfter,
+                    int groups = 1) {
         // configure cuDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape(), padBefore, padAfter);
+        configureBackend(inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape(), padBefore, padAfter, groups);
 
         // perform the convolution
         const T alpha = 1, beta = 0;
@@ -223,12 +232,14 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
      * @param gradShape         grad tensor shape
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups for depthwise / grouped convolutions
      */
     void configureBackend(const Shape& inputShape,
                           const Shape& kernelShape,
                           const Shape& gradShape,
                           const IntPair& padBefore,
-                          const IntPair& padAfter) {
+                          const IntPair& padAfter,
+                          int groups) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->gradShape == gradShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -266,6 +277,10 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
             CUDNN_CROSS_CORRELATION,
             cudnn::getDataType<T>()));
 
+        // enable groups
+        if (groups > 1)
+            cudnn::Context::raiseIfError(cudnnSetConvolutionGroupCount(convDesc, groups));
+
         // setup tensors
         cudnn::setTensorDescriptor<T>(inputDesc, inputShape, dataFormat);
         cudnn::setTensorDescriptor<T>(gradDesc, repaddedGradShape, dataFormat);
@@ -274,7 +289,9 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
             kernelGradDesc,
             cudnn::getDataType<T>(),
             CUDNN_TENSOR_NCHW,  // OIHW according to the docs
-            kernelShape[0], kernelShape[1], kernelShape[2], kernelShape[3]));
+            kernelShape[groups > 1 ? 1 : 0],    // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
+            kernelShape[groups > 1 ? 0 : 1],
+            kernelShape[2], kernelShape[3]));
     }
 
    public:
@@ -309,6 +326,7 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
      * @param inputGradTensor   output: input gradient
      * @param padBefore         number of zero samples to add to the input tensor on top/left
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups for depthwise / grouped convolutions
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& kernelTensor,
@@ -316,9 +334,10 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
                     Tensor<T>& kernelGradTensor,
                     Tensor<T>& inputGradTensor,
                     const IntPair& padBefore,
-                    const IntPair& padAfter) {
+                    const IntPair& padAfter,
+                    int groups = 1) {
         // configure oneDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter);
+        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter, groups);
 
         // pad if needed
         if (buffer) {
