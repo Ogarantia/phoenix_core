@@ -52,7 +52,7 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
         if (groups == 1) {
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
         } else {
-            if (groups == kernelShape[1]) 
+            if (groups != kernelShape[1])
                 throw std::invalid_argument("Groups convolution is not implemented yet. Groups must be equals to input channels for the Depthwise convolution 2D.");
             // converting IOHW shape into GIOHW with G=I
             Shape kernelShapeExpanded = kernelShape.expandDim(0);
