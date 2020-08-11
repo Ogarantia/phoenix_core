@@ -7,13 +7,13 @@ Context& Context::getInstance() {
     return context;
 }
 
-Memory::Memory(size_t sizeBytes): size(sizeBytes) {
-    Context::getInstance().raiseIfError(
-        cudaMalloc(&ptr, sizeBytes)
-    );
+Memory::Memory(size_t sizeBytes) : size(sizeBytes) {
+    auto status = cudaMalloc(&ptr, sizeBytes);
+    if (status != cudaError::cudaSuccess)
+        throw std::runtime_error(cudaGetErrorString(status));
 }
 
-Memory::Memory(Memory&& another): size(another.size), ptr(another.ptr) {
+Memory::Memory(Memory&& another) : size(another.size), ptr(another.ptr) {
     another.ptr = nullptr;
     another.size = 0;
 }
@@ -27,19 +27,20 @@ Memory& Memory::operator=(Memory&& another) {
     return *this;
 }
 
-
 Memory::~Memory() {
     cudaFree(ptr);
 }
 
-
 void Memory::zero() {
-    Context::getInstance().raiseIfError(cudaMemset(ptr, 0, size));
+    auto status = cudaMemset(ptr, 0, size);
+    if (status != cudaError::cudaSuccess)
+        throw std::runtime_error(cudaGetErrorString(status));
 }
 
-
 void Memory::free() {
-    Context::getInstance().raiseIfError(cudaFree(ptr));
+    auto status = cudaFree(ptr);
+    if (status != cudaError::cudaSuccess)
+        throw std::runtime_error(cudaGetErrorString(status));
     ptr = nullptr;
     size = 0;
 }
