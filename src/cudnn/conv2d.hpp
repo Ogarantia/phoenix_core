@@ -15,7 +15,7 @@ namespace upstride {
 
 namespace cudnn {
 /**
- * @brief Given a potentially spatially asymmetric padding, computes symmetric padding allowing to have the same output tensor as for the original asymmetric padding, up to a crop.
+ * @brief For an asymmetric input padding, computes symmetric padding allowing to have the same output tensor as for the original asymmetric padding, up to a crop. Otherwise transmits the input padding as is.
  *
  * @param padBefore         padding at the beginning of spatial dimensions
  * @param padAfter          padding at thg end of spatial dimensions

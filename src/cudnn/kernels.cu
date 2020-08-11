@@ -63,7 +63,7 @@ inline int ceili(int n, int d) {
 }
 
 /**
- * @brief Sets up a naive CUDA kernel grid config for a pointwise operation
+ * @brief Sets up a simple CUDA kernel grid config for a pointwise operation
  * @param shape         shape of the threads space to sample
  * @param dataFormat    data format of the corresponding shape
  * @param threads       number of threads per block (output)
