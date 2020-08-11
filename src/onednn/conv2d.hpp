@@ -1,5 +1,7 @@
 #pragma once
+#include <assert.h>
 #include "context.hpp"
+
 namespace upstride {
 
 /**
@@ -50,6 +52,9 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
         if (groups == 1) {
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
         } else {
+            if (groups == kernelShape[1]) 
+                throw std::invalid_argument("Groups convolution is not implemented yet. Groups must be equals to input channels for the Depthwise convolution 2D.");
+            // converting IOHW shape into GIOHW with G=I
             Shape kernelShapeExpanded = kernelShape.expandDim(0);
             int tmpDim = kernelShapeExpanded[0];
             kernelShapeExpanded[0] = kernelShapeExpanded[2];
@@ -140,12 +145,14 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
      * @param gradShape         grad tensor shape
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
     void configureBackend(const Shape& inputShape,
                           const Shape& kernelShape,
                           const Shape& gradShape,
                           const IntPair& padBefore,
-                          const IntPair& padAfter) {
+                          const IntPair& padAfter,
+                          const int groups = 1) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->gradShape == gradShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -161,7 +168,15 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
         // set up oneDNN memory descriptors
         // for inputs
         inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), onednn::getDataType<T>(), formatTag);
-        kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
+        if (groups == 1) {
+            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
+        } else {
+            Shape kernelShapeExpanded = kernelShape.expandDim(0);
+            int tmpDim = kernelShapeExpanded[0];
+            kernelShapeExpanded[0] = kernelShapeExpanded[2];
+            kernelShapeExpanded[2] = tmpDim;
+            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShapeExpanded), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT_DW);
+        }
         gradMemDesc = dnnl::memory::desc(onednn::shapeToDims(gradShape), onednn::getDataType<T>(), formatTag);
         // for output
         kernelGradMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
@@ -223,6 +238,7 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
 
     /**
      * @brief Executes the convolution operation
+     * 
      * @param inputTensor       forward input tensor
      * @param kernelTensor      forward input kernel tensor
      * @param gradTensor        gradient of the forward output tensor (dy)
@@ -230,6 +246,7 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
      * @param inputGradTensor   output: input gradient
      * @param padBefore         number of zero samples to add to the input tensor on top/left
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& kernelTensor,
@@ -237,10 +254,11 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
                     Tensor<T>& kernelGradTensor,
                     Tensor<T>& inputGradTensor,
                     const IntPair& padBefore,
-                    const IntPair& padAfter) {
-        // configure oneDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter);
+                    const IntPair& padAfter,
+                    const int groups = 1) {
 
+        // configure oneDNN-related stuff in a deferred fashion
+        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter, groups);
         // instantiate DNNL memory
         auto& engine = onednn::Context::getInstance().getEngine();
         dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));
