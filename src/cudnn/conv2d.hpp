@@ -159,6 +159,8 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
      * @param inputTensor       Input tensor
      * @param filterTensor      Filter tensor
      * @param outputTensor      Output tensor
+     * @param padBefore         Number of zero samples to add to the input tensor on top/left
+     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& filterTensor,
@@ -299,10 +301,14 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
     }
 
     /**
-     * @brief Executes the convolution operation
-     * @param inputTensor       Input tensor
-     * @param kernelTensor      kernel tensor
-     * @param outputTensor      Output tensor
+     * @brief Executes the operation
+     * @param inputTensor       forward input tensor
+     * @param kernelTensor      forward input kernel tensor
+     * @param gradTensor        gradient of the forward output tensor (dy)
+     * @param kernelGradTensor  output: kernel gradient
+     * @param inputGradTensor   output: input gradient
+     * @param padBefore         number of zero samples to add to the input tensor on top/left
+     * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& kernelTensor,

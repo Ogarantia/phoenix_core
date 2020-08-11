@@ -89,6 +89,8 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
      * @param inputTensor       Input tensor
      * @param kernelTensor      kernel tensor
      * @param outputTensor      Output tensor
+     * @param padBefore         Number of zero samples to add to the input tensor on top/left
+     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
     void operator()(const Tensor<const T>& inputTensor,
@@ -221,9 +223,13 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
 
     /**
      * @brief Executes the convolution operation
-     * @param inputTensor       Input tensor
-     * @param kernelTensor      kernel tensor
-     * @param outputTensor      Output tensor
+     * @param inputTensor       forward input tensor
+     * @param kernelTensor      forward input kernel tensor
+     * @param gradTensor        gradient of the forward output tensor (dy)
+     * @param kernelGradTensor  output: kernel gradient
+     * @param inputGradTensor   output: input gradient
+     * @param padBefore         number of zero samples to add to the input tensor on top/left
+     * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& kernelTensor,
