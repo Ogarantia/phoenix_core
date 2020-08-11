@@ -19,10 +19,10 @@ using namespace upstride;
  * @return number of samples resulting from the operation.
  */
 inline int computeWindowedOutputSizeAndPadding(int inputSize, int filterSize,
-                                        int dilation, int stride,
-                                        Padding padding,
-                                        int& paddingBefore,
-                                        int& paddingAfter) {
+                                               int dilation, int stride,
+                                               Padding padding,
+                                               int& paddingBefore,
+                                               int& paddingAfter) {
     // Based on Tensorflow implementation:
     // https://github.com/tensorflow/tensorflow/blob/8f7e34982dde766b3fc73c90bcdbfccc001fe8e3/tensorflow/core/framework/kernel_shape_util.cc#L18-L65
 
@@ -89,7 +89,8 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
                                       const IntTuple& explicitPaddings,
                                       const IntTuple& strides,
                                       const IntTuple& dilations,
-                                      IntPair& padBefore, IntPair& padAfter) {
+                                      IntPair& padBefore, IntPair& padAfter,
+                                      int groups) {
     // Perform shape checks
     if (inputShape.getSize() != 4)
         throw std::invalid_argument("Four-dimensional input tensor expected");
@@ -110,6 +111,7 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
 
     // For scalar tensors (typeDim == 1), work with usual 4D filters. Otherwise the filter tensor is 5D.
     //fixme: heavily disabled for testing due to oneDNN specificities
+
     const int firstFilterDim = typeDim > 1 ? 1 : 0;
     const int filterWidthDim = firstFilterDim + 3;
     const int filterHeightDim = firstFilterDim + 2;
@@ -122,7 +124,7 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
     // Set up the resulting shape
     Shape outputShape(4);
     outputShape[0] = inputShape[0];
-    outputShape.depth(dataFormat) = filterShape[filterOutChannelDim];
+    outputShape.depth(dataFormat) = groups * filterShape[filterOutChannelDim];
 
     // init padding
     if (paddingPreset == Padding::EXPLICIT) {

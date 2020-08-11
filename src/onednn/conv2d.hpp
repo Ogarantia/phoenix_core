@@ -1,12 +1,12 @@
 #pragma once
 #include "context.hpp"
-
 namespace upstride {
 
 /**
  * @brief Conv2D kernel memory layout required by oneDNN
  */
 static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT = dnnl::memory::format_tag::oihw;
+static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT_DW = dnnl::memory::format_tag::goihw;
 
 /**
  * @brief Regular 2D convolution implementation using oneDNN
@@ -30,8 +30,9 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
      * @param outputTensor      Output tensor shape
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void configureBackend(const Shape& inputShape, const Shape& kernelShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter) {
+    void configureBackend(const Shape& inputShape, const Shape& kernelShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, const int groups = 1) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -46,9 +47,16 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
 
         // set up oneDNN memory descriptors
         inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), onednn::getDataType<T>(), formatTag);
-        kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
+        if (groups == 1) {
+            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
+        } else {
+            Shape kernelShapeExpanded = kernelShape.expandDim(0);
+            int tmpDim = kernelShapeExpanded[0];
+            kernelShapeExpanded[0] = kernelShapeExpanded[2];
+            kernelShapeExpanded[2] = tmpDim;
+            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShapeExpanded), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT_DW);
+        }
         outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
-
         // set up convolution operation-related descriptors
         convPrim = dnnl::convolution_forward(dnnl::convolution_forward::primitive_desc(
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
@@ -81,14 +89,16 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
      * @param inputTensor       Input tensor
      * @param kernelTensor      kernel tensor
      * @param outputTensor      Output tensor
+     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
     void operator()(const Tensor<const T>& inputTensor,
                     const Tensor<const T>& kernelTensor,
                     Tensor<T>& outputTensor,
                     const IntPair& padBefore,
-                    const IntPair& padAfter) {
+                    const IntPair& padAfter,
+                    int groups = 1) {
         // configure oneDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), outputTensor.getShape(), padBefore, padAfter);
+        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), outputTensor.getShape(), padBefore, padAfter, groups);
 
         // instantiate DNNL memory
         auto& engine = onednn::Context::getInstance().getEngine();

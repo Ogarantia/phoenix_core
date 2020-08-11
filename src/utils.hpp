@@ -21,10 +21,10 @@ class IntPair {
     int x, y;
 
     IntPair() : x(0), y(0) {}
-    IntPair(int val): x(val), y(val) {}
-    IntPair(int x, int y): x(x), y(y) {}
+    IntPair(int val) : x(val), y(val) {}
+    IntPair(int x, int y) : x(x), y(y) {}
 
-    inline IntPair operator+(const IntPair & another) const {
+    inline IntPair operator+(const IntPair& another) const {
         return IntPair(x + another.x, y + another.y);
     }
 
@@ -187,6 +187,25 @@ class Shape {
             numel *= shape[i];
         return numel;
     }
+
+    /**
+     * @brief Add a dimension of 1 at the "dim" index
+     *
+     * @param dim    Index where the new dimension must be added
+     * @return Shape Return a new Shape with the new dimension.
+     */
+    Shape expandDim(int dim = 0) const {
+        Shape shape(size + 1);
+        for (int i = 0; i < size + 1; i++) {
+            if (i < dim)
+                shape[i] = this->shape[i];
+            else if (i == dim)
+                shape[i] = 1;
+            else
+                shape[i] = this->shape[i - 1];
+        }
+        return shape;
+    }
 };
 
 /**
@@ -263,6 +282,7 @@ bool getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal, IntPair&
  * @param dilations         Convolution dilation rate
  * @param padBefore         Number of zero samples to add at the beginning to height and width input dimensions (computed in function of other parameters)
  * @param padAfter          Number of zero samples to add at the end to height and width input dimensions (computed in function of other parameters)
+ * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
  * @return the output tensor shape.
  */
 Shape computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
@@ -271,7 +291,8 @@ Shape computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
                             const IntTuple& explicitPaddings,
                             const IntTuple& strides,
                             const IntTuple& dilations,
-                            IntPair& padBefore, IntPair& padAfter);
+                            IntPair& padBefore, IntPair& padAfter,
+                            int groups = 1);
 
 }  // namespace upstride
 
