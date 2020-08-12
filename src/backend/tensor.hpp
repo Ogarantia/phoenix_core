@@ -111,6 +111,26 @@ class Shape {
     int& operator[](int i) { return shape[i]; }
 
     /**
+     * @brief Overloaded "==" operator to compare two Shapes.
+     * 
+     * @param another Shape
+     * @return true if both Shape are equals; size and dimensions
+     * @return false 
+     */
+    inline bool operator==(const Shape& another) const {
+        if (size != another.size)
+            return false;
+        for (size_t i = 0; i < size; i++)
+            if (shape[i] != another.shape[i])
+                return false;
+        return true;
+    }
+
+    inline bool operator!=(const Shape& another) const {
+        return !(*this == another);
+    }
+
+    /**
      * @brief Accesses the width dimension in function of a specific data format
      * @param fmt   The data format of the tensor
      * @return the tensor width.

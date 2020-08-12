@@ -108,19 +108,3 @@ inline std::ostream& operator<<(std::ostream& str, const upstride::Shape& shape)
 }
 
 }  // namespace std
-
-/**
- * @brief Overloaded "==" operator to compare two Shape a and b.
- * 
- * @param a Shape
- * @param b Shape
- * @return true if both Shape are equals; size and dimensions
- * @return false 
- */
-inline bool operator==(const upstride::Shape& a, const upstride::Shape& b) {
-    if (!(a.getSize() == b.getSize())) return false;
-    for (size_t i = 0; i < a.getSize(); i++) {
-        if (a[i] != b[i]) return false;
-    }
-    return true;
-}
