@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include "../utils.hpp"
+#include "../backend.hpp"
 #include "context.hpp"
 #include "kernels.hpp"
 
@@ -51,11 +51,11 @@ inline IntPair symmetrizePadding(const IntPair& padBefore, const IntPair& padAft
 }  // namespace cudnn
 
 /**
- * @brief Regular 2D convolution implementation using cuDNN.
+ * @brief 2D convolution implementation using cuDNN.
  * @tparam T    A scalar datatype for the tensor content
  */
 template <typename T>
-class UpstrideConv2DFunctor<upstride::device::GPU, T> {
+class ScalarConv2DFunctor<upstride::device::GPU, T> {
    private:
     Shape inputShape, filterShape, outputShape;
     Shape repaddedOutputShape;  //!< intermediate output shape for symmetrically padded input to handle the asymmetric padding
@@ -128,21 +128,21 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
         cudnn::Context::raiseIfError(cudnnSetFilter4dDescriptor(
             filterDesc,
             cudnn::getDataType<T>(),
-            CUDNN_TENSOR_NCHW,  // OIHW according to the docs
-            filterShape[groups > 1 ? 1 : 0],    // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
+            CUDNN_TENSOR_NCHW,                // OIHW according to the docs
+            filterShape[groups > 1 ? 1 : 0],  // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
             filterShape[groups > 1 ? 0 : 1],
             filterShape[2], filterShape[3]));
     }
 
    public:
-    UpstrideConv2DFunctor() {
+    ScalarConv2DFunctor() {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
         cudnn::Context::raiseIfError(cudnnCreateFilterDescriptor(&filterDesc));
     }
 
-    ~UpstrideConv2DFunctor() {
+    ~ScalarConv2DFunctor() {
         cudnnDestroyConvolutionDescriptor(convDesc);
         cudnnDestroyTensorDescriptor(inputDesc);
         cudnnDestroyTensorDescriptor(outputDesc);
@@ -203,12 +203,11 @@ class UpstrideConv2DFunctor<upstride::device::GPU, T> {
 };
 
 /**
- * @brief Regular 2D backward convolution implementation using cuDNN
- *
+ * @brief 2D backward convolution implementation using cuDNN
  * @tparam T    scalar datatype
  */
 template <typename T>
-class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
+class ScalarConv2DGradFunctor<upstride::device::GPU, T> {
    private:
     Shape inputShape, kernelShape, gradShape;
     Shape repaddedGradShape;  //!< gradient tensor (dy) shape for symmetrically padded input to handle the asymmetric padding
@@ -288,21 +287,21 @@ class UpstrideConv2DGradFunctor<upstride::device::GPU, T> {
         cudnn::Context::raiseIfError(cudnnSetFilter4dDescriptor(
             kernelGradDesc,
             cudnn::getDataType<T>(),
-            CUDNN_TENSOR_NCHW,  // OIHW according to the docs
-            kernelShape[groups > 1 ? 1 : 0],    // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
+            CUDNN_TENSOR_NCHW,                // OIHW according to the docs
+            kernelShape[groups > 1 ? 1 : 0],  // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
             kernelShape[groups > 1 ? 0 : 1],
             kernelShape[2], kernelShape[3]));
     }
 
    public:
-    UpstrideConv2DGradFunctor() {
+    ScalarConv2DGradFunctor() {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&gradDesc));
         cudnn::Context::raiseIfError(cudnnCreateFilterDescriptor(&kernelGradDesc));
     }
 
-    ~UpstrideConv2DGradFunctor() {
+    ~ScalarConv2DGradFunctor() {
         cudnnDestroyConvolutionDescriptor(convDesc);
         cudnnDestroyTensorDescriptor(inputDesc);
         cudnnDestroyTensorDescriptor(gradDesc);

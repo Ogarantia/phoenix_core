@@ -10,9 +10,9 @@
 
 #include <cudnn.h>
 
-#include <exception>
+#include <stdexcept>
 
-#include "../upstride.hpp"
+#include "../backend.hpp"
 
 namespace upstride {
 namespace cudnn {

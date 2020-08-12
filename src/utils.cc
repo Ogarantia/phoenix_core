@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <stdexcept>
 
-#include "upstride.hpp"
-
 using namespace upstride;
 
 /**

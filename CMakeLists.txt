@@ -36,7 +36,7 @@ if (WITH_ONEDNN)
 
   # add oneDNN-specific sources
   set(SOURCES ${SOURCES}
-      ${CPP_SOURCES_FOLDER}/onednn/onednn.cc
+      ${CPP_SOURCES_FOLDER}/backend/onednn/onednn.cc
   )
 endif()
 
@@ -47,8 +47,8 @@ endif()
 if (WITH_CUDNN)
   set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${CMAKE_CXX_FLAGS}")
   set(SOURCES ${SOURCES}
-      ${CPP_SOURCES_FOLDER}/cudnn/cudnn.cc
-      ${CPP_SOURCES_FOLDER}/cudnn/kernels.cu
+      ${CPP_SOURCES_FOLDER}/backend/cudnn/cudnn.cc
+      ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels.cu
   )
   link_libraries(cudnn)
 endif()

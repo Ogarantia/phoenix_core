@@ -1,8 +1,8 @@
 #pragma once
 #include <unordered_map>
 
+#include "../backend.hpp"
 #include "dnnl.hpp"
-#include "upstride.hpp"
 
 namespace upstride {
 namespace onednn {

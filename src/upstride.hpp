@@ -1,41 +1,12 @@
+/**
+ * @file upstride.hpp
+ * @author Maxim Karpushin (maxim.karpushin@upstride.io)
+ * @brief UpStride API
+ * Include this file to get the whole package at once
+ * @copyright Copyright (c) 2020 UpStride
+ */
+
 #pragma once
 
 #include "utils.hpp"
-
-namespace upstride {
-
-namespace device {
-
-typedef struct {
-} CPU;
-typedef struct {
-} GPU;
-
-}  // namespace device
-
-
-class Context {
-    const int typeDimensions;
-
-   protected:
-    Context(const int td) : typeDimensions(td){};
-};
-
-/**
- * @brief Operation functors declarations
- * The operations are only declared here. They are specialized further on for every backend.
- * @tparam Device       A device the specific implementation is designed for
- * @tparam T            A scalar datatype
- */
-template <typename Device, typename T>
-class UpstrideConv2DFunctor;
-
-/**
- * @brief Operation functors declarations for the convolution 2D backward propagation  
- * The operations are only declared here. They are specialized further on for every backend.
- * @tparam Device       A device the specific implementation is designed for
- * @tparam T            A scalar datatype
- */
-template <typename Device, typename T>
-class UpstrideConv2DGradFunctor;
-}  // namespace upstride
+#include "conv2d.hpp"

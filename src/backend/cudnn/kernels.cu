@@ -1,6 +1,6 @@
 #include <cuda.h>
 
-#include <exception>
+#include <stdexcept>
 
 #include "context.hpp"
 #include "kernels.hpp"

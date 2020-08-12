@@ -1,5 +1,7 @@
 #pragma once
 #include <assert.h>
+
+#include "../backend.hpp"
 #include "context.hpp"
 
 namespace upstride {
@@ -11,11 +13,11 @@ static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT = dnnl::memory::forma
 static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT_DW = dnnl::memory::format_tag::goihw;
 
 /**
- * @brief Regular 2D convolution implementation using oneDNN
+ * @brief 2D convolution implementation using oneDNN
  * @tparam T    scalar datatype
  */
 template <typename T>
-class UpstrideConv2DFunctor<upstride::device::CPU, T> {
+class ScalarConv2DFunctor<upstride::device::CPU, T> {
    private:
     dnnl::memory::desc inputMemDesc, kernelMemDesc, outputMemDesc;
     dnnl::convolution_forward convPrim;
@@ -75,7 +77,7 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
     }
 
    public:
-    UpstrideConv2DFunctor() {}
+    ScalarConv2DFunctor() {}
 
     /**
      * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
@@ -121,12 +123,11 @@ class UpstrideConv2DFunctor<upstride::device::CPU, T> {
 };
 
 /**
- * @brief Regular 2D backward convolution implementation using oneDNN
- * 
+ * @brief 2D backward convolution implementation using oneDNN
  * @tparam T    scalar datatype 
  */
 template <typename T>
-class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
+class ScalarConv2DGradFunctor<upstride::device::CPU, T> {
    private:
     dnnl::memory::desc inputMemDesc, kernelMemDesc, gradMemDesc, kernelGradMemDesc, inputGradMemDesc;
     dnnl::convolution_backward_data convBackDataPrim;
@@ -227,7 +228,7 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
     }
 
    public:
-    UpstrideConv2DGradFunctor() {}
+    ScalarConv2DGradFunctor() {}
 
     void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation, bool requireInputGrad) {
         this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
@@ -256,7 +257,6 @@ class UpstrideConv2DGradFunctor<upstride::device::CPU, T> {
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     const int groups = 1) {
-
         // configure oneDNN-related stuff in a deferred fashion
         configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter, groups);
         // instantiate DNNL memory

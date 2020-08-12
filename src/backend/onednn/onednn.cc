@@ -1,7 +1,6 @@
 
 #include "context.hpp"
 #include "dnnl.hpp"
-#include "upstride.hpp"
 
 using namespace upstride::onednn;
 

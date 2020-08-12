@@ -5,8 +5,9 @@
  * 
  * @copyright Copyright (c) 2020 UpStride 
  */
+
 #pragma once
-#include "../utils.hpp"
+#include "../tensor.hpp"
 
 namespace upstride {
 namespace cudnn {
