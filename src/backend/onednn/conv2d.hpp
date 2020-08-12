@@ -85,10 +85,10 @@ class ScalarConv2DFunctor<upstride::device::CPU, T> {
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      */
-    void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation) {
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
         this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
-        getSpatialStep(stride, 1, this->stride);
-        getSpatialStep(dilation, 1, this->dilation);
+        this->stride = stride;
+        this->dilation = dilation;
     }
 
     /**
@@ -230,10 +230,10 @@ class ScalarConv2DGradFunctor<upstride::device::CPU, T> {
    public:
     ScalarConv2DGradFunctor() {}
 
-    void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation, bool requireInputGrad) {
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
         this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
-        getSpatialStep(stride, 1, this->stride);
-        getSpatialStep(dilation, 1, this->dilation);
+        this->stride = stride;
+        this->dilation = dilation;
         this->requireInputGrad = requireInputGrad;
     }
 

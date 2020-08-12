@@ -24,7 +24,7 @@ class UpstrideConv2DFunctor {
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      */
-    void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation) {
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
         convOp.configure(dataFormat, stride, dilation);
     }
 
@@ -62,7 +62,7 @@ class UpstrideConv2DGradFunctor {
      * @param dilation      Convolution dilation
      * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
      */
-    void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation, bool requireInputGrad) {
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
         convOp.configure(dataFormat, stride, dilation, requireInputGrad);
     }
 

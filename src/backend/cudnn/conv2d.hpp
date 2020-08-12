@@ -155,11 +155,12 @@ class ScalarConv2DFunctor<upstride::device::GPU, T> {
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      */
-    void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation) {
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
         this->dataFormat = dataFormat;
-        getSpatialStep(stride, 1, this->stride);
-        getSpatialStep(dilation, 1, this->dilation);
+        this->stride = stride;
+        this->dilation = dilation;
     }
+
 
     /**
      * @brief Executes the convolution operation
@@ -308,12 +309,12 @@ class ScalarConv2DGradFunctor<upstride::device::GPU, T> {
         cudnnDestroyFilterDescriptor(kernelGradDesc);
     }
 
-    void configure(DataFormat dataFormat, const IntTuple& stride, const IntTuple& dilation, bool requireInputGrad) {
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
         if (requireInputGrad)
             throw std::runtime_error("Conv2D gradient computation with respect to the input tensor is not implemented");
         this->dataFormat = dataFormat;
-        getSpatialStep(stride, 1, this->stride);
-        getSpatialStep(dilation, 1, this->dilation);
+        this->stride = stride;
+        this->dilation = dilation;
     }
 
     /**
