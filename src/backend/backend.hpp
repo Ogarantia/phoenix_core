@@ -18,12 +18,15 @@
 
 namespace upstride {
 
+/**
+ * @brief Backend enumeration
+ */
 namespace device {
 
 typedef struct {
-} CPU;
+} CPU;      //!< CPU oneDNN backend
 typedef struct {
-} GPU;
+} CUDA;     //!< CUDA/cuDNN GPU backend
 
 }  // namespace device
 

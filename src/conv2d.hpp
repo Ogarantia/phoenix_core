@@ -37,14 +37,15 @@ class UpstrideConv2DFunctor {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void operator()(const Tensor<const T>& inputTensor,
-                    const Tensor<const T>& kernelTensor,
-                    Tensor<T>& outputTensor,
+    void operator()(const Tensor<Device, const T>& inputTensor,
+                    const Tensor<Device, const T>& kernelTensor,
+                    Tensor<Device, T>& outputTensor,
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
         // fixme: this is scalar sconvolution operator
         convOp(inputTensor, kernelTensor, outputTensor, padBefore, padAfter, groups);
+        
         // TODO: implement quaternion convolution right here
     }
 };
@@ -77,11 +78,11 @@ class UpstrideConv2DGradFunctor {
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void operator()(const Tensor<const T>& inputTensor,
-                    const Tensor<const T>& kernelTensor,
-                    const Tensor<const T>& gradTensor,
-                    Tensor<T>& kernelGradTensor,
-                    Tensor<T>& inputGradTensor,
+    void operator()(const Tensor<Device, const T>& inputTensor,
+                    const Tensor<Device, const T>& kernelTensor,
+                    const Tensor<Device, const T>& gradTensor,
+                    Tensor<Device, T>& kernelGradTensor,
+                    Tensor<Device, T>& inputGradTensor,
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {

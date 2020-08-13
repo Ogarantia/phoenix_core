@@ -55,7 +55,7 @@ inline IntPair symmetrizePadding(const IntPair& padBefore, const IntPair& padAft
  * @tparam T    A scalar datatype for the tensor content
  */
 template <typename T>
-class ScalarConv2DFunctor<upstride::device::GPU, T> {
+class ScalarConv2DFunctor<device::CUDA, T> {
    private:
     Shape inputShape, filterShape, outputShape;
     Shape repaddedOutputShape;  //!< intermediate output shape for symmetrically padded input to handle the asymmetric padding
@@ -171,9 +171,9 @@ class ScalarConv2DFunctor<upstride::device::GPU, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void operator()(const Tensor<const T>& inputTensor,
-                    const Tensor<const T>& filterTensor,
-                    Tensor<T>& outputTensor,
+    void operator()(const Tensor<device::CUDA, const T>& inputTensor,
+                    const Tensor<device::CUDA, const T>& filterTensor,
+                    Tensor<device::CUDA, T>& outputTensor,
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
@@ -196,7 +196,7 @@ class ScalarConv2DFunctor<upstride::device::GPU, T> {
         // crop, if needed
         if (buffer)
             cudnn::crop(
-                Tensor<const T>(repaddedOutputShape, (const T*)buffer),
+                Tensor<device::CUDA, const T>(repaddedOutputShape, (const T*)buffer),
                 outputTensor,
                 dataFormat,
                 repaddingOffset);
@@ -208,7 +208,7 @@ class ScalarConv2DFunctor<upstride::device::GPU, T> {
  * @tparam T    scalar datatype
  */
 template <typename T>
-class ScalarConv2DGradFunctor<upstride::device::GPU, T> {
+class ScalarConv2DGradFunctor<device::CUDA, T> {
    private:
     Shape inputShape, kernelShape, gradShape;
     Shape repaddedGradShape;  //!< gradient tensor (dy) shape for symmetrically padded input to handle the asymmetric padding
@@ -328,11 +328,11 @@ class ScalarConv2DGradFunctor<upstride::device::GPU, T> {
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void operator()(const Tensor<const T>& inputTensor,
-                    const Tensor<const T>& kernelTensor,
-                    const Tensor<const T>& gradTensor,
-                    Tensor<T>& kernelGradTensor,
-                    Tensor<T>& inputGradTensor,
+    void operator()(const Tensor<device::CUDA, const T>& inputTensor,
+                    const Tensor<device::CUDA, const T>& kernelTensor,
+                    const Tensor<device::CUDA, const T>& gradTensor,
+                    Tensor<device::CUDA, T>& kernelGradTensor,
+                    Tensor<device::CUDA, T>& inputGradTensor,
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
@@ -341,7 +341,7 @@ class ScalarConv2DGradFunctor<upstride::device::GPU, T> {
 
         // pad if needed
         if (buffer) {
-            Tensor<T> repaddedGradTensor(repaddedGradShape, (T*)buffer);
+            Tensor<device::CUDA, T> repaddedGradTensor(repaddedGradShape, (T*)buffer);
             cudnn::insert(gradTensor, repaddedGradTensor, dataFormat, repaddingOffset);
         }
 

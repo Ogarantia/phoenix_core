@@ -75,7 +75,7 @@ TEST_CASE("Test:Tensor") {
         upstride::Shape s1(4, shapes);
         float* img = (float*)calloc(224 * 224 * 3, sizeof(float));
 
-        upstride::Tensor<float> t1(s1, img);
+        upstride::Tensor<upstride::device::CPU, float> t1(s1, img);
         bool test = true;
 
         for (int i = 0; i < 224 * 224 * 3 && test; i++) {

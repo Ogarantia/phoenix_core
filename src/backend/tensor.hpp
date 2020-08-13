@@ -201,9 +201,11 @@ class Shape {
  * 
  * @tparam T Type of the tensor
  */
-template <typename T>
+template <typename Device, typename T>
 class Tensor {
     const Shape shape;
+
+   protected:
     T* tensor;
 
    public:
@@ -215,6 +217,7 @@ class Tensor {
     */
     Tensor(const Shape& sh, T* t) : shape(sh.getSize(), sh.getShapePtr()),
                                     tensor(t) {}
+
     /**
      * @brief Get the pointer to the Tensor object 
      * 

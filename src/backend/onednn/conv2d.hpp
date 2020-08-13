@@ -17,7 +17,7 @@ static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT_DW = dnnl::memory::fo
  * @tparam T    scalar datatype
  */
 template <typename T>
-class ScalarConv2DFunctor<upstride::device::CPU, T> {
+class ScalarConv2DFunctor<device::CPU, T> {
    private:
     dnnl::memory::desc inputMemDesc, kernelMemDesc, outputMemDesc;
     dnnl::convolution_forward convPrim;
@@ -100,9 +100,9 @@ class ScalarConv2DFunctor<upstride::device::CPU, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void operator()(const Tensor<const T>& inputTensor,
-                    const Tensor<const T>& kernelTensor,
-                    Tensor<T>& outputTensor,
+    void operator()(const Tensor<device::CPU, const T>& inputTensor,
+                    const Tensor<device::CPU, const T>& kernelTensor,
+                    Tensor<device::CPU, T>& outputTensor,
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
@@ -127,7 +127,7 @@ class ScalarConv2DFunctor<upstride::device::CPU, T> {
  * @tparam T    scalar datatype 
  */
 template <typename T>
-class ScalarConv2DGradFunctor<upstride::device::CPU, T> {
+class ScalarConv2DGradFunctor<device::CPU, T> {
    private:
     dnnl::memory::desc inputMemDesc, kernelMemDesc, gradMemDesc, kernelGradMemDesc, inputGradMemDesc;
     dnnl::convolution_backward_data convBackDataPrim;
@@ -249,11 +249,11 @@ class ScalarConv2DGradFunctor<upstride::device::CPU, T> {
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void operator()(const Tensor<const T>& inputTensor,
-                    const Tensor<const T>& kernelTensor,
-                    const Tensor<const T>& gradTensor,
-                    Tensor<T>& kernelGradTensor,
-                    Tensor<T>& inputGradTensor,
+    void operator()(const Tensor<device::CPU, const T>& inputTensor,
+                    const Tensor<device::CPU, const T>& kernelTensor,
+                    const Tensor<device::CPU, const T>& gradTensor,
+                    Tensor<device::CPU, T>& kernelGradTensor,
+                    Tensor<device::CPU, T>& inputGradTensor,
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     const int groups = 1) {

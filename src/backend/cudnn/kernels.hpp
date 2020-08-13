@@ -8,6 +8,7 @@
 
 #pragma once
 #include "../tensor.hpp"
+#include "../backend.hpp"
 
 namespace upstride {
 namespace cudnn {
@@ -21,10 +22,7 @@ namespace cudnn {
  * @param dataFormat    input and output data format
  */
 template <typename T>
-void crop(const Tensor<const T>& input, Tensor<T>& output, DataFormat dataFormat, const IntPair& offset);
-
-template <>
-void crop(const Tensor<const float>& input, Tensor<float>& output, DataFormat dataFormat, const IntPair& offset);
+extern void crop(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
 
 /**
  * @brief Insert a tensor into another bigger tensor with a potential offset along the spatial dimensions H and W
@@ -36,10 +34,8 @@ void crop(const Tensor<const float>& input, Tensor<float>& output, DataFormat da
  * @param offset        position of the topleft corner of the input inside the output
  */
 template <typename T>
-void insert(const Tensor<const T>& input, Tensor<T>& output, DataFormat dataFormat, const IntPair& offset);
-
-template <>
-void insert(const Tensor<const float>& input, Tensor<float>& output, DataFormat dataFormat, const IntPair& offset);
+extern void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
 
 }  // namespace cudnn
+
 }  // namespace upstride

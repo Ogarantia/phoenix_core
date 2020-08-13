@@ -81,7 +81,11 @@ inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim
         ceili(shape.depth(dataFormat) * shape[0], threads.z));
 }
 
-void upstride::cudnn::crop(const Tensor<const float>& input, Tensor<float>& output, DataFormat dataFormat, const IntPair& offset) {
+namespace upstride {
+namespace cudnn {
+
+template <>
+void crop(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
     // check stuff
     const Shape& inShape = input.getShape();
     const Shape& outShape = output.getShape();
@@ -114,7 +118,8 @@ void upstride::cudnn::crop(const Tensor<const float>& input, Tensor<float>& outp
     Context::raiseIfError();
 }
 
-void upstride::cudnn::insert(const Tensor<const float>& input, Tensor<float>& output, DataFormat dataFormat, const IntPair& offset) {
+template <>
+void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
     // check stuff
     const Shape& inShape = input.getShape();
     const Shape& outShape = output.getShape();
@@ -146,3 +151,8 @@ void upstride::cudnn::insert(const Tensor<const float>& input, Tensor<float>& ou
 
     Context::raiseIfError();
 }
+
+
+}  // namespace cudnn
+
+}  // namespace upstride
