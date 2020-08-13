@@ -196,6 +196,38 @@ class Shape {
     }
 };
 
+template <typename Device, typename T>
+class Tensor;  //!< forward declaration
+
+/**
+ * @brief Declares a set of tensor manipulation routines.
+ * This structure is to be specialized in every backend to bring up the implementation.
+ * These routines are not intended to be used directly in the core code. They are wrapped in operators in Tensor class.
+ */
+template <typename Device>
+struct TensorManipulations {
+    /**
+     * @brief Accumulate a tensor (b) to another tensor (a) by addition: a = a + b
+     * @tparam T scalar datatype
+     * @param input   the tensor values to be added (b)
+     * @param output  the destination tensor (a)
+     * @param shape   shape of both tensors
+     */
+    template <typename T>
+    void accumulateAdd(const Tensor<Device, T>& input, Tensor<Device, T>& output, const Shape& shape);
+
+    /**
+     * @brief Accumulate a tensor (b) to another tensor (a) by subtraction: a = a - b
+     * @tparam T scalar datatype
+     * @param input   the tensor values to be subtracted (b)
+     * @param output  the destination tensor (a)
+     * @param shape   shape of both tensors
+     */
+    template <typename T>
+    void accumulateSub(const Tensor<Device, T>&, Tensor<Device, T>& output, const Shape& shape);
+
+};  // namespace tensor_arithmetics
+
 /**
  * @brief Tensor representation using its shape a tensor array
  * 
@@ -206,32 +238,60 @@ class Tensor {
     const Shape shape;
 
    protected:
-    T* tensor;
+    T* tensor;  //!< points to the tensor content in memory
 
    public:
     /**
-    * @brief Construct a new Tensor object
-    * 
-    * @param sh Shape of the tensor
-    * @param t Tensor
+    * @brief Construct a new Tensor object from an existing content
+    * @param sh     Shape of the tensor
+    * @param t      pointer to the content
     */
     Tensor(const Shape& sh, T* t) : shape(sh.getSize(), sh.getShapePtr()),
                                     tensor(t) {}
 
     /**
-     * @brief Get the pointer to the Tensor object 
-     * 
+     * @brief Get the pointer to the tensor content in memory
      * @return T* Pointer to tensor
      */
     T* getDataPtr() { return tensor; }
     const T* getDataPtr() const { return tensor; }
 
     /**
-     * @brief Get the Shape object
-     * 
+     * @brief Retrieves the shape of the Tensor instance
      * @return const Shape& 
      */
     const Shape& getShape() const { return shape; }
+
+    /**
+     * @brief Adds a Tensor to the current Tensor
+     * @param another   the tensor to add
+     * @return the tensor itself
+     */
+    inline Tensor& operator+=(const Tensor& another) {
+        if (shape != another.shape)
+            throw std::invalid_argument("Tensor shapes mismatch in accumulate-add");
+        TensorManipulations<Device>::accumulateAdd(another, *this, shape);
+        return *this;
+    }
+
+    /**
+     * @brief Subtracts a Tensor to the current Tensor
+     * @param another   the tensor to subtract
+     * @return the tensor itself
+     */
+    inline Tensor& operator-=(const Tensor& another) {
+        if (shape != another.shape)
+            throw std::invalid_argument("Tensor shapes mismatch in accumulate-subtract");
+        TensorManipulations<Device>::accumulateSub(another, *this, shape);
+        return *this;
+    }
 };
+
+/**
+ * @brief Forward declaration of a Tensor implementation that allocates and frees the memory itself.
+ * The implementation is device-dependend and is provided by every backend.
+ */
+template <typename Device, typename T>
+class AllocatedTensor;
 
 }  // namespace upstride

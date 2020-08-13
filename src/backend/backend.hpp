@@ -24,9 +24,9 @@ namespace upstride {
 namespace device {
 
 typedef struct {
-} CPU;      //!< CPU oneDNN backend
+} CPU;  //!< CPU oneDNN backend
 typedef struct {
-} CUDA;     //!< CUDA/cuDNN GPU backend
+} CUDA;  //!< CUDA/cuDNN GPU backend
 
 }  // namespace device
 

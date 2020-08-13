@@ -8,9 +8,11 @@
  */
 
 // oneDNN CPU backend implementation
+#include "onednn/tensor.hpp"
 #include "onednn/conv2d.hpp"
 
 // cuDNN GPU backend implementation
 #ifdef BACKEND_CUDNN
+#include "cudnn/tensor.hpp"
 #include "cudnn/conv2d.hpp"
 #endif
