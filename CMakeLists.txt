@@ -23,11 +23,17 @@ set(SOURCES ${SOURCES}
 #######################
 
 if (WITH_ONEDNN)
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -ftree-vectorize -msse4.1")
+  else ()
+    set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize -ftree-vectorize -msse4.1")
+ endif()
+
   # add dependency to oneDNN
   set(ONEDNN_SUBMODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/thirdparty/onednn")
   option(DNNL_BUILD_TESTS "Build DNLL tests" OFF)
   option(DNNL_BUILD_EXAMPLES "Build DNLL examples" OFF)
-  set(DNNL_ARCH_OPT_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize -ftree-vectorize -msse4.1" CACHE INTERNAL "" )
+  set(DNNL_ARCH_OPT_FLAGS ${OPTIMIZATION_FLAGS} CACHE INTERNAL "" )
   message("**************** Compiling oneDNN: ****************")
   add_subdirectory(${ONEDNN_SUBMODULE_PATH})
   message("**************** ***************** ****************")
