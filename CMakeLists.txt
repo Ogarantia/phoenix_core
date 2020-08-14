@@ -18,17 +18,17 @@ set(SOURCES ${SOURCES}
     ${CPP_SOURCES_FOLDER}/utils.cc
 )
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -ftree-vectorize -msse4.1")
+else ()
+  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize -ftree-vectorize -msse4.1")
+endif()
+
 #######################
 #    ONEDNN SETUP     #
 #######################
 
 if (WITH_ONEDNN)
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -ftree-vectorize -msse4.1")
-  else ()
-    set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize -ftree-vectorize -msse4.1")
- endif()
-
   # add dependency to oneDNN
   set(ONEDNN_SUBMODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/thirdparty/onednn")
   option(DNNL_BUILD_TESTS "Build DNLL tests" OFF)
@@ -51,7 +51,7 @@ endif()
 #######################
 
 if (WITH_CUDNN)
-  set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${CMAKE_CXX_FLAGS}")
+  set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS} ${CMAKE_CXX_FLAGS}")
   set(SOURCES ${SOURCES}
       ${CPP_SOURCES_FOLDER}/backend/cudnn/cudnn.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels.cu
