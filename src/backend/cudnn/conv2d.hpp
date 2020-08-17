@@ -58,13 +58,12 @@ template <typename T>
 class ScalarConv2DFunctor<device::CUDA, T> {
    private:
     Shape inputShape, filterShape, outputShape;
-    Shape repaddedOutputShape;  //!< intermediate output shape for symmetrically padded input to handle the asymmetric padding
     IntPair padBefore;          //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
     IntPair padAfter;           //!< zero padding: number of zeros to add at the end to every input spatial dimension
     IntPair actualPad;          //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
     IntPair repaddingOffset;    //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
     IntPair stride, dilation;
-    cudnn::Memory buffer;  //!< buffer in device memory used to store the uncropped output when dealing with the asymmetric padding
+    AllocatedTensor<device::CUDA, T>* buffer;  //!< buffer in device memory used to store the uncropped output when dealing with the asymmetric padding
 
     DataFormat dataFormat;
     cudnnConvolutionDescriptor_t convDesc;
@@ -93,19 +92,20 @@ class ScalarConv2DFunctor<device::CUDA, T> {
         this->padBefore = padBefore;
         this->padAfter = padAfter;
 
-        repaddedOutputShape = outputShape;
+        Shape repaddedOutputShape(outputShape);
 
         // check for padding symmetry
         if (padBefore == padAfter) {
             actualPad = padBefore;
-            buffer.free();
+            delete buffer;
+            buffer = nullptr;
         } else {
             actualPad = cudnn::symmetrizePadding(padBefore, padAfter, stride, repaddingOffset);
             repaddedOutputShape.width(dataFormat) += repaddingOffset.x;
             repaddedOutputShape.height(dataFormat) += repaddingOffset.y;
 
             // allocate intermediate buffer to fit the output into
-            buffer = cudnn::Memory(repaddedOutputShape.numel() * sizeof(T));
+            buffer = new AllocatedTensor<device::CUDA, T>(repaddedOutputShape);
         }
 
         // setup convolution descriptor
@@ -135,7 +135,7 @@ class ScalarConv2DFunctor<device::CUDA, T> {
     }
 
    public:
-    ScalarConv2DFunctor() {
+    ScalarConv2DFunctor(): buffer(nullptr) {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
@@ -143,6 +143,7 @@ class ScalarConv2DFunctor<device::CUDA, T> {
     }
 
     ~ScalarConv2DFunctor() {
+        delete buffer;
         cudnnDestroyConvolutionDescriptor(convDesc);
         cudnnDestroyTensorDescriptor(inputDesc);
         cudnnDestroyTensorDescriptor(outputDesc);
@@ -191,12 +192,12 @@ class ScalarConv2DFunctor<device::CUDA, T> {
             CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM,
             nullptr, 0,
             &beta,
-            outputDesc, buffer ? buffer : outputTensor.getDataPtr()));
+            outputDesc, buffer ? buffer->getDataPtr() : outputTensor.getDataPtr()));
 
         // crop, if needed
         if (buffer)
             cudnn::crop(
-                Tensor<device::CUDA, const T>(repaddedOutputShape, (const T*)buffer),
+                *buffer,
                 outputTensor,
                 dataFormat,
                 repaddingOffset);
@@ -211,14 +212,13 @@ template <typename T>
 class ScalarConv2DGradFunctor<device::CUDA, T> {
    private:
     Shape inputShape, kernelShape, gradShape;
-    Shape repaddedGradShape;  //!< gradient tensor (dy) shape for symmetrically padded input to handle the asymmetric padding
     IntPair padBefore;        //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
     IntPair padAfter;         //!< zero padding: number of zeros to add at the end to every input spatial dimension
     IntPair actualPad;        //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
     IntPair repaddingOffset;  //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
     IntPair stride, dilation;
     DataFormat dataFormat;
-    cudnn::Memory buffer;  //!< intermediate buffer to store repadded output gradient
+    AllocatedTensor<device::CUDA, T>* buffer;  //!< intermediate buffer to store repadded output gradient
 
     cudnnConvolutionDescriptor_t convDesc;   //!< convolution operation descriptor, as in forward
     cudnnTensorDescriptor_t inputDesc;       //!< input (x) descriptor
@@ -252,20 +252,21 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
         this->padBefore = padBefore;
         this->padAfter = padAfter;
 
-        repaddedGradShape = gradShape;
+        Shape repaddedGradShape = gradShape;
 
         // check for padding symmetry
         if (padBefore == padAfter) {
             actualPad = padBefore;
-            buffer.free();
+            delete buffer;
+            buffer = nullptr;
         } else {
             actualPad = cudnn::symmetrizePadding(padBefore, padAfter, stride, repaddingOffset);
             repaddedGradShape.width(dataFormat) += repaddingOffset.x;
             repaddedGradShape.height(dataFormat) += repaddingOffset.y;
 
             // allocate the intermediate buffer
-            buffer = cudnn::Memory(repaddedGradShape.numel() * sizeof(T));
-            buffer.zero();
+            buffer = new AllocatedTensor<device::CUDA, T>(repaddedGradShape);
+            buffer->zero();
         }
 
         // setup convolution descriptor
@@ -295,7 +296,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
     }
 
    public:
-    ScalarConv2DGradFunctor() {
+    ScalarConv2DGradFunctor(): buffer(nullptr) {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&gradDesc));
@@ -303,6 +304,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
     }
 
     ~ScalarConv2DGradFunctor() {
+        delete buffer;
         cudnnDestroyConvolutionDescriptor(convDesc);
         cudnnDestroyTensorDescriptor(inputDesc);
         cudnnDestroyTensorDescriptor(gradDesc);
@@ -340,10 +342,8 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
         configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter, groups);
 
         // pad if needed
-        if (buffer) {
-            Tensor<device::CUDA, T> repaddedGradTensor(repaddedGradShape, (T*)buffer);
-            cudnn::insert(gradTensor, repaddedGradTensor, dataFormat, repaddingOffset);
-        }
+        if (buffer)
+            cudnn::insert(gradTensor, *buffer, dataFormat, repaddingOffset);
 
         // perform the gradient computation
         const T alpha = 1, beta = 0;
@@ -351,7 +351,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
             cudnn::Context::getInstance().getHandle(),
             &alpha,
             inputDesc, inputTensor.getDataPtr(),
-            gradDesc, buffer ? buffer : gradTensor.getDataPtr(),
+            gradDesc, buffer ? buffer->getDataPtr() : gradTensor.getDataPtr(),
             convDesc,
             CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
             nullptr, 0,

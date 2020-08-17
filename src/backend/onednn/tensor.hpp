@@ -13,13 +13,29 @@ namespace upstride {
 template <>
 struct TensorManipulations<device::CPU> {
     template <typename T>
-    void accumulateAdd(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output, const Shape& shape) {
-        // TODO
+    static void accumulateAdd(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output, const Shape& shape) {
+        int shapeNumel = shape.numel();
+        T* outputPtr = output.getDataPtr();
+        const T* inputPtr = input.getDataPtr();
+        for(int i = 0; i < shapeNumel; ++i) {
+            outputPtr[i] += inputPtr[i];
+        }
     }
 
     template <typename T>
-    void accumulateSub(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output, const Shape& shape) {
-        // TODO
+    static void accumulateSub(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output, const Shape& shape) {
+        int shapeNumel = shape.numel();
+        T* outputPtr = output.getDataPtr();
+        const T* inputPtr = input.getDataPtr();
+        for(int i = 0; i < shapeNumel; ++i) {
+            outputPtr[i] -= inputPtr[i];
+        }
+    }
+
+    template <typename T>
+    static inline void zero(Tensor<device::CPU, T>& output) {
+        T *tensor = output.getDataPtr();
+        memset(tensor, 0, output.getShape().numel() * sizeof(T));
     }
 };
 
@@ -31,14 +47,15 @@ struct TensorManipulations<device::CPU> {
 template <typename T>
 class AllocatedTensor<device::CPU, T> : public Tensor<device::CPU, T> {
     AllocatedTensor(const Shape&, T*) = delete;  // deleting Tensor constructor allowing to wrap an external pointer
+    using Tensor<device::CPU, T>::tensor;
 
    public:
-    AllocatedTensor(const Shape& shape) : Tensor<device::CUDA, T>(shape, nullptr) {
-        // TODO: allocate the memory and assign it to the tensor pointer
+    AllocatedTensor(const Shape& shape) : Tensor<device::CPU, T>(shape, nullptr) {
+        tensor = (T*)malloc(shape.numel() * sizeof(T));
     }
 
     ~AllocatedTensor() {
-        // TODO: free memory
+        free(tensor);
     }
 };
 }  // namespace upstride

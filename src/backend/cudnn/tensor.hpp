@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <cudnn.h>
+
 #include "../backend.hpp"
 #include "kernels.hpp"
 
@@ -14,13 +16,20 @@ namespace upstride {
 template <>
 struct TensorManipulations<device::CUDA> {
     template <typename T>
-    void accumulateAdd(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, const Shape& shape) {
-        // TODO
+    static void accumulateAdd(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, const Shape& shape) {
+        cudnn::accumulateAdd(output.getDataPtr(), input.getDataPtr(), shape.numel() * sizeof(T));
     }
 
     template <typename T>
-    void accumulateSub(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, const Shape& shape) {
-        // TODO
+    static void accumulateSub(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, const Shape& shape) {
+        cudnn::accumulateSub(output.getDataPtr(), input.getDataPtr(), shape.numel() * sizeof(T));
+    }
+
+    template <typename T>
+    static inline void zero(Tensor<device::CUDA, T>& output) {
+        auto status = cudaMemset(output.getDataPtr(), 0, output.getShape().numel() * sizeof(T));
+        if (status != cudaError::cudaSuccess)
+            throw std::runtime_error(cudaGetErrorString(status));
     }
 };
 
@@ -32,14 +41,17 @@ struct TensorManipulations<device::CUDA> {
 template <typename T>
 class AllocatedTensor<device::CUDA, T> : public Tensor<device::CUDA, T> {
     AllocatedTensor(const Shape&, T*) = delete;  // deleting Tensor constructor allowing to wrap an external pointer
+    using Tensor<device::CUDA, T>::tensor;
 
    public:
     AllocatedTensor(const Shape& shape) : Tensor<device::CUDA, T>(shape, nullptr) {
-        // TODO: allocate the memory and assign it to the tensor pointer
+        auto status = cudaMalloc(&tensor, shape.numel() * sizeof(T));
+        if (status != cudaError::cudaSuccess)
+            throw std::runtime_error(cudaGetErrorString(status));
     }
 
     ~AllocatedTensor() {
-        // TODO: free memory
+        cudaFree(tensor);
     }
 };
 }  // namespace upstride

@@ -7,6 +7,22 @@
 
 using namespace upstride;
 
+static const int NUM_THREADS = 64;  //!< default number of threads
+
+template <typename T>
+__global__ void accumulateAdd(T* acc, const T* term, int length) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length)
+        acc[i] += term[i];
+}
+
+template <typename T>
+__global__ void accumulateSub(T* acc, const T* term, int length) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length)
+        acc[i] -= term[i];
+}
+
 /**
  * @brief CUDA kernel cropping an input NCHW tensor along H and W dimensions
  * The output tensor is smaller or equal in size than the input tensor.
@@ -70,7 +86,7 @@ inline int ceili(int n, int d) {
  * @param blocks        number of thread blocks (ouptut)
  * @param numThreads    maximum number of threads per block
  */
-inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim3& threads, dim3& blocks, const int numThreads = 64) {
+inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim3& threads, dim3& blocks, const int numThreads = NUM_THREADS) {
     const int depth = shape.depth(dataFormat) * shape[0];
     const int z = std::min(numThreads, depth);
     const int xy = (int)std::sqrt(numThreads / z);
@@ -85,7 +101,7 @@ namespace upstride {
 namespace cudnn {
 
 template <>
-void crop(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
+void crop(const Tensor<device::CUDA, float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
     // check stuff
     const Shape& inShape = input.getShape();
     const Shape& outShape = output.getShape();
@@ -152,6 +168,15 @@ void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA,
     Context::raiseIfError();
 }
 
+template <>
+void accumulateAdd(float* accumulator, const float* term, int length) {
+    ::accumulateAdd<<<ceili(length, NUM_THREADS), NUM_THREADS>>>(accumulator, term, length);
+}
+
+template <>
+void accumulateSub(float* accumulator, const float* term, int length) {
+    ::accumulateSub<<<ceili(length, NUM_THREADS), NUM_THREADS>>>(accumulator, term, length);
+}
 
 }  // namespace cudnn
 

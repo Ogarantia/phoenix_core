@@ -14,7 +14,7 @@
 // #include <fstream>
 #include <iostream>  // cout
 // #include <limits>
-// #include <random>
+#include <random>
 
 #include "doctest/doctest.h"
 #include "upstride.hpp"
@@ -28,8 +28,7 @@ TEST_CASE("Test:Shape") {
 
     SUBCASE(" Test: Shape::Shape()") {
         std::cout << " Test: Shape::Shape()" << std::endl;
-        const int shapes[4] = {1, 2, 3, 4};
-        upstride::Shape s1(4, shapes);
+        upstride::Shape s1({1, 2, 3, 4});
 
         std::cout << s1 << std::endl;
 
@@ -42,9 +41,8 @@ TEST_CASE("Test:Shape") {
 
     SUBCASE(" Test: Shape == Shape") {
         std::cout << " Test: Shape::operator==" << std::endl;
-        const int shapes[4] = {1, 2, 3, 4};
-        const upstride::Shape s1(4, shapes);
-        const upstride::Shape s2(4, shapes);
+        const upstride::Shape s1({1, 2, 3, 4});
+        const upstride::Shape s2({1, 2, 3, 4});
 
         CHECK((s1 == s2));
         std::cout << std::endl;
@@ -52,12 +50,9 @@ TEST_CASE("Test:Shape") {
 
     SUBCASE(" Test: Shape !(==) Shape") {
         std::cout << " Test: !(Shape::operator==)" << std::endl;
-        const int shape[4] = {1, 2, 3, 4};
-        const int shape2[4] = {1, 2, 6, 4};
-        const int shape3[2] = {1, 2};
-        const upstride::Shape s1(4, shape);
-        const upstride::Shape s2(4, shape2);
-        const upstride::Shape s3(2, shape3);
+        const upstride::Shape s1({1, 2, 3, 4});
+        const upstride::Shape s2({1, 2, 6, 4});
+        const upstride::Shape s3({1, 2});
 
         CHECK((!(s1 == s2)));
         CHECK((!(s1 == s3)));
@@ -67,25 +62,89 @@ TEST_CASE("Test:Shape") {
 
 TEST_CASE("Test:Tensor") {
     std::cout << "---- Test: Tensor creation" << std::endl;
+    int H = 224, W = 224, C = 3;
+    int numel = H * W * C;
 
     SUBCASE(" Test: Tensor::Tensor()") {
         std::cout << " Test: Tensor::Tensor()" << std::endl;
 
-        const int shapes[4] = {1, 2, 3, 4};
-        upstride::Shape s1(4, shapes);
-        float* img = (float*)calloc(224 * 224 * 3, sizeof(float));
+        upstride::Shape s1({1, C, H, W});
+        upstride::AllocatedTensor<upstride::device::CPU, float> t1(s1);
+        
+        float *t1Ptr = t1.getDataPtr();
+        // Ensure values are not zero
+        for (int i = 0; i < numel; i++)
+            t1Ptr[i] = 3.0f;
 
-        upstride::Tensor<upstride::device::CPU, float> t1(s1, img);
+        // Verify if values were indeed modified before applying t1.zero()
         bool test = true;
+        for (int i = 0; i < numel && test; i++) {
+            if (t1.getDataPtr()[i] != 3.0f)
+                test = false;
+        }
 
-        for (int i = 0; i < 224 * 224 * 3 && test; i++) {
-            if (t1.getDataPtr()[i] != 0.0f) {
+        t1.zero();
+        // Verify if new values are zero
+        for (int i = 0; i < numel && test; i++) {
+            if (t1.getDataPtr()[i] != 0.0f)
+                test = false;
+        }
+        CHECK(( test ));
+        CHECK(( t1.getShape() == s1 ));
+        std::cout << std::endl;
+    }
+
+    SUBCASE(" Test: Tensor Src + Dst") {
+        std::cout << " Test: Tensor Src + Dst" << std::endl;
+
+        upstride::Shape s1({1, C, H, W});
+        
+        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensor(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, float> dstTensor(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, float> dstCopyTensor(s1);
+
+        for (int i = 0; i < numel; i++) {
+            srcTensor.getDataPtr()[i] = rand();
+            dstTensor.getDataPtr()[i] = rand();
+            dstCopyTensor.getDataPtr()[i] = dstTensor.getDataPtr()[i];
+        }
+
+        dstTensor += srcTensor;
+
+        bool test = true;
+        for (int i = 0; i < numel && test; i++) {
+            if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] + srcTensor.getDataPtr()[i]) {
                 test = false;
             }
         }
-
         CHECK(( test ));
-        CHECK(( t1.getShape() == s1 ));
+        std::cout << std::endl;
+    }
+
+    SUBCASE(" Test: Tensor Src - Dst") {
+        std::cout << " Test: Tensor Src - Dst" << std::endl;
+
+        upstride::Shape s1({1, C, H, W});
+        
+        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensor(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, float> dstTensor(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, float> dstCopyTensor(s1);
+        
+        for (int i = 0; i < numel; i++) {
+            srcTensor.getDataPtr()[i] = rand();
+            dstTensor.getDataPtr()[i] = rand();
+            dstCopyTensor.getDataPtr()[i] = dstTensor.getDataPtr()[i];
+        }
+
+        dstTensor -= srcTensor;
+
+        bool test = true;
+        for (int i = 0; i < numel && test; i++) {
+            if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] - srcTensor.getDataPtr()[i]) {
+                test = false;
+            }
+        }
+        CHECK(( test ));
         std::cout << std::endl;
     }
 }
@@ -149,14 +208,9 @@ TEST_CASE("Test:Utils") {
         const int typeDim = 4;
         const upstride::DataFormat df = upstride::DataFormat::NCHW;
 
-        const int shapesI[4] = {1, 224, 224, 3};
-        const upstride::Shape inputShape(4, shapesI);
-
-        const int shapesK[5] = {4, 3, 3, 3, 32};
-        const upstride::Shape kernelShape(5, shapesK);
-
-        const int shapesE[4] = {1, 3, 224, 3};
-        const upstride::Shape expectedShape(4, shapesE);
+        const upstride::Shape inputShape({1, 224, 224, 3});
+        const upstride::Shape kernelShape({4, 3, 3, 3, 32});
+        const upstride::Shape expectedShape({1, 3, 224, 3});
 
         upstride::Padding paddingPreset = upstride::Padding::SAME;
         const std::vector<int32_t>& explicitPadding = {0, 0};
@@ -212,4 +266,37 @@ TEST_CASE("Test:Conv2D") {
         std::cout << std::endl;
     }
 }
+#endif
+
+#if 1
+TEST_CASE("Test:TensorSplit") {
+    static const int TEST_BATCH_SIZE = 4;
+    static const int TEST_DATA[TEST_BATCH_SIZE * 2] = {1, 1, 2, 2, 3, 3, 4, 4};
+    static const upstride::Shape TEST_DATA_SHAPE{4, 2, 1, 1};
+
+    upstride::Tensor<upstride::device::CPU, const int> testInputTensor(TEST_DATA_SHAPE, TEST_DATA);
+
+    SUBCASE(" Test: TensorSplit keeping outermost dimension") {
+        upstride::TensorSplit<upstride::device::CPU, const int, TEST_BATCH_SIZE> split(testInputTensor, true);
+        static const upstride::Shape EXPECTED_PART_SHAPE{1, 2, 1, 1};
+
+        for (int i = 0; i < TEST_BATCH_SIZE; ++i) {
+            CHECK(split[i].getShape() == EXPECTED_PART_SHAPE);
+            const int* ptr = split[i].getDataPtr();
+            CHECK(*ptr == i + 1);
+        }
+    }
+
+    SUBCASE(" Test: TensorSplit without keeping the outermost dimension") {
+        upstride::TensorSplit<upstride::device::CPU, const int, TEST_BATCH_SIZE> split(testInputTensor, false);
+        static const upstride::Shape EXPECTED_PART_SHAPE{2, 1, 1};
+
+        for (int i = 0; i < TEST_BATCH_SIZE; ++i) {
+            CHECK(split[i].getShape() == EXPECTED_PART_SHAPE);
+            const int* ptr = split[i].getDataPtr();
+            CHECK(*ptr == i + 1);
+        }
+    }
+}
+
 #endif

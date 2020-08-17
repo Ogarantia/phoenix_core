@@ -7,7 +7,9 @@
  */
 
 #pragma once
+#include <initializer_list>
 #include <stdexcept>
+#include <iostream>
 
 namespace upstride {
 
@@ -46,6 +48,20 @@ class Shape {
      * @brief Constructs a zero Shape object
      */
     Shape() : size(0), shape(nullptr) {}
+
+    /**
+     * @brief Constructs a Shape from a list of numeric values
+     * This allows for the inline Shape instantiation like
+     *      Shape shape{1, 2, 3, 15};
+     * @tparam numeric the datatype of list entries; must be castable to int
+     * @param list the list of sizes of every dimension
+     */
+    template <typename numeric>
+    Shape(std::initializer_list<numeric> list) : size(list.size()), shape(new int[size]) {
+        int i = 0;
+        for (auto _ : list)
+            shape[i++] = static_cast<int>(_);
+    }
 
     /**
     * @brief Construct a new Shape object
@@ -214,7 +230,7 @@ struct TensorManipulations {
      * @param shape   shape of both tensors
      */
     template <typename T>
-    void accumulateAdd(const Tensor<Device, T>& input, Tensor<Device, T>& output, const Shape& shape);
+    static void accumulateAdd(const Tensor<Device, T>& input, Tensor<Device, T>& output, const Shape& shape);
 
     /**
      * @brief Accumulate a tensor (b) to another tensor (a) by subtraction: a = a - b
@@ -224,7 +240,7 @@ struct TensorManipulations {
      * @param shape   shape of both tensors
      */
     template <typename T>
-    void accumulateSub(const Tensor<Device, T>&, Tensor<Device, T>& output, const Shape& shape);
+    static void accumulateSub(const Tensor<Device, T>&, Tensor<Device, T>& output, const Shape& shape);
 
 };  // namespace tensor_arithmetics
 
@@ -285,6 +301,114 @@ class Tensor {
         TensorManipulations<Device>::accumulateSub(another, *this, shape);
         return *this;
     }
+
+    /**
+     * @brief Sets all Tensor elements to zero
+     * @return the tensor itself
+     */
+    inline void zero() {
+        TensorManipulations<Device>::zero(*this);
+    }
+};
+
+/**
+ * @brief Splits a tensor along its outer dimension in smaller tensors.
+ * @tparam T        scalar datatype
+ * @tparam PARTS    expected number of components
+ */
+template <typename Device, typename T, const int PARTS>
+class TensorSplit {
+   private:
+    Tensor<Device, T>* parts[PARTS];
+    Shape partShape;
+
+    /**
+     * @brief Checks inputs and computes the shape of parts.
+     * A routine shared among class constructors.
+     * @param inputShape shape of the input tensor
+     * @param keepOuterDimension if `true`, the outermost input dimension is kept in the parts.
+     */
+    void initPartShape(const Shape& inputShape, bool keepOuterDimension) {
+        if (keepOuterDimension) {
+            if (inputShape[0] % PARTS != 0)
+                throw std::invalid_argument("Cannot split " + std::to_string(inputShape[0]) + " entries in outer dimension onto " + std::to_string(PARTS) + " parts");
+            partShape = Shape(inputShape);
+            partShape[0] /= PARTS;
+        } else {
+            if (inputShape[0] != PARTS)
+                throw std::invalid_argument("Expected a tensor of " + std::to_string(PARTS) + " entries in outer dimension, but got " + std::to_string(inputShape[0]));
+            partShape = Shape(inputShape.getSize() - 1, inputShape.getShapePtr() + 1);
+        }
+    }
+
+   public:
+    /**
+     * @brief Construct a new TensorSplit object from a big Tensor by cutting it multiple smaller tensors along its outermost dimension.
+     * Throws an exception if the outer dimension is not splittable on PARTS equal parts.
+     * @param inputTensor           the big tensor
+     * @param keepOuterDimension    if `false`, the outermost input tensor dimension is expected to match the number of parts, and the parts shape will have less dimensions.
+     *                              Otherwise, the outer dimension is split onto equal parts and preserved in the components even if singleton.
+     *                              Example for PARTS = 4:
+     *                              [4, x, y, z] input -> keep outer dimension        -> [1, x, y, z] parts
+     *                              [4, x, y, z] input -> do not keep outer dimension -> [x, y, z] parts
+     *                              [8, x, y, z] input -> keep outer dimension        -> [2, x, y, z] parts
+     *                              [8, x, y, z] input -> do not keep outer dimension -> exception is thrown
+     *                              [5, x, y, z] input -> exception is thrown anyway (cannot split on PARTS = 4 parts)
+     */
+    TensorSplit(const Tensor<Device, T>& inputTensor, bool keepOuterDimension = true) {
+        const Shape& inputShape = inputTensor.getShape();
+        initPartShape(inputShape, keepOuterDimension);
+        const T* ptr = inputTensor.getDataPtr();
+        const int step = partShape.numel();
+        for (int i = 0; i < PARTS; ++i, ptr += step) {
+            parts[i] = new Tensor<Device, T>(partShape, ptr);
+        }
+    }
+
+    TensorSplit(Tensor<Device, T>& inputTensor, bool keepOuterDimension = true) {
+        const Shape& inputShape = inputTensor.getShape();
+        initPartShape(inputShape, keepOuterDimension);
+        T* ptr = inputTensor.getDataPtr();
+        const int step = partShape.numel();
+        for (int i = 0; i < PARTS; ++i, ptr += step) {
+            parts[i] = new Tensor<Device, T>(partShape, ptr);
+        }
+    }
+
+    ~TensorSplit() {
+        for (int i = 0; i < PARTS; ++i)
+            delete parts[i];
+    }
+
+    /**
+     * @brief Retrieves a part by its index.
+     * @param i the index
+     * @return i-th part of the splitting.
+     */
+    inline const Tensor<Device, T>& operator[](int i) const {
+        return *parts[i];
+    }
+
+    /**
+     * @brief Retrieves a part by its index.
+     * @param i the index
+     * @return i-th part of the splitting.
+     */
+    inline Tensor<Device, T>& operator[](int i) {
+        return *parts[i];
+    }
+
+    /**
+     * @brief Retrieves the number of parts in the splitting
+     * @return the number of parts.
+     */
+    constexpr inline int numParts() const { return PARTS; }
+
+    /**
+     * @brief Returns a shape of a single part
+     * @return the part shape.
+     */
+    inline const Shape& shape() const { return partShape; }
 };
 
 /**

@@ -15,6 +15,7 @@ message("     cuDNN: ${WITH_CUDNN}")
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 set(CPP_SOURCES_FOLDER "${CMAKE_CURRENT_LIST_DIR}/src")
 set(SOURCES ${SOURCES} 
+    ${CPP_SOURCES_FOLDER}/algebras.cc
     ${CPP_SOURCES_FOLDER}/utils.cc
 )
 

@@ -22,7 +22,7 @@ namespace cudnn {
  * @param dataFormat    input and output data format
  */
 template <typename T>
-extern void crop(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
+extern void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
 
 /**
  * @brief Insert a tensor into another bigger tensor with a potential offset along the spatial dimensions H and W
@@ -35,6 +35,13 @@ extern void crop(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA
  */
 template <typename T>
 extern void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
+
+
+template <typename T>
+extern void accumulateAdd(T* accumulator, const T* term, int length);
+
+template <typename T>
+extern void accumulateSub(T* accumulator, const T* term, int length);
 
 }  // namespace cudnn
 
