@@ -20,10 +20,14 @@ set(SOURCES ${SOURCES}
 )
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -ftree-vectorize -msse4.1")
+  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops")
+  set(VECTORIZATION_FLAGS "-ftree-vectorize -march=native")
 else ()
-  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize -ftree-vectorize -msse4.1")
+  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize ")
+  set(VECTORIZATION_FLAGS "-ftree-vectorize -march=native")
 endif()
+
+set(CMAKE_CXX_FLAGS "${OPTIM_FLAGS} ${VECTORIZATION_FLAGS} ${CMAKE_CXX_FLAGS}")
 
 #######################
 #    ONEDNN SETUP     #
@@ -34,7 +38,7 @@ if (WITH_ONEDNN)
   set(ONEDNN_SUBMODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/thirdparty/onednn")
   option(DNNL_BUILD_TESTS "Build DNLL tests" OFF)
   option(DNNL_BUILD_EXAMPLES "Build DNLL examples" OFF)
-  set(DNNL_ARCH_OPT_FLAGS ${OPTIMIZATION_FLAGS} CACHE INTERNAL "" )
+  set(DNNL_ARCH_OPT_FLAGS "${OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS}" CACHE INTERNAL "" )
   message("**************** Compiling oneDNN: ****************")
   add_subdirectory(${ONEDNN_SUBMODULE_PATH})
   message("**************** ***************** ****************")
@@ -44,6 +48,7 @@ if (WITH_ONEDNN)
   # add oneDNN-specific sources
   set(SOURCES ${SOURCES}
       ${CPP_SOURCES_FOLDER}/backend/onednn/onednn.cc
+      ${CPP_SOURCES_FOLDER}/backend/onednn/tensor.cc
   )
 endif()
 
@@ -70,6 +75,7 @@ if (BUILD_TESTS)
   link_directories(${CMAKE_CURRENT_LIST_DIR}/src/cc)
 
   set(TESTSOURCES ${TESTSOURCES} 
+    ${SOURCES}
     ${CPP_SOURCES_FOLDER}/utils.cc
     ${CMAKE_CURRENT_LIST_DIR}/tests/tests.cpp
   )

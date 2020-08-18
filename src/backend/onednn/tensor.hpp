@@ -7,34 +7,44 @@
  */
 #pragma once
 
+#if __AVX512F__ || __AVX__
+#include <immintrin.h>
+#elif __SSE4_1__
+#include <smmintrin.h>
+#endif
+
 #include "../backend.hpp"
 
 namespace upstride {
 template <>
 struct TensorManipulations<device::CPU> {
     template <typename T>
-    static void accumulateAdd(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output, const Shape& shape) {
+    static void accumulateAdd(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output, const Shape& shape)  {
         int shapeNumel = shape.numel();
         T* outputPtr = output.getDataPtr();
         const T* inputPtr = input.getDataPtr();
-        for(int i = 0; i < shapeNumel; ++i) {
+        for (int i = 0; i < shapeNumel; ++i) {
             outputPtr[i] += inputPtr[i];
         }
     }
+    static void accumulateAdd(const Tensor<device::CPU, float>& input, Tensor<device::CPU, float>& output, const Shape& shape); 
+    static void accumulateAdd(const Tensor<device::CPU, int>& input, Tensor<device::CPU, int>& output, const Shape& shape); 
 
     template <typename T>
     static void accumulateSub(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output, const Shape& shape) {
         int shapeNumel = shape.numel();
         T* outputPtr = output.getDataPtr();
         const T* inputPtr = input.getDataPtr();
-        for(int i = 0; i < shapeNumel; ++i) {
+        for (int i = 0; i < shapeNumel; ++i) {
             outputPtr[i] -= inputPtr[i];
         }
     }
-
+    static void accumulateSub(const Tensor<device::CPU, float>& input, Tensor<device::CPU, float>& output, const Shape& shape); 
+    static void accumulateSub(const Tensor<device::CPU, int>& input, Tensor<device::CPU, int>& output, const Shape& shape);
+    
     template <typename T>
     static inline void zero(Tensor<device::CPU, T>& output) {
-        T *tensor = output.getDataPtr();
+        T* tensor = output.getDataPtr();
         memset(tensor, 0, output.getShape().numel() * sizeof(T));
     }
 };

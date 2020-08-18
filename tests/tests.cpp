@@ -22,6 +22,28 @@
 /* =============================================================================
                                  PHOENIX 
 ============================================================================= */
+/**
+ * @brief Fill a tensor with random floating values.
+ * 
+ * @param t Tensor to fill
+ */
+void setRandVal(upstride::AllocatedTensor<upstride::device::CPU, float>& t) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dist(-1.0f, 1.0f);
+    for (int i = 0; i < t.getShape().numel(); i++) {
+        t.getDataPtr()[i] = dist(gen);
+    }
+}
+
+void setRandVal(upstride::AllocatedTensor<upstride::device::CPU, int>& t) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dist(-10, 10);
+    for (int i = 0; i < t.getShape().numel(); i++) {
+        t.getDataPtr()[i] = dist(gen);
+    }
+}
 
 TEST_CASE("Test:Shape") {
     std::cout << "---- Test: Shape creation" << std::endl;
@@ -60,26 +82,56 @@ TEST_CASE("Test:Shape") {
     }
 }
 
+enum binop { plus,
+             minus };
+template <typename T>
+bool accumulatorTest(const upstride::AllocatedTensor<upstride::device::CPU, T>& srcTensor, upstride::AllocatedTensor<upstride::device::CPU, T>& dstTensor, binop op) {
+    upstride::AllocatedTensor<upstride::device::CPU, T> dstCopyTensor(dstTensor.getShape());
+
+    for (int i = 0; i < dstTensor.getShape().numel(); i++) {
+        dstCopyTensor.getDataPtr()[i] = dstTensor.getDataPtr()[i];
+    }
+    if (op == binop::plus) {
+        dstTensor += srcTensor;
+        for (int i = 0; i < dstTensor.getShape().numel(); i++) {
+            if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] + srcTensor.getDataPtr()[i]) {
+                return false;
+            }
+        }
+    } else if (op == binop::minus) {
+        dstTensor -= srcTensor;
+        for (int i = 0; i < dstTensor.getShape().numel(); i++) {
+            if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] - srcTensor.getDataPtr()[i]) {
+                return false;
+            }
+        }
+    } else {
+        std::cout << "Error binary operation expected is \"plus\" or \"minus\"" << std::endl;
+        return false;
+    }
+    return true;
+}
+
 TEST_CASE("Test:Tensor") {
     std::cout << "---- Test: Tensor creation" << std::endl;
     int H = 224, W = 224, C = 3;
     int numel = H * W * C;
+    upstride::Shape s1({1, C, H, W});
 
     SUBCASE(" Test: Tensor::Tensor()") {
         std::cout << " Test: Tensor::Tensor()" << std::endl;
 
-        upstride::Shape s1({1, C, H, W});
         upstride::AllocatedTensor<upstride::device::CPU, float> t1(s1);
-        
-        float *t1Ptr = t1.getDataPtr();
+
+        float* t1Ptr = t1.getDataPtr();
         // Ensure values are not zero
         for (int i = 0; i < numel; i++)
-            t1Ptr[i] = 3.0f;
+            t1Ptr[i] = i * 3.0f;
 
         // Verify if values were indeed modified before applying t1.zero()
         bool test = true;
         for (int i = 0; i < numel && test; i++) {
-            if (t1.getDataPtr()[i] != 3.0f)
+            if (t1.getDataPtr()[i] != i * 3.0f)
                 test = false;
         }
 
@@ -89,67 +141,39 @@ TEST_CASE("Test:Tensor") {
             if (t1.getDataPtr()[i] != 0.0f)
                 test = false;
         }
-        CHECK(( test ));
-        CHECK(( t1.getShape() == s1 ));
+        CHECK((test));
         std::cout << std::endl;
     }
 
-    SUBCASE(" Test: Tensor Src + Dst") {
-        std::cout << " Test: Tensor Src + Dst" << std::endl;
+    SUBCASE(" Test: [float/int] Tensor Src + Dst") {
+        std::cout << "[float] Test: Tensor Src + Dst" << std::endl;
+        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensori(s1), dstTensori(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, int> srcTensorf(s1), dstTensorf(s1);
+        setRandVal(srcTensori);
+        setRandVal(dstTensori);
+        setRandVal(srcTensorf);
+        setRandVal(dstTensorf);
 
-        upstride::Shape s1({1, C, H, W});
-        
-        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensor(s1);
-        upstride::AllocatedTensor<upstride::device::CPU, float> dstTensor(s1);
-        upstride::AllocatedTensor<upstride::device::CPU, float> dstCopyTensor(s1);
-
-        for (int i = 0; i < numel; i++) {
-            srcTensor.getDataPtr()[i] = rand();
-            dstTensor.getDataPtr()[i] = rand();
-            dstCopyTensor.getDataPtr()[i] = dstTensor.getDataPtr()[i];
-        }
-
-        dstTensor += srcTensor;
-
-        bool test = true;
-        for (int i = 0; i < numel && test; i++) {
-            if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] + srcTensor.getDataPtr()[i]) {
-                test = false;
-            }
-        }
-        CHECK(( test ));
+        CHECK((accumulatorTest(srcTensori, dstTensori, binop::plus)));
+        CHECK((accumulatorTest(srcTensorf, dstTensorf, binop::plus)));
         std::cout << std::endl;
     }
 
-    SUBCASE(" Test: Tensor Src - Dst") {
-        std::cout << " Test: Tensor Src - Dst" << std::endl;
+    SUBCASE(" Test: [float/int] Tensor Src - Dst") {
+        std::cout << "[float/int] Test: Tensor Src - Dst" << std::endl;
+        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensori(s1), dstTensori(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, int> srcTensorf(s1), dstTensorf(s1);
+        setRandVal(srcTensori);
+        setRandVal(dstTensori);
+        setRandVal(srcTensorf);
+        setRandVal(dstTensorf);
 
-        upstride::Shape s1({1, C, H, W});
-        
-        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensor(s1);
-        upstride::AllocatedTensor<upstride::device::CPU, float> dstTensor(s1);
-        upstride::AllocatedTensor<upstride::device::CPU, float> dstCopyTensor(s1);
-        
-        for (int i = 0; i < numel; i++) {
-            srcTensor.getDataPtr()[i] = rand();
-            dstTensor.getDataPtr()[i] = rand();
-            dstCopyTensor.getDataPtr()[i] = dstTensor.getDataPtr()[i];
-        }
-
-        dstTensor -= srcTensor;
-
-        bool test = true;
-        for (int i = 0; i < numel && test; i++) {
-            if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] - srcTensor.getDataPtr()[i]) {
-                test = false;
-            }
-        }
-        CHECK(( test ));
+        CHECK((accumulatorTest(srcTensori, dstTensori, binop::minus)));
+        CHECK((accumulatorTest(srcTensorf, dstTensorf, binop::minus)));
         std::cout << std::endl;
     }
 }
 
-#if 1
 TEST_CASE("Test:DataFormat") {
     std::cout << "---- Test: DataFormat functions" << std::endl;
 
@@ -178,8 +202,7 @@ TEST_CASE("Test:DataFormat") {
         std::cout << std::endl;
     }
 }
-#endif
-#if 1
+
 TEST_CASE("Test:Padding") {
     std::cout << "---- Test: Padding functions" << std::endl;
 
@@ -197,8 +220,6 @@ TEST_CASE("Test:Padding") {
     }
 }
 
-#endif
-#if 1
 TEST_CASE("Test:Utils") {
     std::cout << "---- Test: Utils functions" << std::endl;
 
@@ -235,40 +256,6 @@ TEST_CASE("Test:Utils") {
     }
 }
 
-#endif
-#if 0
-TEST_CASE("Test:Conv2D") {
-    std::cout << "---- Test: Conv2D OneDNN version" << std::endl;
-
-    SUBCASE(" Test: upstride::UpstrideConv2DFunctor<device::CPU, float>") {
-        std::cout << " Test: upstride::UpstrideConv2DFunctor<device::CPU, float>" << std::endl;
-
-        float* input = (float*)calloc(224 * 224 * 3, sizeof(float));
-        float* kernel = (float*)calloc(3 * 3 * 32, sizeof(float));
-
-        // int outputSize = upstride::computeConvOutputSize(
-        //         1, dataFormat,
-        //         input.getShape(), filter.getShape(),
-        //         paddingPreset, explicitPadding, stride, dilation));
-        // float* output = (float*)calloc(3 * 3 * 32, sizeof(float));
-
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> conv2d();
-        // upstride_ops.upstride_conv2d(
-        //     tf.zeros((1, 224, 224, 3), dtype = tf.float32),
-        //     tf.zeros((1, 3, 3, 3, 32), dtype = tf.float32),
-        //     strides = [ 1, 1 ],
-        //     padding = 'SAME')
-
-        std::cout << " COUCOU   OneDNN    : " << std::endl;
-        std::cout << std::endl;
-
-        // CHECK((expectedOut1 == a + d));
-        std::cout << std::endl;
-    }
-}
-#endif
-
-#if 1
 TEST_CASE("Test:TensorSplit") {
     static const int TEST_BATCH_SIZE = 4;
     static const int TEST_DATA[TEST_BATCH_SIZE * 2] = {1, 1, 2, 2, 3, 3, 4, 4};
@@ -298,5 +285,3 @@ TEST_CASE("Test:TensorSplit") {
         }
     }
 }
-
-#endif
