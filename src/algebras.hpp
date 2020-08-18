@@ -26,13 +26,6 @@ typedef struct {
 } SignTableEntry;
 
 /**
- * @brief Row of sign tables in Clifford product specification
- */
-typedef struct {
-    const SignTableEntry elements[];
-} SignTableRow;
-
-/**
  * @brief Forward declaration of Clifford product specification
  * @tparam algebra  Algebra specification
  */
@@ -43,14 +36,16 @@ template <>
 class CliffordProductSpec<Algebra::REAL> {
    public:
     static const int DIMS = 1;
-    static const SignTableRow SIGNTABLE[];
+    static const SignTableEntry SIGNTABLE[];    //!< specifies the contribution of every left-right component pair to the product
+    static const int SIGNTABLE_LAYOUT[];        //!< index of the first entry of every row in the signtable
 };
 
 template <>
 class CliffordProductSpec<Algebra::QUATERNION> {
    public:
     static const int DIMS = 4;
-    static const SignTableRow SIGNTABLE[];
+    static const SignTableEntry SIGNTABLE[];    //!< specifies the contribution of every left-right component pair to the product
+    static const int SIGNTABLE_LAYOUT[];        //!< index of the first entry of every row in the signtable
 };
 
 }  // namespace upstride

@@ -47,7 +47,7 @@ class UpstrideConv2DFunctor {
 
         // loop through output dimensions
         for (int dim = 0; dim < CliffordProductSpec::DIMS; ++dim) {
-            const auto& row = CliffordProductSpec::SIGNTABLE[dim].elements;
+            const auto row = &CliffordProductSpec::SIGNTABLE[ CliffordProductSpec::SIGNTABLE_LAYOUT[dim] ];
             if (!row[0].positive)  // negative first term case is not handled yet
                 throw std::runtime_error("Not implemented");
 
