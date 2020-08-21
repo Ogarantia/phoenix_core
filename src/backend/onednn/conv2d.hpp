@@ -27,6 +27,21 @@ class ScalarConv2DFunctor<device::CPU, T> {
     IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
     IntPair stride, dilation;
 
+   public:
+    ScalarConv2DFunctor() {}
+
+    /**
+     * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
+     * @param dataFormat    Expected tensors format
+     * @param stride        Convolution stride
+     * @param dilation      Convolution dilation
+     */
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
+        this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
+        this->stride = stride;
+        this->dilation = dilation;
+    }
+
     /**
      * @brief Performs backend-related operation configuration
      * @param inputShape        Input tensor shape
@@ -36,7 +51,12 @@ class ScalarConv2DFunctor<device::CPU, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void configureBackend(const Shape& inputShape, const Shape& kernelShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, const int groups = 1) {
+    void configure(const Shape& inputShape,
+                   const Shape& kernelShape,
+                   const Shape& outputShape,
+                   const IntPair& padBefore,
+                   const IntPair& padAfter,
+                   const int groups = 1) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -76,39 +96,15 @@ class ScalarConv2DFunctor<device::CPU, T> {
             onednn::Context::getInstance().getEngine()));
     }
 
-   public:
-    ScalarConv2DFunctor() {}
-
-    /**
-     * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
-     * @param dataFormat    Expected tensors format
-     * @param stride        Convolution stride
-     * @param dilation      Convolution dilation
-     */
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
-        this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
-        this->stride = stride;
-        this->dilation = dilation;
-    }
-
     /**
      * @brief Executes the convolution operation
      * @param inputTensor       Input tensor
      * @param kernelTensor      kernel tensor
      * @param outputTensor      Output tensor
-     * @param padBefore         Number of zero samples to add to the input tensor on top/left
-     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
-     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
     void operator()(const Tensor<device::CPU, const T>& inputTensor,
                     const Tensor<device::CPU, const T>& kernelTensor,
-                    Tensor<device::CPU, T>& outputTensor,
-                    const IntPair& padBefore,
-                    const IntPair& padAfter,
-                    int groups = 1) {
-        // configure oneDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), outputTensor.getShape(), padBefore, padAfter, groups);
-
+                    Tensor<device::CPU, T>& outputTensor) {
         // instantiate DNNL memory
         auto& engine = onednn::Context::getInstance().getEngine();
         dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));
@@ -139,6 +135,16 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
     IntPair stride, dilation;
     bool requireInputGrad;  //!< Use to determine if inputGrad need to be compute or not
 
+   public:
+    ScalarConv2DGradFunctor() {}
+
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
+        this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
+        this->stride = stride;
+        this->dilation = dilation;
+        this->requireInputGrad = requireInputGrad;
+    }
+
     /**
      * @brief Performs backend-related operation configuration
      * @param inputShape        Input tensor shape
@@ -148,12 +154,12 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void configureBackend(const Shape& inputShape,
-                          const Shape& kernelShape,
-                          const Shape& gradShape,
-                          const IntPair& padBefore,
-                          const IntPair& padAfter,
-                          const int groups = 1) {
+    void configure(const Shape& inputShape,
+                   const Shape& kernelShape,
+                   const Shape& gradShape,
+                   const IntPair& padBefore,
+                   const IntPair& padAfter,
+                   const int groups = 1) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->gradShape == gradShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -227,16 +233,6 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
         }
     }
 
-   public:
-    ScalarConv2DGradFunctor() {}
-
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
-        this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
-        this->stride = stride;
-        this->dilation = dilation;
-        this->requireInputGrad = requireInputGrad;
-    }
-
     /**
      * @brief Executes the convolution operation
      * 
@@ -253,12 +249,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                     const Tensor<device::CPU, const T>& kernelTensor,
                     const Tensor<device::CPU, const T>& gradTensor,
                     Tensor<device::CPU, T>& kernelGradTensor,
-                    Tensor<device::CPU, T>& inputGradTensor,
-                    const IntPair& padBefore,
-                    const IntPair& padAfter,
-                    const int groups = 1) {
-        // configure oneDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter, groups);
+                    Tensor<device::CPU, T>& inputGradTensor) {
         // instantiate DNNL memory
         auto& engine = onednn::Context::getInstance().getEngine();
         dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));

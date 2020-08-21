@@ -46,7 +46,7 @@ bool getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal, IntPair&
 /**
  * @brief Computes convolution output shape
  * The filter memory layout is assumed as follows: [blade, filter height, filter_width, input channels, output channels]
- * @param typeDim           Dimensionality of a specific UpStride datatype (e.g., 4 for quaternions)
+ * @param algebra           Algebra used to perform the convolution. The kernel shape is conditioned by the algebra choice.
  * @param dataFormat        Input and output tensors data format
  * @param inputShape        Input tensor shape
  * @param filterShape       Kernel tensor shape
@@ -59,7 +59,7 @@ bool getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal, IntPair&
  * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
  * @return the output tensor shape.
  */
-Shape computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
+Shape computeConvOutputSize(const Algebra algebra, const DataFormat dataFormat,
                             const Shape& inputShape, const Shape& filterShape,
                             Padding paddingPreset,
                             const IntTuple& explicitPaddings,
@@ -67,6 +67,14 @@ Shape computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
                             const IntTuple& dilations,
                             IntPair& padBefore, IntPair& padAfter,
                             int groups = 1);
+
+/**
+ * @brief Maps abstract user type numbers ("type 1", "type 2", "type 3") to Algebras
+ * Raises an exception if the input type number is out of a valid range.
+ * @param uptype    The user type number
+ * @return Algebra corresponding to the type number
+ */
+Algebra getAlgebraFromType(int uptype);
 
 }  // namespace upstride
 

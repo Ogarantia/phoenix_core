@@ -58,10 +58,10 @@ template <typename T>
 class ScalarConv2DFunctor<device::CUDA, T> {
    private:
     Shape inputShape, filterShape, outputShape;
-    IntPair padBefore;          //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
-    IntPair padAfter;           //!< zero padding: number of zeros to add at the end to every input spatial dimension
-    IntPair actualPad;          //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
-    IntPair repaddingOffset;    //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
+    IntPair padBefore;        //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
+    IntPair padAfter;         //!< zero padding: number of zeros to add at the end to every input spatial dimension
+    IntPair actualPad;        //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
+    IntPair repaddingOffset;  //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
     IntPair stride, dilation;
     AllocatedTensor<device::CUDA, T>* buffer;  //!< buffer in device memory used to store the uncropped output when dealing with the asymmetric padding
 
@@ -70,16 +70,41 @@ class ScalarConv2DFunctor<device::CUDA, T> {
     cudnnTensorDescriptor_t inputDesc, outputDesc;
     cudnnFilterDescriptor_t filterDesc;
 
+   public:
+    ScalarConv2DFunctor() : buffer(nullptr) {
+        cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
+        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
+        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
+        cudnn::Context::raiseIfError(cudnnCreateFilterDescriptor(&filterDesc));
+    }
+
+    ~ScalarConv2DFunctor() {
+        delete buffer;
+        cudnnDestroyConvolutionDescriptor(convDesc);
+        cudnnDestroyTensorDescriptor(inputDesc);
+        cudnnDestroyTensorDescriptor(outputDesc);
+        cudnnDestroyFilterDescriptor(filterDesc);
+    }
+
+    /**
+     * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
+     * @param dataFormat    Expected tensors format
+     * @param stride        Convolution stride
+     * @param dilation      Convolution dilation
+     */
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
+        this->dataFormat = dataFormat;
+        this->stride = stride;
+        this->dilation = dilation;
+    }
+
     /**
      * @brief Performs backend-related operation configuration
      * @param inputShape        Input tensor shape
      * @param filterShape       Filter tensor shape
      * @param outputTensor      Output tensor shape
-     * @param padBefore         Number of zero samples to add to the input tensor on top/left
-     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
-     * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void configureBackend(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, int groups) {
+    void configure(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, int groups) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -134,35 +159,6 @@ class ScalarConv2DFunctor<device::CUDA, T> {
             filterShape[2], filterShape[3]));
     }
 
-   public:
-    ScalarConv2DFunctor(): buffer(nullptr) {
-        cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
-        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
-        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
-        cudnn::Context::raiseIfError(cudnnCreateFilterDescriptor(&filterDesc));
-    }
-
-    ~ScalarConv2DFunctor() {
-        delete buffer;
-        cudnnDestroyConvolutionDescriptor(convDesc);
-        cudnnDestroyTensorDescriptor(inputDesc);
-        cudnnDestroyTensorDescriptor(outputDesc);
-        cudnnDestroyFilterDescriptor(filterDesc);
-    }
-
-    /**
-     * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
-     * @param dataFormat    Expected tensors format
-     * @param stride        Convolution stride
-     * @param dilation      Convolution dilation
-     */
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
-        this->dataFormat = dataFormat;
-        this->stride = stride;
-        this->dilation = dilation;
-    }
-
-
     /**
      * @brief Executes the convolution operation
      * @param inputTensor       Input tensor
@@ -174,13 +170,7 @@ class ScalarConv2DFunctor<device::CUDA, T> {
      */
     void operator()(const Tensor<device::CUDA, const T>& inputTensor,
                     const Tensor<device::CUDA, const T>& filterTensor,
-                    Tensor<device::CUDA, T>& outputTensor,
-                    const IntPair& padBefore,
-                    const IntPair& padAfter,
-                    int groups = 1) {
-        // configure cuDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), filterTensor.getShape(), outputTensor.getShape(), padBefore, padAfter, groups);
-
+                    Tensor<device::CUDA, T>& outputTensor) {
         // perform the convolution
         const T alpha = 1, beta = 0;
         cudnn::Context::raiseIfError(cudnnConvolutionForward(
@@ -225,6 +215,30 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
     cudnnTensorDescriptor_t gradDesc;        //!< output value gradient (dy) descriptor (which is an input of this operation)
     cudnnFilterDescriptor_t kernelGradDesc;  //!< kernel gradient (dw) descriptor (output of this operation)
 
+   public:
+    ScalarConv2DGradFunctor() : buffer(nullptr) {
+        cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
+        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
+        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&gradDesc));
+        cudnn::Context::raiseIfError(cudnnCreateFilterDescriptor(&kernelGradDesc));
+    }
+
+    ~ScalarConv2DGradFunctor() {
+        delete buffer;
+        cudnnDestroyConvolutionDescriptor(convDesc);
+        cudnnDestroyTensorDescriptor(inputDesc);
+        cudnnDestroyTensorDescriptor(gradDesc);
+        cudnnDestroyFilterDescriptor(kernelGradDesc);
+    }
+
+    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
+        if (requireInputGrad)
+            throw std::runtime_error("Conv2D gradient computation with respect to the input tensor is not implemented");
+        this->dataFormat = dataFormat;
+        this->stride = stride;
+        this->dilation = dilation;
+    }
+
     /**
      * @brief Performs backend-related operation configuration
      * @param inputShape        Input tensor shape
@@ -234,12 +248,12 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void configureBackend(const Shape& inputShape,
-                          const Shape& kernelShape,
-                          const Shape& gradShape,
-                          const IntPair& padBefore,
-                          const IntPair& padAfter,
-                          int groups) {
+    void configure(const Shape& inputShape,
+                   const Shape& kernelShape,
+                   const Shape& gradShape,
+                   const IntPair& padBefore,
+                   const IntPair& padAfter,
+                   int groups) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->gradShape == gradShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -295,30 +309,6 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
             kernelShape[2], kernelShape[3]));
     }
 
-   public:
-    ScalarConv2DGradFunctor(): buffer(nullptr) {
-        cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
-        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
-        cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&gradDesc));
-        cudnn::Context::raiseIfError(cudnnCreateFilterDescriptor(&kernelGradDesc));
-    }
-
-    ~ScalarConv2DGradFunctor() {
-        delete buffer;
-        cudnnDestroyConvolutionDescriptor(convDesc);
-        cudnnDestroyTensorDescriptor(inputDesc);
-        cudnnDestroyTensorDescriptor(gradDesc);
-        cudnnDestroyFilterDescriptor(kernelGradDesc);
-    }
-
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
-        if (requireInputGrad)
-            throw std::runtime_error("Conv2D gradient computation with respect to the input tensor is not implemented");
-        this->dataFormat = dataFormat;
-        this->stride = stride;
-        this->dilation = dilation;
-    }
-
     /**
      * @brief Executes the operation
      * @param inputTensor       forward input tensor
@@ -334,13 +324,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
                     const Tensor<device::CUDA, const T>& kernelTensor,
                     const Tensor<device::CUDA, const T>& gradTensor,
                     Tensor<device::CUDA, T>& kernelGradTensor,
-                    Tensor<device::CUDA, T>& inputGradTensor,
-                    const IntPair& padBefore,
-                    const IntPair& padAfter,
-                    int groups = 1) {
-        // configure oneDNN-related stuff in a deferred fashion
-        configureBackend(inputTensor.getShape(), kernelTensor.getShape(), gradTensor.getShape(), padBefore, padAfter, groups);
-
+                    Tensor<device::CUDA, T>& inputGradTensor) {
         // pad if needed
         if (buffer)
             cudnn::insert(gradTensor, *buffer, dataFormat, repaddingOffset);

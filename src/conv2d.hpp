@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
 #include "utils.hpp"
@@ -14,78 +15,23 @@
 namespace upstride {
 
 template <typename Device, typename T>
-class UpstrideConv2DFunctor {
+class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>> {
+    using AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>::proceedWithAlgebra;
+
    private:
     ScalarConv2DFunctor<Device, T> convOp;  //!< scalar convolution operator to be used to implement other data types
-
-    /**
-     * @brief Convolution operator for a specific algebra
-     * 
-     * @tparam CliffordProductSpec  Clifford product specification
-     * @param inputTensor       Input tensor
-     * @param kernelTensor      kernel tensor
-     * @param outputTensor      Output tensor
-     * @param padBefore         Number of zero samples to add to the input tensor on top/left
-     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
-     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
-     */
-    template <class CliffordProductSpec>
-    void conv2d(const Tensor<Device, const T>& inputTensor,
-                const Tensor<Device, const T>& kernelTensor,
-                Tensor<Device, T>& outputTensor,
-                const IntPair& padBefore,
-                const IntPair& padAfter,
-                int groups) {
-        // split tensors along blades
-        TensorSplit<Device, const T, CliffordProductSpec::DIMS>
-            input(inputTensor),
-            kernel(kernelTensor, kernelTensor.getShape().getSize() == 4);
-        TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
-
-        // allocate a temporary buffer
-        AllocatedTensor<Device, T> buffer(output.shape());
-
-        // loop through output dimensions
-        for (int dim = 0; dim < CliffordProductSpec::DIMS; ++dim) {
-            const auto row = &CliffordProductSpec::SIGNTABLE[ CliffordProductSpec::SIGNTABLE_LAYOUT[dim] ];
-            if (!row[0].positive)  // negative first term case is not handled yet
-                throw std::runtime_error("Not implemented");
-
-            // compute first term
-            convOp(
-                input[row[0].left],
-                kernel[row[0].right],
-                output[dim],
-                padBefore, padAfter, groups);
-
-            // compute remaining terms and accumulate the output
-            for (int termNum = 1; termNum < CliffordProductSpec::DIMS; ++termNum) {
-                const auto& entry = row[termNum];
-
-                // compute convolution for two given components
-                convOp(
-                    input[entry.left],
-                    kernel[entry.right],
-                    buffer,
-                    padBefore, padAfter, groups);
-
-                // accumulate to output
-                if (entry.positive)
-                    output[dim] += buffer;
-                else
-                    output[dim] -= buffer;
-            }
-        }
-    }
+    Algebra algebra;
 
    public:
     /**
      * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
+     * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
      * @param dataFormat    Expected tensors format
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      */
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
+    void configure(Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
+        this->algebra = algebra;
         convOp.configure(dataFormat, stride, dilation);
     }
 
@@ -104,25 +50,71 @@ class UpstrideConv2DFunctor {
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
-        // TODO: select by type
-        conv2d<CliffordProductSpec<Algebra::REAL>>(inputTensor, kernelTensor, outputTensor, padBefore, padAfter, groups);
+
+        convOp.configure(
+            inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+            kernelTensor.getShape().slice(-4),
+            outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+            padBefore,
+            padAfter,
+            groups);
+
+        proceedWithAlgebra(algebra, inputTensor, kernelTensor, outputTensor);
+    }
+
+    template <Algebra algebra>
+    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
+                            const Tensor<Device, const T>& kernelTensor,
+                            Tensor<Device, T>& outputTensor) {
+        using CliffordProductSpec = CliffordProductSpec<algebra>;
+
+        // split tensors along blades
+        TensorSplit<Device, const T, CliffordProductSpec::DIMS>
+            input(inputTensor),
+            kernel(kernelTensor, kernelTensor.getShape().getSize() == 4);
+        TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
+
+        // allocate a temporary buffer
+        AllocatedTensor<Device, T> buffer(output.shape());
+
+        // compute the Clifford product
+        BinaryOperation<CliffordProductSpec>::product(
+            [this, &input, &kernel, &output](int left, int right, int dim) {
+                convOp(input[left], kernel[right], output[dim]);
+            },
+
+            [this, &input, &kernel, &buffer](int left, int right, int) {
+                convOp(input[left], kernel[right], buffer);
+            },
+
+            [this, &output, &buffer](int dim, int, bool positive) {
+                if (positive)
+                    output[dim] += buffer;
+                else
+                    output[dim] -= buffer;
+            });
     }
 };
 
 template <typename Device, typename T>
-class UpstrideConv2DGradFunctor {
+class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>> {
+    using AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>>::proceedWithAlgebra;
+
    private:
     ScalarConv2DGradFunctor<Device, T> convOp;  //!< scalar convolution operator to be used to implement other data types
+    Algebra algebra;
 
    public:
     /**
      * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
+     * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
      * @param dataFormat    Expected tensors format
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
      */
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
+    void configure(Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
+        this->algebra = algebra;
         convOp.configure(dataFormat, stride, dilation, requireInputGrad);
     }
 
@@ -145,9 +137,56 @@ class UpstrideConv2DGradFunctor {
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
-        // fixme: this is scalar sconvolution operator
-        convOp(inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor, padBefore, padAfter, groups);
-        // TODO: implement quaternion convolution right here
+        convOp.configure(
+            inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+            kernelTensor.getShape().slice(-4),
+            gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+            padBefore,
+            padAfter,
+            groups);
+
+        proceedWithAlgebra(algebra, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+    }
+
+    template <Algebra algebra>
+    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
+                            const Tensor<Device, const T>& kernelTensor,
+                            const Tensor<Device, const T>& gradTensor,
+                            Tensor<Device, T>& kernelGradTensor,
+                            Tensor<Device, T>& inputGradTensor) {
+        using CliffordProductSpec = CliffordProductSpec<algebra>;
+
+        // split tensors along blades
+        TensorSplit<Device, const T, CliffordProductSpec::DIMS>
+            input(inputTensor),
+            kernel(kernelTensor, kernelTensor.getShape().getSize() == 4),
+            grad(gradTensor);
+        TensorSplit<Device, T, CliffordProductSpec::DIMS> outputKernel(kernelGradTensor);
+        TensorSplit<Device, T, CliffordProductSpec::DIMS> outputInput(inputGradTensor);
+
+        // allocate a temporary buffer
+        AllocatedTensor<Device, T> bufferKernel(outputKernel.shape());
+        AllocatedTensor<Device, T> bufferInput(outputInput.shape());
+
+        // compute the Clifford product
+        BinaryOperation<CliffordProductSpec>::product(
+            [this, &input, &kernel, &grad, &outputKernel, &outputInput](int left, int right, int dim) {
+                convOp(input[left], kernel[right], grad[dim], outputKernel[dim], outputInput[dim]);
+            },
+
+            [this, &input, &kernel, &grad, &bufferKernel, &bufferInput](int left, int right, int dim) {
+                convOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
+            },
+
+            [this, &outputKernel, &outputInput, &bufferKernel, &bufferInput](int dim, int, bool positive) {
+                if (positive) {
+                    outputKernel[dim] += bufferKernel;
+                    outputInput[dim] += bufferInput;
+                } else {
+                    outputKernel[dim] -= bufferKernel;
+                    outputInput[dim] -= bufferInput;
+                }
+            });
     }
 };
 

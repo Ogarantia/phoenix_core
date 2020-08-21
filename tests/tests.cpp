@@ -70,14 +70,30 @@ TEST_CASE("Test:Shape") {
         std::cout << std::endl;
     }
 
-    SUBCASE(" Test: Shape !(==) Shape") {
-        std::cout << " Test: !(Shape::operator==)" << std::endl;
+    SUBCASE(" Test: Shape != Shape") {
+        std::cout << " Test: Shape::operator!=" << std::endl;
         const upstride::Shape s1({1, 2, 3, 4});
         const upstride::Shape s2({1, 2, 6, 4});
         const upstride::Shape s3({1, 2});
 
-        CHECK((!(s1 == s2)));
-        CHECK((!(s1 == s3)));
+        CHECK((s1 != s2));
+        CHECK((s1 != s3));
+        std::cout << std::endl;
+    }
+
+    SUBCASE(" Test: Shape slicing and splitting") {
+        std::cout << " Shape slicing and splitting" << std::endl;
+        const upstride::Shape testShape{0, 1, 2, 3, 4, 5, 6};
+
+        CHECK((testShape.slice(0, 3) == upstride::Shape{0, 1, 2}));
+        CHECK((testShape.slice(4) == upstride::Shape{4, 5, 6}));
+        CHECK((testShape.slice(-3) == upstride::Shape{4, 5, 6}));
+        CHECK((testShape.slice(-3, -1) == upstride::Shape{4, 5}));
+
+        CHECK((testShape.slice(2, 3).split(1) == upstride::Shape{2}));
+        CHECK((testShape.slice(3).split(3) == upstride::Shape{1, 4, 5, 6}));
+        CHECK((testShape.slice(4).split(2) == upstride::Shape{2, 5, 6}));
+
         std::cout << std::endl;
     }
 }
@@ -131,14 +147,14 @@ TEST_CASE("Test:Tensor") {
         // Verify if values were indeed modified before applying t1.zero()
         bool test = true;
         for (int i = 0; i < numel && test; i++) {
-            if (t1.getDataPtr()[i] != i * 3.0f)
+            if (t1Ptr[i] != i * 3.0f)
                 test = false;
         }
 
         t1.zero();
         // Verify if new values are zero
         for (int i = 0; i < numel && test; i++) {
-            if (t1.getDataPtr()[i] != 0.0f)
+            if (t1Ptr[i] != 0.0f)
                 test = false;
         }
         CHECK((test));
@@ -171,6 +187,54 @@ TEST_CASE("Test:Tensor") {
         CHECK((accumulatorTest(srcTensori, dstTensori, binop::minus)));
         CHECK((accumulatorTest(srcTensorf, dstTensorf, binop::minus)));
         std::cout << std::endl;
+    }
+}
+
+TEST_CASE("Test:Conv2d") {
+    std::cout << "---- Test: Conv2d computation" << std::endl;
+    int dim = upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION];
+    int N = 1, C = 2, H = 3, W = 3;
+    int numel = dim * N * C * H * W;
+
+    SUBCASE(" Test: Conv2d - quaternion") {
+        std::cout << " Test: Conv2d - quaternion" << std::endl;
+        const upstride::Algebra algebra(upstride::Algebra::QUATERNION);
+
+        upstride::Shape sIn({dim*N, C, H, W});
+        upstride::Shape sKer({dim, N, C, H, W});
+        upstride::Shape sOut({dim*N, 1, 1, 1});
+        upstride::AllocatedTensor<upstride::device::CPU, float> inputTensor(sIn);
+        upstride::AllocatedTensor<upstride::device::CPU, float> kernelTensor(sKer);
+        upstride::AllocatedTensor<upstride::device::CPU, float> outputTensor(sOut);
+        outputTensor.zero();
+
+        float* inputTensorPtr = inputTensor.getDataPtr();
+        float* kernelTensorPtr = kernelTensor.getDataPtr();
+        for(int i = 0; i < numel; ++i) {
+            inputTensorPtr[i] = 1;
+            kernelTensorPtr[i] = 1;
+        }
+
+        upstride::IntPair st(1, 1);
+        upstride::IntPair dil(1, 1);
+        const upstride::IntPair padBefore(0);
+        const upstride::IntPair padAfter(0);
+        upstride::Tensor<upstride::device::CPU, const float> constInputTensor(sIn, inputTensor.getDataPtr());
+        upstride::Tensor<upstride::device::CPU, const float> constKernelTensor(sKer, kernelTensor.getDataPtr());
+     
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor;
+        myConv2DFunctor.configure(algebra, upstride::DataFormat::NCHW, st, dil);
+        myConv2DFunctor(constInputTensor, constKernelTensor, outputTensor, padBefore, padAfter, /*groups=*/1);
+
+        bool test = true;
+        float* outputTensorPtr = outputTensor.getDataPtr();
+        if (outputTensorPtr[0] != -36.0f)
+            test = false;
+        for (int i = 1; i < 4 && test; ++i) {
+            if (outputTensorPtr[i] != 36.0f)
+                test = false;
+        }
+        CHECK((test));
     }
 }
 
@@ -226,7 +290,6 @@ TEST_CASE("Test:Utils") {
     SUBCASE(" Test: Utils::computeConvOutputSize") {
         std::cout << " Test: Utils::computeConvOutputSize" << std::endl;
 
-        const int typeDim = 4;
         const upstride::DataFormat df = upstride::DataFormat::NCHW;
 
         const upstride::Shape inputShape({1, 224, 224, 3});
@@ -239,7 +302,7 @@ TEST_CASE("Test:Utils") {
         const std::vector<int32_t>& dilation = {0, 0};
         upstride::IntPair padBefore, padAfter;
 
-        upstride::Shape outputShape = upstride::computeConvOutputSize(typeDim,
+        upstride::Shape outputShape = upstride::computeConvOutputSize(upstride::Algebra::QUATERNION,
                                                                       df,
                                                                       inputShape,
                                                                       kernelShape,
@@ -284,4 +347,9 @@ TEST_CASE("Test:TensorSplit") {
             CHECK(*ptr == i + 1);
         }
     }
+}
+
+TEST_CASE("Algebras multivector dimensions") {
+    CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::REAL] == 1);
+    CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION] == 4);
 }

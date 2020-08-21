@@ -8,8 +8,8 @@
 
 #pragma once
 #include <initializer_list>
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
 
 namespace upstride {
 
@@ -210,6 +210,39 @@ class Shape {
         }
         return shape;
     }
+
+    /**
+     * @brief Cuts out a slice of the Shape in Pythonic fashion
+     *      slice(3, 6) contains elements 3, 4, and 5
+     *      slice(2) contains all elements starting from the 2nd to the end
+     *      slice(-3) contains last three elements
+     *      slice(-3, -1) contains elements n - 3 and n - 2
+     * @param from  First element index
+     * @param to    Last element index. If omitted, keep the tail.
+     * @return a slice containing specified elements.
+     */
+    Shape slice(int from, int to = 0) const {
+        if (from < 0)
+            from += size;
+        if (to <= 0)
+            to += size;
+        if (from < to && to <= size)
+            return Shape(to - from, shape + from);
+        throw std::invalid_argument("Slice is out of range: " + std::to_string(from) + ":" + std::to_string(to));
+    }
+
+    /**
+     * @brief Returns Shape corresponding to splitting of the current Shape on equal parts along the outermost dimension
+     * @param numParts  Number of parts to split onto
+     * @return the shape of a single part in the split.
+     */
+    Shape split(int numParts) const {
+        if (shape[0] % numParts != 0)
+            throw std::invalid_argument("Cannot split " + std::to_string(shape[0]) + " onto " + std::to_string(numParts) + " parts");
+        Shape result(size, shape);
+        result.shape[0] /= numParts;
+        return result;
+    }
 };
 
 template <typename Device, typename T>
@@ -332,12 +365,11 @@ class TensorSplit {
         if (keepOuterDimension) {
             if (inputShape[0] % PARTS != 0)
                 throw std::invalid_argument("Cannot split " + std::to_string(inputShape[0]) + " entries in outer dimension onto " + std::to_string(PARTS) + " parts");
-            partShape = Shape(inputShape);
-            partShape[0] /= PARTS;
+            partShape = inputShape.split(PARTS);
         } else {
             if (inputShape[0] != PARTS)
                 throw std::invalid_argument("Expected a tensor of " + std::to_string(PARTS) + " entries in outer dimension, but got " + std::to_string(inputShape[0]));
-            partShape = Shape(inputShape.getSize() - 1, inputShape.getShapePtr() + 1);
+            partShape = inputShape.slice(1);
         }
     }
 

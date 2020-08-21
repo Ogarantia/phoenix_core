@@ -50,7 +50,7 @@ class Context : public upstride::Context {
     dnnl::engine oneEngine;
     dnnl::stream oneStream;
 
-    Context(const int typeDim) : upstride::Context(typeDim), oneEngine(dnnl::engine::kind::cpu, 0), oneStream(oneEngine) {}
+    Context() : oneEngine(dnnl::engine::kind::cpu, 0), oneStream(oneEngine) {}
 
    public:
     /**

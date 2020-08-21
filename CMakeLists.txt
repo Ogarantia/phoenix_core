@@ -74,12 +74,9 @@ if (BUILD_TESTS)
   include_directories(tests/cpp_tests/doctest)
   link_directories(${CMAKE_CURRENT_LIST_DIR}/src/cc)
 
-  set(TESTSOURCES ${TESTSOURCES} 
-    ${SOURCES}
-    ${CPP_SOURCES_FOLDER}/utils.cc
-    ${CMAKE_CURRENT_LIST_DIR}/tests/tests.cpp
-  )
-
-  add_executable(tests ${TESTSOURCES})
+  add_executable(tests
+      ${SOURCES}
+      ${CMAKE_CURRENT_LIST_DIR}/tests/tests.cpp)
+  
   add_test(tests tests)
 endif()

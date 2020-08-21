@@ -81,7 +81,7 @@ DataFormat upstride::dataFormatFromString(std::string dataFormatString) {
     throw std::invalid_argument("Invalid data format encountered: " + dataFormatString);
 }
 
-Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFormat,
+Shape upstride::computeConvOutputSize(Algebra algebra, const DataFormat dataFormat,
                                       const Shape& inputShape, const Shape& filterShape,
                                       Padding paddingPreset,
                                       const IntTuple& explicitPaddings,
@@ -92,10 +92,10 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
     // Perform shape checks
     if (inputShape.getSize() != 4)
         throw std::invalid_argument("Four-dimensional input tensor expected");
-    if (typeDim > 1) {
+    if (algebra != Algebra::REAL) {
         if (filterShape.getSize() != 5)
             throw std::invalid_argument("Five-dimensional filter tensor expected");
-        if (filterShape[0] != typeDim)
+        if (filterShape[0] != MULTIVECTOR_DIM[algebra])
             throw std::invalid_argument("First filter dimension mismatch, got " + std::to_string(filterShape[0]));
     } else if (filterShape.getSize() != 4)
         throw std::invalid_argument("Four-dimensional filter tensor expected");
@@ -107,10 +107,9 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
     if (!getSpatialStep(dilations, 1, dilation))
         throw std::invalid_argument("Invalid dilations.");
 
-    // For scalar tensors (typeDim == 1), work with usual 4D filters. Otherwise the filter tensor is 5D.
+    // For scalar tensors work with usual 4D filters. Otherwise the filter tensor is 5D.
     //fixme: heavily disabled for testing due to oneDNN specificities
-
-    const int firstFilterDim = typeDim > 1 ? 1 : 0;
+    const int firstFilterDim = (algebra == Algebra::REAL) ? 0 : 1;
     const int filterWidthDim = firstFilterDim + 3;
     const int filterHeightDim = firstFilterDim + 2;
     const int filterInChannelDim = firstFilterDim + 1;
@@ -144,4 +143,13 @@ Shape upstride::computeConvOutputSize(const int typeDim, const DataFormat dataFo
         padBefore.y, padAfter.y);
 
     return outputShape;
+}
+
+
+Algebra upstride::getAlgebraFromType(int uptype) {
+    switch (uptype) {
+        case 0: return Algebra::REAL;
+        case 2: return Algebra::QUATERNION;
+    }
+    throw std::invalid_argument("Invalid datatype index: " + std::to_string(uptype));
 }

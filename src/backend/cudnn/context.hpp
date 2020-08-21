@@ -51,7 +51,7 @@ class Context : public upstride::Context {
    private:
     cudnnHandle_t handle;
 
-    Context(const int typeDim) : upstride::Context(typeDim) {
+    Context() {
         raiseIfError(cudnnCreate(&handle));
     }
 

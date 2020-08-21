@@ -5,7 +5,7 @@
 using namespace upstride::onednn;
 
 Context& Context::getInstance() {
-    static upstride::onednn::Context context(1);
+    static upstride::onednn::Context context;
     return context;
 }
 

@@ -3,6 +3,6 @@
 using namespace upstride::cudnn;
 
 Context& Context::getInstance() {
-    static upstride::cudnn::Context context(1);
+    static upstride::cudnn::Context context;
     return context;
 }

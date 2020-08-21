@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "tensor.hpp"
+#include "../algebras.hpp"
 
 namespace upstride {
 
@@ -59,10 +60,8 @@ class IntPair {
  * @brief Base class of a context shared between different operations
  */
 class Context {
-    const int typeDimensions;
-
    protected:
-    Context(const int td) : typeDimensions(td){};
+    Context() {}
 };
 
 /**
