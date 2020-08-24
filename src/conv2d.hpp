@@ -15,6 +15,42 @@
 
 namespace upstride {
 
+/**
+ * @brief Specifies memory layout for a convolution kernel
+ *   OIHW for real algebra
+ *   nOIHW for a non-real algebra containinb n-dimensional multivectors.
+ */
+class Conv2DKernelLayout {
+   public:
+    /**
+     * @brief Returns dimension number containing the number of output channels in the convolution kernel for a specific algebra.
+     */
+    static inline int numOutputChannelsDim(Algebra algebra) {
+        return algebra == Algebra::REAL ? 0 : 1;
+    }
+
+    /**
+     * @brief Returns dimension number containing the number of input channels in the convolution kernel for a specific algebra.
+     */
+    static inline int numInputChannelsDim(Algebra algebra) {
+        return algebra == Algebra::REAL ? 1 : 2;
+    }
+
+    /**
+     * @brief Returns dimension number containing the height of the convolution kernel for a specific algebra.
+     */
+    static inline int filterHeightDim(Algebra algebra) {
+        return algebra == Algebra::REAL ? 2 : 3;
+    }
+
+    /**
+     * @brief Returns dimension number containing the width of the convolution kernel for a specific algebra.
+     */
+    static inline int filterWidthDim(Algebra algebra) {
+        return algebra == Algebra::REAL ? 3 : 4;
+    }
+};
+
 template <typename Device, typename T>
 class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>> {
     using AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>::proceedWithAlgebra;
