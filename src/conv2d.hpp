@@ -10,6 +10,7 @@
 #include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
+#include "thread_local_ptr.hpp"
 #include "utils.hpp"
 
 namespace upstride {
@@ -19,8 +20,10 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     using AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>::proceedWithAlgebra;
 
    private:
-    ScalarConv2DFunctor<Device, T> convOp;  //!< scalar convolution operator to be used to implement other data types
+    ThreadLocalPtr<ScalarConv2DFunctor<Device, T>> convOp;  //!< scalar convolution operator to be used to implement other data types
     Algebra algebra;
+    DataFormat dataFormat;
+    IntPair stride, dilation;
 
    public:
     /**
@@ -32,11 +35,14 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
      */
     void configure(Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
         this->algebra = algebra;
-        convOp.configure(dataFormat, stride, dilation);
+        this->dataFormat = dataFormat;
+        this->stride = stride;
+        this->dilation = dilation;
     }
 
     /**
      * @brief Executes the convolution operation
+     * This function may be called from multiple threads.
      * @param inputTensor       Input tensor
      * @param kernelTensor      kernel tensor
      * @param outputTensor      Output tensor
@@ -50,8 +56,10 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
+        // ensure the object exists within the current thread
+        convOp(dataFormat, stride, dilation);
 
-        convOp.configure(
+        convOp->configure(
             inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
@@ -80,11 +88,11 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         // compute the Clifford product
         BinaryOperation<CliffordProductSpec>::product(
             [this, &input, &kernel, &output](int left, int right, int dim) {
-                convOp(input[left], kernel[right], output[dim]);
+                (*convOp)(input[left], kernel[right], output[dim]);
             },
 
             [this, &input, &kernel, &buffer](int left, int right, int) {
-                convOp(input[left], kernel[right], buffer);
+                (*convOp)(input[left], kernel[right], buffer);
             },
 
             [this, &output, &buffer](int dim, int, bool positive) {
@@ -101,8 +109,11 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     using AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>>::proceedWithAlgebra;
 
    private:
-    ScalarConv2DGradFunctor<Device, T> convOp;  //!< scalar convolution operator to be used to implement other data types
+    ThreadLocalPtr<ScalarConv2DGradFunctor<Device, T>> convOp;  //!< scalar convolution operator to be used to implement other data types
     Algebra algebra;
+    DataFormat dataFormat;
+    IntPair stride, dilation;
+    bool requireInputGrad;
 
    public:
     /**
@@ -115,11 +126,15 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
      */
     void configure(Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
         this->algebra = algebra;
-        convOp.configure(dataFormat, stride, dilation, requireInputGrad);
+        this->dataFormat = dataFormat;
+        this->stride = stride;
+        this->dilation = dilation;
+        this->requireInputGrad = requireInputGrad;
     }
 
     /**
      * @brief Executes the operation
+     * This function may be called from multiple threads.
      * @param inputTensor       forward input tensor
      * @param kernelTensor      forward input kernel tensor
      * @param gradTensor        gradient of the forward output tensor (dy)
@@ -137,7 +152,10 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
-        convOp.configure(
+        // ensure the object exists within the current thread
+        convOp(dataFormat, stride, dilation, requireInputGrad);
+
+        convOp->configure(
             inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
@@ -171,11 +189,11 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
         // compute the Clifford product
         BinaryOperation<CliffordProductSpec>::product(
             [this, &input, &kernel, &grad, &outputKernel, &outputInput](int left, int right, int dim) {
-                convOp(input[left], kernel[right], grad[dim], outputKernel[dim], outputInput[dim]);
+                (*convOp)(input[left], kernel[right], grad[dim], outputKernel[dim], outputInput[dim]);
             },
 
             [this, &input, &kernel, &grad, &bufferKernel, &bufferInput](int left, int right, int dim) {
-                convOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
+                (*convOp)(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
             },
 
             [this, &outputKernel, &outputInput, &bufferKernel, &bufferInput](int dim, int, bool positive) {

@@ -21,26 +21,22 @@ class ScalarConv2DFunctor<device::CPU, T> {
    private:
     dnnl::memory::desc inputMemDesc, kernelMemDesc, outputMemDesc;
     dnnl::convolution_forward convPrim;
-    dnnl::memory::format_tag formatTag;
+    const dnnl::memory::format_tag formatTag;
+    const IntPair stride, dilation;
     Shape inputShape, kernelShape, outputShape;
     IntPair padBefore;  //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
     IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
-    IntPair stride, dilation;
 
    public:
-    ScalarConv2DFunctor() {}
-
     /**
-     * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
+     * @brief Sets main convolution parameters independent from the input, filter and output sizes
      * @param dataFormat    Expected tensors format
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      */
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) {
-        this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
-        this->stride = stride;
-        this->dilation = dilation;
-    }
+    ScalarConv2DFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) : formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+                                                                                                 stride(stride),
+                                                                                                 dilation(dilation) {}
 
     /**
      * @brief Performs backend-related operation configuration
@@ -128,22 +124,18 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
     dnnl::memory::desc inputMemDesc, kernelMemDesc, gradMemDesc, kernelGradMemDesc, inputGradMemDesc;
     dnnl::convolution_backward_data convBackDataPrim;
     dnnl::convolution_backward_weights convBackWeightsPrim;
-    dnnl::memory::format_tag formatTag;
+    const dnnl::memory::format_tag formatTag;
+    const IntPair stride, dilation;
+    const bool requireInputGrad;  //!< Used to determine if inputGrad needs to be computed or not
     Shape inputShape, kernelShape, gradShape;
     IntPair padBefore;  //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
     IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
-    IntPair stride, dilation;
-    bool requireInputGrad;  //!< Use to determine if inputGrad need to be compute or not
 
    public:
-    ScalarConv2DGradFunctor() {}
-
-    void configure(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) {
-        this->formatTag = onednn::dataFormatToFormatTag(dataFormat);
-        this->stride = stride;
-        this->dilation = dilation;
-        this->requireInputGrad = requireInputGrad;
-    }
+    ScalarConv2DGradFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) : formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+                                                                                                                            stride(stride),
+                                                                                                                            dilation(dilation),
+                                                                                                                            requireInputGrad(requireInputGrad) {}
 
     /**
      * @brief Performs backend-related operation configuration
