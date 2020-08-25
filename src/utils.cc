@@ -124,12 +124,12 @@ Shape upstride::computeConvOutputSize(Algebra algebra, const DataFormat dataForm
 
     // compute output size
     outputShape.width(dataFormat) = computeWindowedOutputSizeAndPadding(
-        inputShape.width(dataFormat), filterShape[Conv2DKernelLayout::filterWidthDim(algebra)],
+        inputShape.width(dataFormat), filterShape[Conv2DKernelLayout::widthDim(algebra)],
         dilation.x, stride.x, paddingPreset,
         padBefore.x, padAfter.x);
 
     outputShape.height(dataFormat) = computeWindowedOutputSizeAndPadding(
-        inputShape.height(dataFormat), filterShape[Conv2DKernelLayout::filterHeightDim(algebra)],
+        inputShape.height(dataFormat), filterShape[Conv2DKernelLayout::heightDim(algebra)],
         dilation.y, stride.y, paddingPreset,
         padBefore.y, padAfter.y);
 

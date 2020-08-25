@@ -39,14 +39,14 @@ class Conv2DKernelLayout {
     /**
      * @brief Returns dimension number containing the height of the convolution kernel for a specific algebra.
      */
-    static inline int filterHeightDim(Algebra algebra) {
+    static inline int heightDim(Algebra algebra) {
         return algebra == Algebra::REAL ? 2 : 3;
     }
 
     /**
      * @brief Returns dimension number containing the width of the convolution kernel for a specific algebra.
      */
-    static inline int filterWidthDim(Algebra algebra) {
+    static inline int widthDim(Algebra algebra) {
         return algebra == Algebra::REAL ? 3 : 4;
     }
 };
