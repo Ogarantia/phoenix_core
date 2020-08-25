@@ -17,12 +17,12 @@ template <>
 struct TensorManipulations<device::CUDA> {
     template <typename T>
     static void accumulateAdd(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, const Shape& shape) {
-        cudnn::accumulateAdd(output.getDataPtr(), input.getDataPtr(), shape.numel() * sizeof(T));
+        cudnn::accumulateAdd(output.getDataPtr(), input.getDataPtr(), shape.numel());
     }
 
     template <typename T>
     static void accumulateSub(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, const Shape& shape) {
-        cudnn::accumulateSub(output.getDataPtr(), input.getDataPtr(), shape.numel() * sizeof(T));
+        cudnn::accumulateSub(output.getDataPtr(), input.getDataPtr(), shape.numel());
     }
 
     template <typename T>

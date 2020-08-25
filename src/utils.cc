@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "conv2d.hpp"
+
 using namespace upstride;
 
 /**
@@ -107,21 +109,10 @@ Shape upstride::computeConvOutputSize(Algebra algebra, const DataFormat dataForm
     if (!getSpatialStep(dilations, 1, dilation))
         throw std::invalid_argument("Invalid dilations.");
 
-    // For scalar tensors work with usual 4D filters. Otherwise the filter tensor is 5D.
-    //fixme: heavily disabled for testing due to oneDNN specificities
-    const int firstFilterDim = (algebra == Algebra::REAL) ? 0 : 1;
-    const int filterWidthDim = firstFilterDim + 3;
-    const int filterHeightDim = firstFilterDim + 2;
-    const int filterInChannelDim = firstFilterDim + 1;
-    const int filterOutChannelDim = firstFilterDim + 0;
-
-    /*if (inputShape.depth(dataFormat) % filterShape[filterInChannelDim] != 0)
-        throw std::invalid_argument("Filter channels number/input channels number mismatch");*/
-
     // Set up the resulting shape
     Shape outputShape(4);
     outputShape[0] = inputShape[0];
-    outputShape.depth(dataFormat) = groups * filterShape[filterOutChannelDim];
+    outputShape.depth(dataFormat) = groups * filterShape[Conv2DKernelLayout::numOutputChannelsDim(algebra)];
 
     // init padding
     if (paddingPreset == Padding::EXPLICIT) {
@@ -133,23 +124,24 @@ Shape upstride::computeConvOutputSize(Algebra algebra, const DataFormat dataForm
 
     // compute output size
     outputShape.width(dataFormat) = computeWindowedOutputSizeAndPadding(
-        inputShape.width(dataFormat), filterShape[filterWidthDim],
+        inputShape.width(dataFormat), filterShape[Conv2DKernelLayout::widthDim(algebra)],
         dilation.x, stride.x, paddingPreset,
         padBefore.x, padAfter.x);
 
     outputShape.height(dataFormat) = computeWindowedOutputSizeAndPadding(
-        inputShape.height(dataFormat), filterShape[filterHeightDim],
+        inputShape.height(dataFormat), filterShape[Conv2DKernelLayout::heightDim(algebra)],
         dilation.y, stride.y, paddingPreset,
         padBefore.y, padAfter.y);
 
     return outputShape;
 }
 
-
 Algebra upstride::getAlgebraFromType(int uptype) {
     switch (uptype) {
-        case 0: return Algebra::REAL;
-        case 2: return Algebra::QUATERNION;
+        case 0:
+            return Algebra::REAL;
+        case 2:
+            return Algebra::QUATERNION;
     }
     throw std::invalid_argument("Invalid datatype index: " + std::to_string(uptype));
 }
