@@ -70,13 +70,10 @@ class ScalarConv2DFunctor<device::CPU, T> {
         if (groups == 1) {
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
         } else {
-            if (groups != kernelShape[1])
-                throw std::invalid_argument("Groups convolution is not implemented yet. Groups must be equals to input channels for the Depthwise convolution 2D.");
-            // converting IOHW shape into GIOHW with G=I
+            // converting OIHW shape into GOIHW
             Shape kernelShapeExpanded = kernelShape.expandDim(0);
-            int tmpDim = kernelShapeExpanded[0];
-            kernelShapeExpanded[0] = kernelShapeExpanded[2];
-            kernelShapeExpanded[2] = tmpDim;
+            kernelShapeExpanded[0] = groups;
+            kernelShapeExpanded[1] /= groups;
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShapeExpanded), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT_DW);
         }
         outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
@@ -170,10 +167,10 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
         if (groups == 1) {
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
         } else {
+            // converting OIHW shape into GOIHW
             Shape kernelShapeExpanded = kernelShape.expandDim(0);
-            int tmpDim = kernelShapeExpanded[0];
-            kernelShapeExpanded[0] = kernelShapeExpanded[2];
-            kernelShapeExpanded[2] = tmpDim;
+            kernelShapeExpanded[0] = groups;
+            kernelShapeExpanded[1] /= groups;
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShapeExpanded), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT_DW);
         }
         gradMemDesc = dnnl::memory::desc(onednn::shapeToDims(gradShape), onednn::getDataType<T>(), formatTag);

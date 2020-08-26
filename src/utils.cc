@@ -112,7 +112,7 @@ Shape upstride::computeConvOutputSize(Algebra algebra, const DataFormat dataForm
     // Set up the resulting shape
     Shape outputShape(4);
     outputShape[0] = inputShape[0];
-    outputShape.depth(dataFormat) = groups * filterShape[Conv2DKernelLayout::numOutputChannelsDim(algebra)];
+    outputShape.depth(dataFormat) = filterShape[Conv2DKernelLayout::numOutputChannelsDim(algebra)];
 
     // init padding
     if (paddingPreset == Padding::EXPLICIT) {
