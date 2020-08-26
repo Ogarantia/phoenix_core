@@ -151,10 +151,8 @@ class ScalarConv2DFunctor<device::CUDA, T> {
         cudnn::Context::raiseIfError(cudnnSetFilter4dDescriptor(
             filterDesc,
             cudnn::getDataType<T>(),
-            CUDNN_TENSOR_NCHW,                // OIHW according to the docs
-            filterShape[groups > 1 ? 1 : 0],  // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
-            filterShape[groups > 1 ? 0 : 1],
-            filterShape[2], filterShape[3]));
+            CUDNN_TENSOR_NCHW,  // OIHW according to the docs
+            filterShape[0], filterShape[1], filterShape[2], filterShape[3]));
     }
 
     /**
@@ -299,9 +297,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
             kernelDesc,
             cudnn::getDataType<T>(),
             CUDNN_TENSOR_NCHW,                // OIHW according to the docs
-            kernelShape[groups > 1 ? 1 : 0],  // FIXME: this inversion is found empirically and is not explained in cuDNN docs; check for regular grouped conv
-            kernelShape[groups > 1 ? 0 : 1],
-            kernelShape[2], kernelShape[3]));
+            kernelShape[0], kernelShape[1], kernelShape[2], kernelShape[3]));
     }
 
     /**
