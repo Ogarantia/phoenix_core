@@ -61,6 +61,7 @@ if (WITH_CUDNN)
   set(SOURCES ${SOURCES}
       ${CPP_SOURCES_FOLDER}/backend/cudnn/cudnn.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels.cu
+      ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels_quat.cu
   )
   link_libraries(cudnn)
 endif()

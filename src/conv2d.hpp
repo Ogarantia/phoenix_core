@@ -110,33 +110,62 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             Tensor<Device, T>& outputTensor) {
-        using CliffordProductSpec = CliffordProductSpec<algebra>;
+        if (algebra == Algebra::QUATERNION) {
+            // split tensors along blades
+            const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
+            TensorSplit<Device, T, 4> output(outputTensor);
 
-        // split tensors along blades
-        TensorSplit<Device, const T, CliffordProductSpec::DIMS>
-            input(inputTensor),
-            kernel(kernelTensor, kernelTensor.getShape().getSize() == 4);
-        TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
+            // allocate temporary buffers
+            AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *outputLanes[8];
+            for (int i = 0; i < 8; ++i) {
+                inputLanes[i] = new AllocatedTensor<Device, T>(input.shape());
+                kernelLanes[i] = new AllocatedTensor<Device, T>(kernel.shape());
+                outputLanes[i] = new AllocatedTensor<Device, T>(output.shape());
+            }
 
-        // allocate a temporary buffer
-        AllocatedTensor<Device, T> buffer(output.shape());
+            // decompose - compute - recompose
+            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
+            for (int i = 0; i < 8; ++i)
+                (*convOp)(*inputLanes[i], *kernelLanes[i], *outputLanes[i]);
+            TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
 
-        // compute the Clifford product
-        BinaryOperation<CliffordProductSpec>::product(
-            [this, &input, &kernel, &output](int left, int right, int dim) {
-                (*convOp)(input[left], kernel[right], output[dim]);
-            },
+            // free temporary buffers
+            for (int i = 0; i < 8; ++i) {
+                delete inputLanes[i];
+                delete kernelLanes[i];
+                delete outputLanes[i];
+            }
+        }
 
-            [this, &input, &kernel, &buffer](int left, int right, int) {
-                (*convOp)(input[left], kernel[right], buffer);
-            },
+        else {
+            using CliffordProductSpec = CliffordProductSpec<algebra>;
 
-            [this, &output, &buffer](int dim, int, bool positive) {
-                if (positive)
-                    output[dim] += buffer;
-                else
-                    output[dim] -= buffer;
-            });
+            // split tensors along blades
+            const TensorSplit<Device, const T, CliffordProductSpec::DIMS>
+                input(inputTensor),
+                kernel(kernelTensor, kernelTensor.getShape().getSize() == 4);
+            TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
+
+            // allocate a temporary buffer
+            AllocatedTensor<Device, T> buffer(output.shape());
+
+            // compute the Clifford product
+            BinaryOperation<CliffordProductSpec>::product(
+                [this, &input, &kernel, &output](int left, int right, int dim) {
+                    (*convOp)(input[left], kernel[right], output[dim]);
+                },
+
+                [this, &input, &kernel, &buffer](int left, int right, int) {
+                    (*convOp)(input[left], kernel[right], buffer);
+                },
+
+                [this, &output, &buffer](int dim, int, bool positive) {
+                    if (positive)
+                        output[dim] += buffer;
+                    else
+                        output[dim] -= buffer;
+                });
+        }
     }
 };
 
@@ -208,39 +237,77 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
-        using CliffordProductSpec = CliffordProductSpec<algebra>;
+        if (algebra == Algebra::QUATERNION) {
+            // split tensors along blades
+            const TensorSplit<Device, const T, 4>
+                input(inputTensor),
+                kernel(kernelTensor, false),
+                grad(gradTensor);
+            TensorSplit<Device, T, 4> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
-        // split tensors along blades
-        TensorSplit<Device, const T, CliffordProductSpec::DIMS>
-            input(inputTensor),
-            kernel(kernelTensor, kernelTensor.getShape().getSize() == 4),
-            grad(gradTensor);
-        TensorSplit<Device, T, CliffordProductSpec::DIMS> outputKernel(kernelGradTensor);
-        TensorSplit<Device, T, CliffordProductSpec::DIMS> outputInput(inputGradTensor);
+            // allocate temporary buffers
+            AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *gradLanes[8], *kernelGradLanes[8], *inputGradLanes[8];
+            for (int i = 0; i < 8; ++i) {
+                inputLanes[i] = new AllocatedTensor<Device, T>(input.shape());
+                kernelLanes[i] = new AllocatedTensor<Device, T>(kernel.shape());
+                gradLanes[i] = new AllocatedTensor<Device, T>(grad.shape());
+                kernelGradLanes[i] = new AllocatedTensor<Device, T>(kernelGrad.shape());
+                inputGradLanes[i] = new AllocatedTensor<Device, T>(inputGrad.shape());
+            }
 
-        // allocate a temporary buffer
-        AllocatedTensor<Device, T> bufferKernel(outputKernel.shape());
-        AllocatedTensor<Device, T> bufferInput(outputInput.shape());
+            // decompose - compute - recompose
+            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
+            TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes);
 
-        // compute the Clifford product
-        BinaryOperation<CliffordProductSpec>::product(
-            [this, &input, &kernel, &grad, &outputKernel, &outputInput](int left, int right, int dim) {
-                (*convOp)(input[left], kernel[right], grad[dim], outputKernel[dim], outputInput[dim]);
-            },
+            for (int i = 0; i < 8; ++i)
+                (*convOp)(*inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
 
-            [this, &input, &kernel, &grad, &bufferKernel, &bufferInput](int left, int right, int dim) {
-                (*convOp)(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
-            },
+            TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
 
-            [this, &outputKernel, &outputInput, &bufferKernel, &bufferInput](int dim, int, bool positive) {
-                if (positive) {
-                    outputKernel[dim] += bufferKernel;
-                    outputInput[dim] += bufferInput;
-                } else {
-                    outputKernel[dim] -= bufferKernel;
-                    outputInput[dim] -= bufferInput;
-                }
-            });
+            // free temporary buffers
+            for (int i = 0; i < 8; ++i) {
+                delete inputLanes[i];
+                delete kernelLanes[i];
+                delete gradLanes[i];
+                delete kernelGradLanes[i];
+                delete inputGradLanes[i];
+            }
+        }
+
+        else {
+            using CliffordProductSpec = CliffordProductSpec<algebra>;
+
+            // split tensors along blades
+            const TensorSplit<Device, const T, CliffordProductSpec::DIMS>
+                input(inputTensor),
+                kernel(kernelTensor, kernelTensor.getShape().getSize() == 4),
+                grad(gradTensor);
+            TensorSplit<Device, T, CliffordProductSpec::DIMS> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
+
+            // allocate a temporary buffer
+            AllocatedTensor<Device, T> bufferKernel(kernelGrad.shape());
+            AllocatedTensor<Device, T> bufferInput(inputGrad.shape());
+
+            // compute the Clifford product
+            BinaryOperation<CliffordProductSpec>::product(
+                [this, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
+                    (*convOp)(input[left], kernel[right], grad[dim], kernelGrad[dim], inputGrad[dim]);
+                },
+
+                [this, &input, &kernel, &grad, &bufferKernel, &bufferInput](int left, int right, int dim) {
+                    (*convOp)(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
+                },
+
+                [this, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int dim, int, bool positive) {
+                    if (positive) {
+                        kernelGrad[dim] += bufferKernel;
+                        inputGrad[dim] += bufferInput;
+                    } else {
+                        kernelGrad[dim] -= bufferKernel;
+                        inputGrad[dim] -= bufferInput;
+                    }
+                });
+        }
     }
 };
 

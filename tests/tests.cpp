@@ -219,12 +219,10 @@ TEST_CASE("Test:Conv2d") {
         upstride::IntPair dil(1, 1);
         const upstride::IntPair padBefore(0);
         const upstride::IntPair padAfter(0);
-        upstride::Tensor<upstride::device::CPU, const float> constInputTensor(sIn, inputTensor.getDataPtr());
-        upstride::Tensor<upstride::device::CPU, const float> constKernelTensor(sKer, kernelTensor.getDataPtr());
-     
+
         upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor;
         myConv2DFunctor.configure(algebra, upstride::DataFormat::NCHW, st, dil);
-        myConv2DFunctor(constInputTensor, constKernelTensor, outputTensor, padBefore, padAfter, /*groups=*/1);
+        myConv2DFunctor(inputTensor, kernelTensor, outputTensor, padBefore, padAfter, /*groups=*/1);
 
         bool test = true;
         float* outputTensorPtr = outputTensor.getDataPtr();

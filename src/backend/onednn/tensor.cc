@@ -2,8 +2,8 @@
 
 namespace upstride {
 
-void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, float>& input, Tensor<device::CPU, float>& output, const Shape& shape) {
-    int shapeNumel = shape.numel();
+void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, float>& input, Tensor<device::CPU, float>& output) {
+    int shapeNumel = input.getShape().numel();
     float* outputPtr = output.getDataPtr();
     const float* inputPtr = input.getDataPtr();
     int idx = 0;
@@ -34,8 +34,8 @@ void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, f
     }
 }
 
-void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, int>& input, Tensor<device::CPU, int>& output, const Shape& shape) {
-    int shapeNumel = shape.numel();
+void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, int>& input, Tensor<device::CPU, int>& output) {
+    int shapeNumel = input.getShape().numel();
     int* outputPtr = output.getDataPtr();
     const int* inputPtr = input.getDataPtr();
     int idx = 0;
@@ -66,8 +66,8 @@ void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, i
     }
 }
 
-void TensorManipulations<device::CPU>::accumulateSub(const Tensor<device::CPU, float>& input, Tensor<device::CPU, float>& output, const Shape& shape) {
-    int shapeNumel = shape.numel();
+void TensorManipulations<device::CPU>::accumulateSub(const Tensor<device::CPU, float>& input, Tensor<device::CPU, float>& output) {
+    int shapeNumel = input.getShape().numel();
     float* outputPtr = output.getDataPtr();
     const float* inputPtr = input.getDataPtr();
     int idx = 0;
@@ -98,8 +98,8 @@ void TensorManipulations<device::CPU>::accumulateSub(const Tensor<device::CPU, f
     }
 }
 
-void TensorManipulations<device::CPU>::accumulateSub(const Tensor<device::CPU, int>& input, Tensor<device::CPU, int>& output, const Shape& shape) {
-    int shapeNumel = shape.numel();
+void TensorManipulations<device::CPU>::accumulateSub(const Tensor<device::CPU, int>& input, Tensor<device::CPU, int>& output) {
+    int shapeNumel = input.getShape().numel();
     int* outputPtr = output.getDataPtr();
     const int* inputPtr = input.getDataPtr();
     int idx = 0;

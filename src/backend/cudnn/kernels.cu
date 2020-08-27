@@ -68,17 +68,6 @@ __global__ void insertNCHW(const T* in, T* out, int dx, int dy, int inWidth, int
 }
 
 /**
- * @brief Rounding up integer division
- * 
- * @param n nominator
- * @param d denominator
- * @return closest integer greater than n/d 
- */
-inline int ceili(int n, int d) {
-    return (n + d - 1) / d;
-}
-
-/**
  * @brief Sets up a simple CUDA kernel grid config for a pointwise operation
  * @param shape         shape of the threads space to sample
  * @param dataFormat    data format of the corresponding shape

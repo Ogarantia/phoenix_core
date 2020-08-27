@@ -248,6 +248,16 @@ class Shape {
 template <typename Device, typename T>
 class Tensor;  //!< forward declaration
 
+template <typename Device, typename T, const int PARTS>
+class TensorSplit;  //!< forward declaration
+
+/**
+ * @brief Forward declaration of a Tensor implementation that allocates and frees the memory itself.
+ * The implementation is device-dependend and is provided by every backend.
+ */
+template <typename Device, typename T>
+class AllocatedTensor;
+
 /**
  * @brief Declares a set of tensor manipulation routines.
  * This structure is to be specialized in every backend to bring up the implementation.
@@ -275,6 +285,48 @@ struct TensorManipulations {
     template <typename T>
     static void accumulateSub(const Tensor<Device, T>&, Tensor<Device, T>& output, const Shape& shape);
 
+    /**
+     * @brief Maps quaternion tensors as arguments of a multiplicative binary operation onto 8 scalar lanes the operation can be applied to.
+     * @tparam T        scalar datatype
+     * @param inLeft    left operand
+     * @param outLeft   left operand decomposition
+     * @param inRight   right operand
+     * @param outRight  right operand decomposition
+     */
+    template <typename T>
+    static inline void decomposeQuaternionInputs(const TensorSplit<Device, const T, 4>& inLeft, AllocatedTensor<Device, T>* outLeft[8],
+                                                 const TensorSplit<Device, const T, 4>& inRight, AllocatedTensor<Device, T>* outRight[8]);
+
+    /**
+     * @brief Maps output gradient of a multiplicative binary operation onto 8 scalar lanes the backward pass can be performed onto.
+     * @tparam T        scalar datatype
+     * @param inGrad    operation output gradient
+     * @param outGrad   operation gradient decomposition
+     */
+    template <typename T>
+    static inline void decomposeQuaternionOutputGrad(const TensorSplit<Device, const T, 4>& inGrad, AllocatedTensor<Device, T>* outGrad[8]);
+
+    /**
+     * @brief Maps 8 scalar lanes of a decomposed quaternion multiplicative binary operation result to a regular quaternion tensor.
+     * @tparam T        scalar datatype
+     * @param inLanes           operation result
+     * @param outQuats          recomposed quaternion output
+     */
+    template <typename T>
+    static inline void recomposeQuaternionOutput(AllocatedTensor<Device, T>* inLanes[8], TensorSplit<Device, T, 4>& outQuats);
+
+    /**
+     * @brief Maps 8 scalar lanes of a decomposed quaternion multiplicative binary operation gradient to quaternion tensors.
+     * @tparam T        scalar datatype
+     * @param inLeftGradLanes   left operand gradient decomposed on lanes
+     * @param outLeftGradQuats  recomposed left operand gradient
+     * @param inRightGradLanes  right operand gradient decomposed on lanes
+     * @param outRightGradQuats recomposed left operand gradient
+     */
+    template <typename T>
+    static inline void recomposeQuaternionInputsGrad(AllocatedTensor<Device, T>* inLeftGradLanes[8], TensorSplit<Device, T, 4>& outLeftGradQuats,
+                                                     AllocatedTensor<Device, T>* inRightGradLanes[8], TensorSplit<Device, T, 4>& outRightGradQuats);
+
 };  // namespace tensor_arithmetics
 
 /**
@@ -285,6 +337,8 @@ struct TensorManipulations {
 template <typename Device, typename T>
 class Tensor {
     const Shape shape;
+
+    Tensor(const Tensor&) = delete;  // disabling copying constructor
 
    protected:
     T* tensor;  //!< points to the tensor content in memory
@@ -297,6 +351,12 @@ class Tensor {
     */
     Tensor(const Shape& sh, T* t) : shape(sh.getSize(), sh.getShapePtr()),
                                     tensor(t) {}
+
+    /**
+     * @brief Construct an empty Tensor object.
+     * It has zero dimensions and contains no content (its data pointer is null).
+     */
+    Tensor() : tensor(nullptr) {}
 
     /**
      * @brief Get the pointer to the tensor content in memory
@@ -319,7 +379,7 @@ class Tensor {
     inline Tensor& operator+=(const Tensor& another) {
         if (shape != another.shape)
             throw std::invalid_argument("Tensor shapes mismatch in accumulate-add");
-        TensorManipulations<Device>::accumulateAdd(another, *this, shape);
+        TensorManipulations<Device>::accumulateAdd(another, *this);
         return *this;
     }
 
@@ -331,7 +391,7 @@ class Tensor {
     inline Tensor& operator-=(const Tensor& another) {
         if (shape != another.shape)
             throw std::invalid_argument("Tensor shapes mismatch in accumulate-subtract");
-        TensorManipulations<Device>::accumulateSub(another, *this, shape);
+        TensorManipulations<Device>::accumulateSub(another, *this);
         return *this;
     }
 
@@ -341,6 +401,15 @@ class Tensor {
      */
     inline void zero() {
         TensorManipulations<Device>::zero(*this);
+    }
+
+    /**
+     * @brief Conversion to the immutable representation of the same data.
+     * @return tensor having const-qualified pointer.
+     */
+    inline operator Tensor<Device, const T>&() {
+        return reinterpret_cast<Tensor<Device, const T>&>(*this);
+        // static_cast causes endless recursion
     }
 };
 
@@ -442,12 +511,5 @@ class TensorSplit {
      */
     inline const Shape& shape() const { return partShape; }
 };
-
-/**
- * @brief Forward declaration of a Tensor implementation that allocates and frees the memory itself.
- * The implementation is device-dependend and is provided by every backend.
- */
-template <typename Device, typename T>
-class AllocatedTensor;
 
 }  // namespace upstride
