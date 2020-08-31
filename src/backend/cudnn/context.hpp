@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <cudnn.h>
-
+#include <map>
 #include <stdexcept>
 
 #include "../backend.hpp"
+#include "device.hpp"
 
 namespace upstride {
 namespace cudnn {
@@ -49,15 +49,10 @@ inline cudnnDataType_t getDataType<float>() { return CUDNN_DATA_FLOAT; }
  */
 class Context : public upstride::Context {
    private:
-    cudnnHandle_t handle;
+    std::map<cudaStream_t, device::CUDA> devices;  //!< the devices; they are indexed by CUDA streams
 
-    Context() {
-        raiseIfError(cudnnCreate(&handle));
-    }
-
-    ~Context() {
-        raiseIfError(cudnnDestroy(handle));
-    }
+    Context() {}
+    ~Context() {}
 
    public:
     /**
@@ -93,7 +88,12 @@ class Context : public upstride::Context {
      */
     static Context& getInstance();
 
-    const cudnnHandle_t& getHandle() const { return handle; }
+    /**
+     * @brief Retrieves or creates a device attached to a specific CUDA stream.
+     * @param stream the CUDA stream
+     * @return the device instance.
+     */
+    const device::CUDA& registerDevice(const cudaStream_t& stream);
 };
 
 /**

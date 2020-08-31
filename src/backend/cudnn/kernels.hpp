@@ -9,6 +9,7 @@
 #pragma once
 #include "../backend.hpp"
 #include "../tensor.hpp"
+#include "device.hpp"
 
 /**
  * @brief Rounding up integer division
@@ -47,10 +48,10 @@ template <typename T>
 extern void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
 
 template <typename T>
-extern void accumulateAdd(T* accumulator, const T* term, int length);
+extern void accumulateAdd(const device::CUDA& device, T* accumulator, const T* term, int length);
 
 template <typename T>
-extern void accumulateSub(T* accumulator, const T* term, int length);
+extern void accumulateSub(const device::CUDA& device, T* accumulator, const T* term, int length);
 
 template <typename T>
 extern void decomposeQuaternionInputs(const TensorSplit<device::CUDA, const T, 4>& inLeft, AllocatedTensor<device::CUDA, T>* outLeft[8],

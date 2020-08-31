@@ -112,7 +112,7 @@ void crop(const Tensor<device::CUDA, float>& input, Tensor<device::CUDA, float>&
     makeGridConfig(inShape, dataFormat, threads, blocks);
 
     // launching the kernel
-    cropNCHW<<<blocks, threads>>>(
+    cropNCHW<<<blocks, threads, 0, input.getDevice().stream()>>>(
         input.getDataPtr(),
         output.getDataPtr(),
         offset.x, offset.y,
@@ -146,7 +146,7 @@ void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA,
     makeGridConfig(outShape, dataFormat, threads, blocks);
 
     // launching the kernel
-    insertNCHW<<<blocks, threads>>>(
+    insertNCHW<<<blocks, threads, 0, input.getDevice().stream()>>>(
         input.getDataPtr(),
         output.getDataPtr(),
         offset.x, offset.y,
@@ -158,13 +158,13 @@ void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA,
 }
 
 template <>
-void accumulateAdd(float* accumulator, const float* term, int length) {
-    ::accumulateAdd<<<ceili(length, NUM_THREADS), NUM_THREADS>>>(accumulator, term, length);
+void accumulateAdd(const device::CUDA& device, float* accumulator, const float* term, int length) {
+    ::accumulateAdd<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
 }
 
 template <>
-void accumulateSub(float* accumulator, const float* term, int length) {
-    ::accumulateSub<<<ceili(length, NUM_THREADS), NUM_THREADS>>>(accumulator, term, length);
+void accumulateSub(const device::CUDA& device, float* accumulator, const float* term, int length) {
+    ::accumulateSub<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
 }
 
 }  // namespace cudnn

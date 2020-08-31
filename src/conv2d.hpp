@@ -10,6 +10,7 @@
 #include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
+#include "deferred_allocator.hpp"
 #include "thread_local_ptr.hpp"
 #include "utils.hpp"
 
@@ -60,6 +61,8 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     Algebra algebra;
     DataFormat dataFormat;
     IntPair stride, dilation;
+    DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], outputLanes[8];  //!< deferred allocators for the factorized quaternion implementation
+    DeferredAllocator<Device, T> buffer;                                         //!< deferred allocator for an intermediate buffer for the default implementation
 
    public:
     /**
@@ -115,12 +118,12 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
             TensorSplit<Device, T, 4> output(outputTensor);
 
-            // allocate temporary buffers
+            // get temporary buffers
             AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *outputLanes[8];
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = new AllocatedTensor<Device, T>(input.shape());
-                kernelLanes[i] = new AllocatedTensor<Device, T>(kernel.shape());
-                outputLanes[i] = new AllocatedTensor<Device, T>(output.shape());
+                inputLanes[i] = &this->inputLanes[i].get(inputTensor.getDevice(), input.shape());
+                kernelLanes[i] = &this->kernelLanes[i].get(kernelTensor.getDevice(), kernel.shape());
+                outputLanes[i] = &this->outputLanes[i].get(outputTensor.getDevice(), output.shape());
             }
 
             // decompose - compute - recompose
@@ -128,13 +131,6 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             for (int i = 0; i < 8; ++i)
                 (*convOp)(*inputLanes[i], *kernelLanes[i], *outputLanes[i]);
             TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
-
-            // free temporary buffers
-            for (int i = 0; i < 8; ++i) {
-                delete inputLanes[i];
-                delete kernelLanes[i];
-                delete outputLanes[i];
-            }
         }
 
         else {
@@ -147,7 +143,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T> buffer(output.shape());
+            AllocatedTensor<Device, T>& buffer(this->buffer.get(outputTensor.getDevice(), output.shape()));
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
@@ -179,6 +175,8 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     DataFormat dataFormat;
     IntPair stride, dilation;
     bool requireInputGrad;
+    DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
+    DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
 
    public:
     /**
@@ -245,14 +243,14 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                 grad(gradTensor);
             TensorSplit<Device, T, 4> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
-            // allocate temporary buffers
+            // get temporary buffers
             AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *gradLanes[8], *kernelGradLanes[8], *inputGradLanes[8];
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = new AllocatedTensor<Device, T>(input.shape());
-                kernelLanes[i] = new AllocatedTensor<Device, T>(kernel.shape());
-                gradLanes[i] = new AllocatedTensor<Device, T>(grad.shape());
-                kernelGradLanes[i] = new AllocatedTensor<Device, T>(kernelGrad.shape());
-                inputGradLanes[i] = new AllocatedTensor<Device, T>(inputGrad.shape());
+                inputLanes[i] = &this->inputLanes[i].get(inputTensor.getDevice(), input.shape());
+                kernelLanes[i] = &this->kernelLanes[i].get(kernelTensor.getDevice(), kernel.shape());
+                gradLanes[i] = &this->gradLanes[i].get(gradTensor.getDevice(), grad.shape());
+                kernelGradLanes[i] = &this->kernelGradLanes[i].get(kernelGradTensor.getDevice(), kernelGrad.shape());
+                inputGradLanes[i] = &this->inputGradLanes[i].get(inputGradTensor.getDevice(), inputGrad.shape());
             }
 
             // decompose - compute - recompose
@@ -263,15 +261,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                 (*convOp)(*inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
 
             TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
-
-            // free temporary buffers
-            for (int i = 0; i < 8; ++i) {
-                delete inputLanes[i];
-                delete kernelLanes[i];
-                delete gradLanes[i];
-                delete kernelGradLanes[i];
-                delete inputGradLanes[i];
-            }
         }
 
         else {
@@ -285,8 +274,8 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorSplit<Device, T, CliffordProductSpec::DIMS> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T> bufferKernel(kernelGrad.shape());
-            AllocatedTensor<Device, T> bufferInput(inputGrad.shape());
+            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(kernelGradTensor.getDevice(), kernelGrad.shape()));
+            AllocatedTensor<Device, T>& bufferInput(this->bufferInput.get(inputGradTensor.getDevice(), inputGrad.shape()));
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(

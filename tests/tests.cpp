@@ -19,9 +19,8 @@
 #include "doctest/doctest.h"
 #include "upstride.hpp"
 
-/* =============================================================================
-                                 PHOENIX 
-============================================================================= */
+static const upstride::device::CPU device;
+
 /**
  * @brief Fill a tensor with random floating values.
  * 
@@ -102,7 +101,7 @@ enum binop { plus,
              minus };
 template <typename T>
 bool accumulatorTest(const upstride::AllocatedTensor<upstride::device::CPU, T>& srcTensor, upstride::AllocatedTensor<upstride::device::CPU, T>& dstTensor, binop op) {
-    upstride::AllocatedTensor<upstride::device::CPU, T> dstCopyTensor(dstTensor.getShape());
+    upstride::AllocatedTensor<upstride::device::CPU, T> dstCopyTensor(device, dstTensor.getShape());
 
     for (int i = 0; i < dstTensor.getShape().numel(); i++) {
         dstCopyTensor.getDataPtr()[i] = dstTensor.getDataPtr()[i];
@@ -137,7 +136,7 @@ TEST_CASE("Test:Tensor") {
     SUBCASE(" Test: Tensor::Tensor()") {
         std::cout << " Test: Tensor::Tensor()" << std::endl;
 
-        upstride::AllocatedTensor<upstride::device::CPU, float> t1(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, float> t1(device, s1);
 
         float* t1Ptr = t1.getDataPtr();
         // Ensure values are not zero
@@ -163,8 +162,8 @@ TEST_CASE("Test:Tensor") {
 
     SUBCASE(" Test: [float/int] Tensor Src + Dst") {
         std::cout << "[float] Test: Tensor Src + Dst" << std::endl;
-        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensori(s1), dstTensori(s1);
-        upstride::AllocatedTensor<upstride::device::CPU, int> srcTensorf(s1), dstTensorf(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensori(device, s1), dstTensori(device, s1);
+        upstride::AllocatedTensor<upstride::device::CPU, int> srcTensorf(device, s1), dstTensorf(device, s1);
         setRandVal(srcTensori);
         setRandVal(dstTensori);
         setRandVal(srcTensorf);
@@ -177,8 +176,8 @@ TEST_CASE("Test:Tensor") {
 
     SUBCASE(" Test: [float/int] Tensor Src - Dst") {
         std::cout << "[float/int] Test: Tensor Src - Dst" << std::endl;
-        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensori(s1), dstTensori(s1);
-        upstride::AllocatedTensor<upstride::device::CPU, int> srcTensorf(s1), dstTensorf(s1);
+        upstride::AllocatedTensor<upstride::device::CPU, float> srcTensori(device, s1), dstTensori(device, s1);
+        upstride::AllocatedTensor<upstride::device::CPU, int> srcTensorf(device, s1), dstTensorf(device, s1);
         setRandVal(srcTensori);
         setRandVal(dstTensori);
         setRandVal(srcTensorf);
@@ -203,9 +202,9 @@ TEST_CASE("Test:Conv2d") {
         upstride::Shape sIn({dim*N, C, H, W});
         upstride::Shape sKer({dim, N, C, H, W});
         upstride::Shape sOut({dim*N, 1, 1, 1});
-        upstride::AllocatedTensor<upstride::device::CPU, float> inputTensor(sIn);
-        upstride::AllocatedTensor<upstride::device::CPU, float> kernelTensor(sKer);
-        upstride::AllocatedTensor<upstride::device::CPU, float> outputTensor(sOut);
+        upstride::AllocatedTensor<upstride::device::CPU, float> inputTensor(device, sIn);
+        upstride::AllocatedTensor<upstride::device::CPU, float> kernelTensor(device, sKer);
+        upstride::AllocatedTensor<upstride::device::CPU, float> outputTensor(device, sOut);
         outputTensor.zero();
 
         float* inputTensorPtr = inputTensor.getDataPtr();
@@ -322,7 +321,7 @@ TEST_CASE("Test:TensorSplit") {
     static const int TEST_DATA[TEST_BATCH_SIZE * 2] = {1, 1, 2, 2, 3, 3, 4, 4};
     static const upstride::Shape TEST_DATA_SHAPE{4, 2, 1, 1};
 
-    upstride::Tensor<upstride::device::CPU, const int> testInputTensor(TEST_DATA_SHAPE, TEST_DATA);
+    upstride::Tensor<upstride::device::CPU, const int> testInputTensor(device, TEST_DATA_SHAPE, TEST_DATA);
 
     SUBCASE(" Test: TensorSplit keeping outermost dimension") {
         upstride::TensorSplit<upstride::device::CPU, const int, TEST_BATCH_SIZE> split(testInputTensor, true);

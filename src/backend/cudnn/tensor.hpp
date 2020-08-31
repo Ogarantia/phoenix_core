@@ -10,6 +10,8 @@
 #include <cudnn.h>
 
 #include "../backend.hpp"
+#include "context.hpp"
+#include "device.hpp"
 #include "kernels.hpp"
 
 namespace upstride {
@@ -18,12 +20,12 @@ template <>
 struct TensorManipulations<device::CUDA> {
     template <typename T>
     static void accumulateAdd(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output) {
-        cudnn::accumulateAdd(output.getDataPtr(), input.getDataPtr(), input.getShape().numel());
+        cudnn::accumulateAdd(output.getDevice(), output.getDataPtr(), input.getDataPtr(), input.getShape().numel());
     }
 
     template <typename T>
     static void accumulateSub(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output) {
-        cudnn::accumulateSub(output.getDataPtr(), input.getDataPtr(), input.getShape().numel());
+        cudnn::accumulateSub(output.getDevice(), output.getDataPtr(), input.getDataPtr(), input.getShape().numel());
     }
 
     template <typename T>
@@ -65,16 +67,27 @@ template <typename T>
 class AllocatedTensor<device::CUDA, T> : public Tensor<device::CUDA, T> {
     AllocatedTensor(const Shape&, T*) = delete;  // deleting Tensor constructor allowing to wrap an external pointer
     using Tensor<device::CUDA, T>::tensor;
+    using Tensor<device::CUDA, T>::shape;
 
    public:
-    AllocatedTensor(const Shape& shape) : Tensor<device::CUDA, T>(shape, nullptr) {
+    AllocatedTensor(const device::CUDA& device, const Shape& shape) : Tensor<device::CUDA, T>(device, shape, nullptr) {
         auto status = cudaMalloc(&tensor, shape.numel() * sizeof(T));
         if (status != cudaError::cudaSuccess)
             throw std::runtime_error(cudaGetErrorString(status));
     }
 
+    AllocatedTensor(const device::CUDA& device) : Tensor<device::CUDA, T>(device, Shape(), nullptr) {}
+
     ~AllocatedTensor() {
         cudaFree(tensor);
+    }
+
+    void reshape(const Shape& shape) {
+        if (this->shape != shape) {
+            cudnn::Context::raiseIfError(cudaFree(tensor));
+            cudnn::Context::raiseIfError(cudaMalloc(&tensor, shape.numel() * sizeof(T)));
+            this->shape = shape;
+        }
     }
 };
 }  // namespace upstride

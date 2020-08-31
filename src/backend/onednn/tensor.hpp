@@ -14,6 +14,7 @@
 #endif
 
 #include "../backend.hpp"
+#include "device.hpp"
 
 namespace upstride {
 template <>
@@ -169,14 +170,25 @@ template <typename T>
 class AllocatedTensor<device::CPU, T> : public Tensor<device::CPU, T> {
     AllocatedTensor(const Shape&, T*) = delete;  // deleting Tensor constructor allowing to wrap an external pointer
     using Tensor<device::CPU, T>::tensor;
+    using Tensor<device::CPU, T>::shape;
 
    public:
-    AllocatedTensor(const Shape& shape) : Tensor<device::CPU, T>(shape, nullptr) {
+    AllocatedTensor(const device::CPU& device, const Shape& shape) : Tensor<device::CPU, T>(device, shape, nullptr) {
         tensor = (T*)malloc(shape.numel() * sizeof(T));
     }
 
+    AllocatedTensor(const device::CPU& device) : Tensor<device::CPU, T>(device, Shape(), nullptr) {}
+
     ~AllocatedTensor() {
         free(tensor);
+    }
+
+    void reshape(const Shape& shape) {
+        if (this->shape != shape) {
+            free(tensor);
+            tensor = (T*)malloc(shape.numel() * sizeof(T));
+            this->shape = shape;
+        }
     }
 };
 }  // namespace upstride

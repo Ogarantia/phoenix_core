@@ -336,11 +336,12 @@ struct TensorManipulations {
  */
 template <typename Device, typename T>
 class Tensor {
-    const Shape shape;
+    const Device& device;
 
     Tensor(const Tensor&) = delete;  // disabling copying constructor
 
    protected:
+    Shape shape;
     T* tensor;  //!< points to the tensor content in memory
 
    public:
@@ -349,8 +350,7 @@ class Tensor {
     * @param sh     Shape of the tensor
     * @param t      pointer to the content
     */
-    Tensor(const Shape& sh, T* t) : shape(sh.getSize(), sh.getShapePtr()),
-                                    tensor(t) {}
+    Tensor(const Device& device, const Shape& sh, T* t) : device(device), shape(sh.getSize(), sh.getShapePtr()), tensor(t) {}
 
     /**
      * @brief Construct an empty Tensor object.
@@ -411,6 +411,10 @@ class Tensor {
         return reinterpret_cast<Tensor<Device, const T>&>(*this);
         // static_cast causes endless recursion
     }
+
+    const Device& getDevice() const {
+        return device;
+    }
 };
 
 /**
@@ -462,7 +466,7 @@ class TensorSplit {
         const T* ptr = inputTensor.getDataPtr();
         const int step = partShape.numel();
         for (int i = 0; i < PARTS; ++i, ptr += step) {
-            parts[i] = new Tensor<Device, T>(partShape, ptr);
+            parts[i] = new Tensor<Device, T>(inputTensor.getDevice(), partShape, ptr);
         }
     }
 
@@ -472,7 +476,7 @@ class TensorSplit {
         T* ptr = inputTensor.getDataPtr();
         const int step = partShape.numel();
         for (int i = 0; i < PARTS; ++i, ptr += step) {
-            parts[i] = new Tensor<Device, T>(partShape, ptr);
+            parts[i] = new Tensor<Device, T>(inputTensor.getDevice(), partShape, ptr);
         }
     }
 
