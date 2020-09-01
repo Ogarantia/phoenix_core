@@ -22,7 +22,7 @@ enum Algebra {
 /**
  * @brief Multivector dimension for a specific algebra
  */
-static const int MULTIVECTOR_DIM[] = { 1, 4 };
+static const int MULTIVECTOR_DIM[] = {1, 4};
 
 /**
  * @brief Clifford product sign table entry

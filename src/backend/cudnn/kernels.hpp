@@ -47,6 +47,17 @@ extern void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& 
 template <typename T>
 extern void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
 
+/**
+ * @brief Adds a bias to a tensor
+ *
+ * @tparam T the tensor datatype
+ * @param tensor        The input and the resulting tensor
+ * @param bias          The bias tensor
+ * @param dataFormat    input and output tensors data format
+ */
+template <typename T>
+extern void addBias(Tensor<device::CUDA, T>& tensor, const Tensor<device::CUDA, const T>& bias, DataFormat dataFormat);
+
 template <typename T>
 extern void accumulateAdd(const device::CUDA& device, T* accumulator, const T* term, int length);
 

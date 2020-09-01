@@ -14,8 +14,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "tensor.hpp"
 #include "../algebras.hpp"
+#include "tensor.hpp"
 
 namespace upstride {
 

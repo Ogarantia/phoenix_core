@@ -201,6 +201,7 @@ TEST_CASE("Test:Conv2d") {
 
         upstride::Shape sIn({dim*N, C, H, W});
         upstride::Shape sKer({dim, N, C, H, W});
+        upstride::Shape sBias({});
         upstride::Shape sOut({dim*N, 1, 1, 1});
         upstride::AllocatedTensor<upstride::device::CPU, float> inputTensor(device, sIn);
         upstride::AllocatedTensor<upstride::device::CPU, float> kernelTensor(device, sKer);
@@ -218,10 +219,10 @@ TEST_CASE("Test:Conv2d") {
         upstride::IntPair dil(1, 1);
         const upstride::IntPair padBefore(0);
         const upstride::IntPair padAfter(0);
-
+        
         upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor;
         myConv2DFunctor.configure(algebra, upstride::DataFormat::NCHW, st, dil);
-        myConv2DFunctor(inputTensor, kernelTensor, outputTensor, padBefore, padAfter, /*groups=*/1);
+        myConv2DFunctor(inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
 
         bool test = true;
         float* outputTensorPtr = outputTensor.getDataPtr();

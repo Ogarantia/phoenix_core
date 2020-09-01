@@ -11,6 +11,7 @@ namespace upstride {
  */
 static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT = dnnl::memory::format_tag::oihw;
 static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT_DW = dnnl::memory::format_tag::goihw;
+static const dnnl::memory::format_tag BIAS_MEMORY_LAYOUT = dnnl::memory::format_tag::x;
 
 /**
  * @brief 2D convolution implementation using oneDNN
@@ -19,11 +20,13 @@ static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT_DW = dnnl::memory::fo
 template <typename T>
 class ScalarConv2DFunctor<device::CPU, T> {
    private:
-    dnnl::memory::desc inputMemDesc, kernelMemDesc, outputMemDesc;
-    dnnl::convolution_forward convPrim;
+    dnnl::memory::desc inputMemDesc, kernelMemDesc, biasMemDesc, outputMemDesc;
+    dnnl::convolution_forward convPrim, convPrimNoBias;
     const dnnl::memory::format_tag formatTag;
     const IntPair stride, dilation;
-    Shape inputShape, kernelShape, outputShape;
+    const bool useBias;  //!< if `true`, a bias tensor is added to the convolution output
+
+    Shape inputShape, kernelShape, biasShape, outputShape;
     IntPair padBefore;  //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
     IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
 
@@ -33,15 +36,18 @@ class ScalarConv2DFunctor<device::CPU, T> {
      * @param dataFormat    Expected tensors format
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
+     * @param useBias       If `true`, the bias addition is enabled.
      */
-    ScalarConv2DFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) : formatTag(onednn::dataFormatToFormatTag(dataFormat)),
-                                                                                                 stride(stride),
-                                                                                                 dilation(dilation) {}
+    ScalarConv2DFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) : formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+                                                                                                               stride(stride),
+                                                                                                               dilation(dilation),
+                                                                                                               useBias(useBias) {}
 
     /**
      * @brief Performs backend-related operation configuration
      * @param inputShape        Input tensor shape
      * @param kernelShape       kernel tensor shape
+     * @param biasShape         Bias tensor shape; may be empty if the bias addition is not enabled by `useBias`
      * @param outputTensor      Output tensor shape
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
@@ -49,18 +55,22 @@ class ScalarConv2DFunctor<device::CPU, T> {
      */
     void configure(const Shape& inputShape,
                    const Shape& kernelShape,
+                   const Shape& biasShape,
                    const Shape& outputShape,
                    const IntPair& padBefore,
                    const IntPair& padAfter,
                    const int groups = 1) {
         // check if up-to-date
-        if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->outputShape == outputShape &&
+        if (this->inputShape == inputShape && this->kernelShape == kernelShape &&
+            (!useBias || this->biasShape == biasShape) && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
             return;
 
         // cache shapes for further up-to-dateness checks
         this->inputShape = inputShape;
         this->kernelShape = kernelShape;
+        if (useBias)
+            this->biasShape = biasShape;
         this->outputShape = outputShape;
         this->padBefore = padBefore;
         this->padAfter = padAfter;
@@ -76,9 +86,29 @@ class ScalarConv2DFunctor<device::CPU, T> {
             kernelShapeExpanded[1] /= groups;
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShapeExpanded), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT_DW);
         }
+
+        // bias vector must be of the output channel size, otherwise that mean that we don't use a bias
+        if (useBias)
+            biasMemDesc = dnnl::memory::desc(dnnl::memory::dims{biasShape.numel()}, onednn::getDataType<T>(), BIAS_MEMORY_LAYOUT);
+
         outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
+
         // set up convolution operation-related descriptors
-        convPrim = dnnl::convolution_forward(dnnl::convolution_forward::primitive_desc(
+        if (useBias) {
+            // biased convolution
+            convPrim = dnnl::convolution_forward(dnnl::convolution_forward::primitive_desc(
+                dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
+                                                dnnl::algorithm::convolution_auto,
+                                                inputMemDesc, kernelMemDesc, biasMemDesc, outputMemDesc,
+                                                dnnl::memory::dims({stride.y, stride.x}),
+                                                dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
+                                                dnnl::memory::dims({padBefore.y, padBefore.x}),
+                                                dnnl::memory::dims({padAfter.y, padAfter.x})),
+                onednn::Context::getInstance().getEngine()));
+        }
+
+        // biasless convolution (it is setup anyway to be able to use both biased and biasless versions)
+        convPrimNoBias = dnnl::convolution_forward(dnnl::convolution_forward::primitive_desc(
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
                                             dnnl::algorithm::convolution_auto,
                                             inputMemDesc, kernelMemDesc, outputMemDesc,
@@ -92,11 +122,13 @@ class ScalarConv2DFunctor<device::CPU, T> {
     /**
      * @brief Executes the convolution operation
      * @param inputTensor       Input tensor
-     * @param kernelTensor      kernel tensor
+     * @param kernelTensor      Kernel tensor
+     * @param biasTensor        Pointer to bias tensor; may be null
      * @param outputTensor      Output tensor
      */
     void operator()(const Tensor<device::CPU, const T>& inputTensor,
                     const Tensor<device::CPU, const T>& kernelTensor,
+                    const Tensor<device::CPU, const T>* biasTensor,
                     Tensor<device::CPU, T>& outputTensor) {
         // instantiate DNNL memory
         auto& engine = onednn::Context::getInstance().getEngine();
@@ -104,10 +136,20 @@ class ScalarConv2DFunctor<device::CPU, T> {
         dnnl::memory kernel(kernelMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
         dnnl::memory output(outputMemDesc, engine, outputTensor.getDataPtr());
 
-        // g-g-go
-        onednn::Context::getInstance().execute(convPrim, {{DNNL_ARG_SRC, input},
-                                                          {DNNL_ARG_WEIGHTS, kernel},
-                                                          {DNNL_ARG_DST, output}});
+        if (biasTensor) {
+            if (!useBias)
+                throw std::invalid_argument("Bias application is not configured for this scalar Conv2D operation");
+
+            dnnl::memory bias(biasMemDesc, engine, const_cast<T*>(biasTensor->getDataPtr()));
+            onednn::Context::getInstance().execute(convPrim, {{DNNL_ARG_SRC, input},
+                                                              {DNNL_ARG_WEIGHTS, kernel},
+                                                              {DNNL_ARG_BIAS, bias},
+                                                              {DNNL_ARG_DST, output}});
+        } else {
+            onednn::Context::getInstance().execute(convPrimNoBias, {{DNNL_ARG_SRC, input},
+                                                                    {DNNL_ARG_WEIGHTS, kernel},
+                                                                    {DNNL_ARG_DST, output}});
+        }
     }
 };
 

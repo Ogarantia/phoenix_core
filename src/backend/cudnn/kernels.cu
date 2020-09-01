@@ -67,6 +67,17 @@ __global__ void insertNCHW(const T* in, T* out, int dx, int dy, int inWidth, int
         out[(z * outHeight + y + dy) * outWidth + x + dx] = in[(z * inHeight + y) * inWidth + x];
 }
 
+template <typename T>
+__global__ void addBiasNCHW(T* tensor, const T* bias, int width, int height, int depth, int batchSize) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int z = blockIdx.z * blockDim.z + threadIdx.z;
+    if (x < width && y < height && z < depth)
+        for (int n = 0; n < batchSize; ++n)
+            tensor[((n * depth + z) * height + y) * width + x] += bias[z];
+}
+
+
 /**
  * @brief Sets up a simple CUDA kernel grid config for a pointwise operation
  * @param shape         shape of the threads space to sample
@@ -155,6 +166,26 @@ void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA,
         outShape.depth(dataFormat) * outShape[0]);
 
     Context::raiseIfError();
+}
+
+template<>
+void addBias(Tensor<device::CUDA, float>& tensor, const Tensor<device::CUDA, const float>& bias, DataFormat dataFormat) {
+    if (dataFormat != DataFormat::NCHW)
+        throw std::runtime_error("Unsupported data format");
+
+    const Shape& shape = tensor.getShape();
+    if (shape.getSize() != 4)
+        throw std::runtime_error("Expecting a four-dimenisonal tensor");
+    if (shape.depth(dataFormat) != bias.getShape().numel())
+        throw std::runtime_error("Tensor and bias sizes mismatch");
+
+    dim3 threads, blocks;
+    makeGridConfig(shape, dataFormat, threads, blocks);
+
+    addBiasNCHW<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
+        tensor.getDataPtr(), bias.getDataPtr(),
+        shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]
+    );
 }
 
 template <>

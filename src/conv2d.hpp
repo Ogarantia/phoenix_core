@@ -83,7 +83,8 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
      * @brief Executes the convolution operation
      * This function may be called from multiple threads.
      * @param inputTensor       Input tensor
-     * @param kernelTensor      kernel tensor
+     * @param kernelTensor      Kernel tensor
+     * @param biasTensor        Pointer to bias tensor; may be null
      * @param outputTensor      Output tensor
      * @param padBefore         Number of zero samples to add to the input tensor on top/left
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
@@ -91,32 +92,38 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
      */
     void operator()(const Tensor<Device, const T>& inputTensor,
                     const Tensor<Device, const T>& kernelTensor,
+                    const Tensor<Device, const T>* biasTensor,
                     Tensor<Device, T>& outputTensor,
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
         // ensure the object exists within the current thread
-        convOp(dataFormat, stride, dilation);
+        convOp(dataFormat, stride, dilation, biasTensor != nullptr);
 
         convOp->configure(
             inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
+            biasTensor ? Shape{biasTensor->getShape().numel() / MULTIVECTOR_DIM[algebra]} : Shape(),
             outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             padBefore,
             padAfter,
             groups);
 
-        proceedWithAlgebra(algebra, inputTensor, kernelTensor, outputTensor);
+        proceedWithAlgebra(algebra, inputTensor, kernelTensor, biasTensor, outputTensor);
     }
 
     template <Algebra algebra>
     void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
+                            const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
         if (algebra == Algebra::QUATERNION) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
             TensorSplit<Device, T, 4> output(outputTensor);
+
+            // allocate bias tensor split if the bias tensor is provided
+            TensorSplit<Device, const T, 4>* bias = biasTensor ? new TensorSplit<Device, const T, 4>(*biasTensor) : nullptr;
 
             // get temporary buffers
             AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *outputLanes[8];
@@ -128,9 +135,17 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 
             // decompose - compute - recompose
             TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
-            for (int i = 0; i < 8; ++i)
-                (*convOp)(*inputLanes[i], *kernelLanes[i], *outputLanes[i]);
+            for (int i = 0; i < 4; ++i)
+                (*convOp)(*inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
+            for (int i = 4; i < 8; ++i)
+                // According to the factorization formulation, last four lanes are plainly added to the quaternion components (see recomposeQuaternionOutput()).
+                // Adding bias there then!
+                (*convOp)(*inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
+
             TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
+
+            // free bias
+            delete bias;
         }
 
         else {
@@ -142,17 +157,20 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                 kernel(kernelTensor, kernelTensor.getShape().getSize() == 4);
             TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
 
+            // allocate bias tensor split if the bias tensor is provided
+            TensorSplit<Device, const T, CliffordProductSpec::DIMS>* bias = biasTensor ? new TensorSplit<Device, const T, CliffordProductSpec::DIMS>(*biasTensor) : nullptr;
+
             // allocate a temporary buffer
             AllocatedTensor<Device, T>& buffer(this->buffer.get(outputTensor.getDevice(), output.shape()));
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
-                [this, &input, &kernel, &output](int left, int right, int dim) {
-                    (*convOp)(input[left], kernel[right], output[dim]);
+                [this, &input, &kernel, bias, &output](int left, int right, int dim) {
+                    (*convOp)(input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
                 },
 
                 [this, &input, &kernel, &buffer](int left, int right, int) {
-                    (*convOp)(input[left], kernel[right], buffer);
+                    (*convOp)(input[left], kernel[right], nullptr, buffer);
                 },
 
                 [this, &output, &buffer](int dim, int, bool positive) {
@@ -161,6 +179,9 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                     else
                         output[dim] -= buffer;
                 });
+
+            // free bias
+            delete bias;
         }
     }
 };

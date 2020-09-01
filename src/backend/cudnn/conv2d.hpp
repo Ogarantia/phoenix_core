@@ -80,10 +80,11 @@ class ScalarConv2DFunctor<device::CUDA, T> {
      * @param dataFormat    Expected tensors format
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
+     * @param useBias       If `true`, the bias addition is enabled.
      */
-    ScalarConv2DFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) : dataFormat(dataFormat),
-                                                                                                 stride(stride),
-                                                                                                 dilation(dilation) {
+    ScalarConv2DFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) : dataFormat(dataFormat),
+                                                                                                               stride(stride),
+                                                                                                               dilation(dilation) {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
@@ -103,7 +104,7 @@ class ScalarConv2DFunctor<device::CUDA, T> {
      * @param filterShape       Filter tensor shape
      * @param outputTensor      Output tensor shape
      */
-    void configure(const Shape& inputShape, const Shape& filterShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, int groups) {
+    void configure(const Shape& inputShape, const Shape& filterShape, const Shape& biasShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, int groups) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -156,13 +157,12 @@ class ScalarConv2DFunctor<device::CUDA, T> {
      * @brief Executes the convolution operation
      * @param inputTensor       Input tensor
      * @param filterTensor      Filter tensor
+     * @param biasTensor        Pointer to bias tensor; may be null
      * @param outputTensor      Output tensor
-     * @param padBefore         Number of zero samples to add to the input tensor on top/left
-     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
-     * @param groups            Number of groups for depthwise / grouped convolutions
      */
     void operator()(const Tensor<device::CUDA, const T>& inputTensor,
                     const Tensor<device::CUDA, const T>& filterTensor,
+                    const Tensor<device::CUDA, const T>* biasTensor,
                     Tensor<device::CUDA, T>& outputTensor) {
         // allocate buffer, if needed
         AllocatedTensor<device::CUDA, T>* buffer = nullptr;
@@ -189,8 +189,13 @@ class ScalarConv2DFunctor<device::CUDA, T> {
                 outputTensor,
                 dataFormat,
                 repaddingOffset);
+
+        // add bias
+        if (biasTensor)
+            cudnn::addBias(outputTensor, *biasTensor, dataFormat);
+
     }
-};
+};  // namespace upstride
 
 /**
  * @brief 2D backward convolution implementation using cuDNN
