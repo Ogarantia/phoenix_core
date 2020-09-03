@@ -7,12 +7,6 @@
  */
 #pragma once
 
-#if __AVX512F__ || __AVX__
-#include <immintrin.h>
-#elif __SSE4_1__
-#include <smmintrin.h>
-#endif
-
 #include "../backend.hpp"
 #include "device.hpp"
 

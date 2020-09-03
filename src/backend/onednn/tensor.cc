@@ -1,5 +1,11 @@
 #include "tensor.hpp"
 
+#if __AVX512F__ || __AVX__
+#include <immintrin.h>
+#elif __SSE4_1__
+#include <smmintrin.h>
+#endif
+
 namespace upstride {
 
 void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, float>& input, Tensor<device::CPU, float>& output) {
@@ -41,10 +47,10 @@ void TensorManipulations<device::CPU>::accumulateAdd(const Tensor<device::CPU, i
     int idx = 0;
 #if __AVX512F__
     for (; idx < shapeNumel - 15; idx += 16) {
-        __m512i src_v = _mm512_loadu_epi32(&inputPtr[idx]);
-        __m512i dst_v = _mm512_loadu_epi32(&outputPtr[idx]);
+        __m512i src_v = _mm512_loadu_si512(&inputPtr[idx]);
+        __m512i dst_v = _mm512_loadu_si512(&outputPtr[idx]);
         dst_v = _mm512_add_epi32(dst_v, src_v);
-        _mm512_storeu_epi32(&outputPtr[idx], dst_v);
+        _mm512_storeu_si512(&outputPtr[idx], dst_v);
     }
 #elif __AVX2__
     for (; idx < shapeNumel - 7; idx += 8) {
@@ -105,10 +111,10 @@ void TensorManipulations<device::CPU>::accumulateSub(const Tensor<device::CPU, i
     int idx = 0;
 #if __AVX512F__
     for (; idx < shapeNumel - 15; idx += 16) {
-        __m512i src_v = _mm512_loadu_epi32(&inputPtr[idx]);
-        __m512i dst_v = _mm512_loadu_epi32(&outputPtr[idx]);
+        __m512i src_v = _mm512_loadu_si512(&inputPtr[idx]);
+        __m512i dst_v = _mm512_loadu_si512(&outputPtr[idx]);
         dst_v = _mm512_sub_epi32(dst_v, src_v);
-        _mm512_storeu_epi32(&outputPtr[idx], dst_v);
+        _mm512_storeu_si512(&outputPtr[idx], dst_v);
     }
 #elif __AVX2__
     for (; idx < shapeNumel - 7; idx += 8) {
