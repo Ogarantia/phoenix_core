@@ -1,0 +1,28 @@
+# This is a sample build configuration for C++ – Make.
+# -----
+
+clone:
+  lfs: true    # enable git lfs to use GCC 8.4 deb package
+
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: Build for CPU and run cpp unittests
+          image: ubuntu:18.04
+          caches:
+            - build-folder    # cache build folder with the compiled binaries
+          script:
+            - apt update && apt install -y git cmake
+            - dpkg -i toolchain/gcc-8.4_8.4-1_amd64.deb
+            - git submodule update --init --recursive
+            - find thirdparty -type f -exec touch -t 202009040000 {} +
+            - mkdir -p build && cd build
+            - CC=/usr/local/bin/gcc8.4 CXX=/usr/local/bin/g++8.4 cmake -DWITH_CUDNN=OFF ..
+            - make -j4 tests
+            - ./tests
+            - echo "All good."
+
+definitions:
+  caches:
+    build-folder: build
