@@ -39,12 +39,14 @@ typedef struct {
 template <int algebra>
 class CliffordProductSpec;
 
+
 template <>
 class CliffordProductSpec<Algebra::REAL> {
    public:
     static const int DIMS = 1;
     static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
     static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
+    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient
 };
 
 template <>
@@ -53,6 +55,7 @@ class CliffordProductSpec<Algebra::QUATERNION> {
     static const int DIMS = 4;
     static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
     static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
+    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient
 };
 
 /**
@@ -68,36 +71,26 @@ struct BinaryOperation {
      * The result is stored at a specific blade in the output storage.
      * @param lhs  Index of the left operand blade given as the left operand to the scalar operation
      * @param rhs  Index of the right operand blade given as the right operand to the scalar operation
-     * @param out  Index of the output blade to fill with the result of the operation
+     * @param dim  Index of the output blade to fill with the result of the operation
      */
-    typedef std::function<void(int lhs, int rhs, int out)> FillOutputFunc;
+    typedef std::function<void(int lhs, int rhs, int dim)> FillOutputFunc;
 
     /**
      * @brief Callback function computing the result of a scalar operation taking as arguments specific blades of left and right operands.
-     * The result is store at a specific buffer.
+     * The result is added or subtracted to the output.
      * @param lhs  Index of the left operand blade given as the left operand to the scalar operation
      * @param rhs  Index of the right operand blade given as the right operand to the scalar operation
-     * @param out  Index of the output blade to fill with the result of the operation
+     * @param dim  Index of the output blade to fill with the result of the operation
+     * @param positive  If `true`, the result is added to the output, otherwise it is subtracted.
      */
-    typedef std::function<void(int lhs, int rhs, int buf)> FillBufferFunc;
-
-    /**
-     * @brief Callback function accumulating a specific buffer to the output.
-     * The result is store at a specific buffer.
-     * @param out       Index of the output blade taken as the accumulator
-     * @param buf       Index of the buffer to add to or subtract from the output
-     * @param positive  If `true`, the buffer is added to the output, otherwise it is subtracted.
-     */
-    typedef std::function<void(int out, int buf, bool positive)> AccumulateOutputFunc;
+    typedef std::function<void(int lhs, int rhs, int dim, bool positive)> AccumulateOutputFunc;
 
     /**
      * @brief Computes the result of a multiplicative binary operation.
-     * 
      * @param fillOutputFunc    Callback function filling a specific blade of the output tensor with the result of the operation
-     * @param fillBufferFunc    Callback function filling a buffer tensor with the result of the operation
-     * @param accOutputFunc     Callback function accumulating a buffer to the output
+     * @param accOutputFunc     Callback function accumulating a specific blade of the output tensor with the result of the operation
      */
-    inline static void product(const FillOutputFunc& fillOutputFunc, const FillBufferFunc& fillBufferFunc, const AccumulateOutputFunc& accOutputFunc) {
+    inline static void product(const FillOutputFunc& fillOutputFunc, const AccumulateOutputFunc& accOutputFunc) {
         // loop through dimensions (blades)
         for (int dim = 0; dim < CliffordProductSpec::DIMS; ++dim) {
             const auto row = &CliffordProductSpec::SIGNTABLE[CliffordProductSpec::SIGNTABLE_LAYOUT[dim]];
@@ -111,11 +104,40 @@ struct BinaryOperation {
             for (int termNum = 1; termNum < CliffordProductSpec::DIMS; ++termNum) {
                 const auto& entry = row[termNum];
 
-                // compute convolution for two given components
-                fillBufferFunc(entry.left, entry.right, dim);
-
                 // accumulate to the output
-                accOutputFunc(dim, 0, entry.positive);
+                accOutputFunc(entry.left, entry.right, dim, entry.positive);
+            }
+        }
+    }
+
+
+    /**
+     * @brief Computes the gradient backpropagation of a multiplicative binary operation.
+     * @param fillOutputFunc    Callback function filling a specific blade of the output tensor with the result of the operation
+     * @param accOutputFunc     Callback function accumulating a specific blade of the output tensor with the result of the operation
+     */
+    inline static void productBackprop(const FillOutputFunc& fillOutputFunc, const AccumulateOutputFunc& accOutputFunc) {
+        // go through all the terms of the Clifford product
+        for (int i = 0; i < CliffordProductSpec::SIGNTABLE_LAYOUT[CliffordProductSpec::DIMS]; ++i) {
+            // pick one in the backprop order
+            const int j = CliffordProductSpec::BACKPROP_ORDER[i];
+            const int l = CliffordProductSpec::SIGNTABLE[j].left, r = CliffordProductSpec::SIGNTABLE[j].right;
+
+            // find out to which output dimension the term contributes
+            int dim;
+            for (dim = 0; dim < CliffordProductSpec::DIMS && j >= CliffordProductSpec::SIGNTABLE_LAYOUT[dim + 1]; ++dim);
+
+            // for first DIMS terms the output buffer is filled with the result
+            if (i < CliffordProductSpec::DIMS) {
+                // the term must have a positive contribution, otherwise a unary reverse is needed and this is inefficient. This is what the backprop order is for.
+                if (!CliffordProductSpec::SIGNTABLE[j].positive)
+                    throw std::runtime_error("Not implemented");
+                fillOutputFunc(l, r, dim);
+            }
+
+            // the remaining terms are accumulated to the output
+            else {
+                accOutputFunc(l, r, dim, CliffordProductSpec::SIGNTABLE[j].positive);
             }
         }
     }

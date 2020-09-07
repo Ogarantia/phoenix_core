@@ -117,7 +117,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
-        if (algebra == Algebra::QUATERNION) {
+        if (algebra == Algebra::QUATERNION && Context::preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
             TensorSplit<Device, T, 4> output(outputTensor);
@@ -169,11 +169,8 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                     (*convOp)(input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
                 },
 
-                [this, &input, &kernel, &buffer](int left, int right, int) {
+                [this, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
                     (*convOp)(input[left], kernel[right], nullptr, buffer);
-                },
-
-                [this, &output, &buffer](int dim, int, bool positive) {
                     if (positive)
                         output[dim] += buffer;
                     else
@@ -256,7 +253,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
-        if (algebra == Algebra::QUATERNION) {
+        if (algebra == Algebra::QUATERNION && Context::preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4>
                 input(inputTensor),
@@ -299,22 +296,19 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             AllocatedTensor<Device, T>& bufferInput(this->bufferInput.get(inputGradTensor.getDevice(), inputGrad.shape()));
 
             // compute the Clifford product
-            BinaryOperation<CliffordProductSpec>::product(
+            BinaryOperation<CliffordProductSpec>::productBackprop(
                 [this, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
-                    (*convOp)(input[left], kernel[right], grad[dim], kernelGrad[dim], inputGrad[dim]);
+                    (*convOp)(input[left], kernel[right], grad[dim], kernelGrad[right], inputGrad[left]);
                 },
 
-                [this, &input, &kernel, &grad, &bufferKernel, &bufferInput](int left, int right, int dim) {
+                [this, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
                     (*convOp)(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
-                },
-
-                [this, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int dim, int, bool positive) {
                     if (positive) {
-                        kernelGrad[dim] += bufferKernel;
-                        inputGrad[dim] += bufferInput;
+                        kernelGrad[right] += bufferKernel;
+                        inputGrad[left] += bufferInput;
                     } else {
-                        kernelGrad[dim] -= bufferKernel;
-                        inputGrad[dim] -= bufferInput;
+                        kernelGrad[right] -= bufferKernel;
+                        inputGrad[left] -= bufferInput;
                     }
                 });
         }

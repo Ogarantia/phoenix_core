@@ -57,6 +57,14 @@ class IntPair {
 class Context {
    protected:
     Context() {}
+
+   public:
+    /**
+     * @brief Defines whether the processing speed is preferred to the memory consumption, when an implementation choice is available.
+     * @return true when it is allowed to consume more memory for better speed.
+     * @return false when it is preferable to use less memory at the cost of slower processing.
+     */
+    inline static bool preferSpeedToMemory() { return true; }
 };
 
 /**

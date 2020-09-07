@@ -3,9 +3,9 @@
 using namespace upstride;
 
 const SignTableEntry CliffordProductSpec<Algebra::REAL>::SIGNTABLE[] = {{0, 0, true}};
-const int CliffordProductSpec<Algebra::REAL>::SIGNTABLE_LAYOUT[] = {0};
+const int CliffordProductSpec<Algebra::REAL>::SIGNTABLE_LAYOUT[] = {0, 1};
+const int CliffordProductSpec<Algebra::REAL>::BACKPROP_ORDER[] = {0};
 
-// TODO: this is not tested yet
 const SignTableEntry CliffordProductSpec<Algebra::QUATERNION>::SIGNTABLE[] = {
     // real part
     {0, 0, true},   // r*r
@@ -29,4 +29,7 @@ const SignTableEntry CliffordProductSpec<Algebra::QUATERNION>::SIGNTABLE[] = {
     {3, 0, true}    // k*r
 };
 
-const int CliffordProductSpec<Algebra::QUATERNION>::SIGNTABLE_LAYOUT[] = {0, 4, 8, 12};
+const int CliffordProductSpec<Algebra::QUATERNION>::SIGNTABLE_LAYOUT[] = {0, 4, 8, 12, 16};
+
+const int CliffordProductSpec<Algebra::QUATERNION>::BACKPROP_ORDER[] = {10, 11, 12, 13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15};
+
