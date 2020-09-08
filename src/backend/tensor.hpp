@@ -136,7 +136,7 @@ class Shape {
     inline bool operator==(const Shape& another) const {
         if (size != another.size)
             return false;
-        for (size_t i = 0; i < size; i++)
+        for (int i = 0; i < size; i++)
             if (shape[i] != another.shape[i])
                 return false;
         return true;

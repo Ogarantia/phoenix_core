@@ -10,74 +10,42 @@
 #include <exception>
 #include <map>
 #include <thread>
+#include <mutex>
 
 namespace upstride {
 
 /**
- * @brief Handles a thread-local pointer to an object
- *
+ * @brief Handles a thread-local pointer to an object.
+ * Object instances are created in every thread in a deferred fashion (when the operator (..) is called) and are
+ * transparently accessed from different threads. The destruction is performed together with the pointer destruction.
  * @tparam Object   The object class
  */
 template <class Object>
 class ThreadLocalPtr {
+
     /**
-     * @brief Thread-local storage of objects
-     * Wraps a mapping of thread-local pointers to the objects. Thread-local qualified to be destroyed when the thread exits.
+     * @brief Retrieves the object in the storage by its local-thread pointer.
+     * If no object is found, an exception is thrown.
+     * @param pointer   The local-thread pointer
+     * @return Object owned by the pointer.
      */
-    class Storage {
-       private:
-        std::map<ThreadLocalPtr<Object>*, Object*> map;
+    inline Object* get() const {
+        auto entry = storage.find(std::this_thread::get_id());
+        if (entry == storage.end())
+            throw std::runtime_error("The requested object is not initialized in the current thread");
+        return entry->second;
+    }
 
-       public:
-        inline Storage() {}
-        inline ~Storage() {
-            clear();
-        }
-
-        /**
-         * @brief Retrieves the object in the storage by its local-thread pointer.
-         * If no object is found, an exception is thrown.
-         * @param pointer   The local-thread pointer
-         * @return Object owned by the pointer.
-         */
-        inline Object* get(ThreadLocalPtr<Object>* pointer) const {
-            auto entry = map.find(pointer);
-            if (entry == map.end())
-                throw std::runtime_error("The requested object is not initialized in the current thread");
-            return entry->second;
-        }
-
-        /**
-         * @brief Creates a new object.
-         * @param pointer       The local-thread pointer owning the new instance
-         * @param args          Arguments to pass to the object constructor
-         * @return newly created instance.
-         */
-        template <typename... Args>
-        inline Object& put(ThreadLocalPtr<Object>* pointer, Args&&... args) {
-            auto entry = map.find(pointer);
-            if (entry == map.end())
-                return *(map[pointer] = new Object(args...));
-            return *entry->second;
-        }
-
-        /**
-         * @brief Destroys all the objects in the storage.
-         */
-        inline void clear() {
-            for (auto entry : map)
-                delete entry.second;
-            map.clear();
-        }
-    };
-
-    static thread_local Storage storage;  //!< objects storage
+    // mapping of thread ids to objects instances
+    std::map<std::thread::id, Object*> storage;
+    std::mutex storageAccess;
 
    public:
     inline ThreadLocalPtr() {}
 
     inline ~ThreadLocalPtr() {
-        storage.clear();
+        for (auto entry : storage)
+            delete entry.second;
     }
 
     /**
@@ -88,27 +56,30 @@ class ThreadLocalPtr {
      */
     template <typename... Args>
     Object& operator()(Args&&... args) {
-        return storage.put(this, args...);
+        std::lock_guard<std::mutex> lock(storageAccess);
+        const auto id = std::this_thread::get_id();
+        auto entry = storage.find(id);
+        if (entry == storage.end())
+            return *(storage[id] = new Object(args...));
+        else
+            return *entry->second;
     }
 
     inline Object* operator->() {
-        return storage.get(this);
+        return get();
     }
 
     inline Object& operator*() {
-        return *storage.get(this);
+        return *get();
     }
 
     inline const Object* operator->() const {
-        return storage.get(this);
+        return get();
     }
 
     inline const Object& operator*() const {
-        return *storage.get(this);
+        return *get();
     }
 };
-
-template <class Object>
-thread_local typename ThreadLocalPtr<Object>::Storage ThreadLocalPtr<Object>::storage;
 
 }  // namespace upstride
