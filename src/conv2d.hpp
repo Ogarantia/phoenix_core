@@ -24,6 +24,13 @@ namespace upstride {
 class Conv2DKernelLayout {
    public:
     /**
+     * @brief Returns number of dimensions in the kernel tensor for a specific algebra
+     */
+    static inline int rank(Algebra algebra) {
+        return algebra == Algebra::REAL ? 4 : 5;
+    }
+
+    /**
      * @brief Returns dimension number containing the number of output channels in the convolution kernel for a specific algebra.
      */
     static inline int numOutputChannelsDim(Algebra algebra) {
