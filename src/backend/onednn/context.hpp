@@ -49,15 +49,8 @@ static inline dnnl::memory::dims shapeToDims(const Shape& shape) {
 class Context : public upstride::Context {
     dnnl::engine oneEngine;
     dnnl::stream oneStream;
-
-    Context() : oneEngine(dnnl::engine::kind::cpu, 0), oneStream(oneEngine) {}
-
    public:
-    /**
-     * @brief Provides the instance of oneDNN context.
-     * @return the context.
-     */
-    static Context& getInstance();
+    Context() : oneEngine(dnnl::engine::kind::cpu, 0), oneStream(oneEngine) {}
 
     /**
      * @brief Retrieves oneDNN engine instance associated with the current context.

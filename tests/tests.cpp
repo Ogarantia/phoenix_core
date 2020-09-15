@@ -19,7 +19,8 @@
 #include "doctest/doctest.h"
 #include "upstride.hpp"
 
-static const upstride::device::CPU device;
+static upstride::device::CPU device;
+static upstride::onednn::Context context;
 
 /**
  * @brief Fill a tensor with random floating values.
@@ -220,9 +221,9 @@ TEST_CASE("Test:Conv2d") {
         const upstride::IntPair padBefore(0);
         const upstride::IntPair padAfter(0);
         
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor;
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor(context);
         myConv2DFunctor.configure(algebra, upstride::DataFormat::NCHW, st, dil);
-        myConv2DFunctor(inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
+        myConv2DFunctor(device, inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
 
         bool test = true;
         float* outputTensorPtr = outputTensor.getDataPtr();

@@ -58,33 +58,40 @@ inline IntPair symmetrizePadding(const IntPair& padBefore, const IntPair& padAft
 template <typename T>
 class ScalarConv2DFunctor<device::CUDA, T> {
    private:
+    cudnn::Context& context;
+
     const IntPair stride, dilation;
     const DataFormat dataFormat;
 
     Shape inputShape, filterShape, outputShape;
-    IntPair padBefore;        //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
-    IntPair padAfter;         //!< zero padding: number of zeros to add at the end to every input spatial dimension
-    IntPair actualPad;        //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
-    IntPair repaddingOffset;  //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
-    Shape repaddedOutputShape;
+    IntPair padBefore;          //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
+    IntPair padAfter;           //!< zero padding: number of zeros to add at the end to every input spatial dimension
+    IntPair actualPad;          //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
+    IntPair repaddingOffset;    //!< offset in the output tensor due to the additional padding applied to handle the asymmetric padding
+    Shape repaddedOutputShape;  //!< shape of the output tensor having an additional symmetrized zero padding
     bool useBuffer;                                      //!< if true, an intermediate buffer is used to store repadded input tensor
     DeferredAllocator<device::CUDA, T> bufferAllocator;  //!< the intermediate buffer to store the repadded input tensor
+    cudnn::Memory scratchpad;                            //!< a memory buffer needed by cuDNN algorithm
 
-    cudnnConvolutionDescriptor_t convDesc;
+    cudnnConvolutionFwdAlgo_t algorithm;                 //!< cuDNN convolution computation algorithm
+    cudnnConvolutionDescriptor_t convDesc;               //!< cuDNN convolution operator descriptor
     cudnnTensorDescriptor_t inputDesc, outputDesc;
     cudnnFilterDescriptor_t filterDesc;
 
    public:
     /**
-     * @brief Sets main convolution parameters independent from the input, filter and output sizes
+     * @brief Instantiates a Conv2D operation.
+     * Sets main convolution parameters independent from the input, filter and output sizes.
+     * @param context       A context instance
      * @param dataFormat    Expected tensors format
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      * @param useBias       If `true`, the bias addition is enabled.
      */
-    ScalarConv2DFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) : dataFormat(dataFormat),
-                                                                                                               stride(stride),
-                                                                                                               dilation(dilation) {
+    ScalarConv2DFunctor(upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) : context(static_cast<cudnn::Context&>(context)),
+                                                                                                                                           dataFormat(dataFormat),
+                                                                                                                                           stride(stride),
+                                                                                                                                           dilation(dilation) {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
@@ -100,11 +107,15 @@ class ScalarConv2DFunctor<device::CUDA, T> {
 
     /**
      * @brief Performs backend-related operation configuration
+     * @param device            A device the operation will be executed on
      * @param inputShape        Input tensor shape
      * @param filterShape       Filter tensor shape
      * @param outputTensor      Output tensor shape
+     * @param padBefore         Number of zero samples to add to the input tensor on top/left
+     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void configure(const Shape& inputShape, const Shape& filterShape, const Shape& biasShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, int groups) {
+    void configure(device::CUDA& device, const Shape& inputShape, const Shape& filterShape, const Shape& biasShape, const Shape& outputShape, const IntPair& padBefore, const IntPair& padAfter, int groups) {
         // check if up-to-date
         if (this->inputShape == inputShape && this->filterShape == filterShape && this->outputShape == outputShape &&
             this->padBefore == padBefore && this->padAfter == padAfter)
@@ -151,6 +162,14 @@ class ScalarConv2DFunctor<device::CUDA, T> {
             cudnn::getDataType<T>(),
             CUDNN_TENSOR_NCHW,  // OIHW according to the docs
             filterShape[0], filterShape[1], filterShape[2], filterShape[3]));
+
+        // choose algorithm
+        size_t scratchpadSize;
+        algorithm = device.selectForwardAlgo(context, convDesc, inputDesc, filterDesc, outputDesc, scratchpadSize);
+
+        // allocate scratchpad
+        if (scratchpad.getSize() != scratchpadSize)
+            scratchpad = cudnn::Memory(scratchpadSize);
     }
 
     /**
@@ -177,18 +196,14 @@ class ScalarConv2DFunctor<device::CUDA, T> {
             inputDesc, inputTensor.getDataPtr(),
             filterDesc, filterTensor.getDataPtr(),
             convDesc,
-            CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM,
-            nullptr, 0,
+            algorithm,
+            scratchpad.pointer(), scratchpad.getSize(),
             &beta,
             outputDesc, useBuffer ? buffer->getDataPtr() : outputTensor.getDataPtr()));
 
         // crop, if needed
         if (useBuffer)
-            cudnn::crop(
-                *buffer,
-                outputTensor,
-                dataFormat,
-                repaddingOffset);
+            cudnn::crop(*buffer, outputTensor, dataFormat, repaddingOffset);
 
         // add bias
         if (biasTensor)
@@ -204,6 +219,8 @@ class ScalarConv2DFunctor<device::CUDA, T> {
 template <typename T>
 class ScalarConv2DGradFunctor<device::CUDA, T> {
    private:
+    cudnn::Context& context;
+
     const DataFormat dataFormat;
     const IntPair stride, dilation;
     const bool requireInputGrad;  //!< Used to determine if inputGrad needs to be computed or not
@@ -211,21 +228,25 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
     IntPair padBefore;        //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
     IntPair padAfter;         //!< zero padding: number of zeros to add at the end to every input spatial dimension
     IntPair actualPad;        //!< zero padding actually applied by cuDNN (both at the beginning and at the end of every spatial dimension)
-    IntPair repaddingOffset;  //!< offset in the ouptut tensor due to repadding applied to handle the asymmetric padding
-    Shape repaddedGradShape;
+    IntPair repaddingOffset;  //!< offset in the output tensor due to repadding applied to handle the asymmetric padding
+    Shape repaddedGradShape;  //!< shape of the gradient tensor after additional symmetric zero padding
     bool useBuffer;                                      //!< if true, an intermediate buffer is used to repad the gradient tensor
     DeferredAllocator<device::CUDA, T> bufferAllocator;  //!< the intermediate buffer to store the repadded gradient tensor
+    cudnn::Memory scratchpad;                            //!< a memory buffer needed by cuDNN algorithm
 
+    cudnnConvolutionBwdDataAlgo_t inputGradientAlgo;    //!< cuDNN backward algorithm used to compute the input (data) gradient
+    cudnnConvolutionBwdFilterAlgo_t kernelGradientAlgo; //!< cuDNN backward algorithm used to compute the kernel (filter) gradient
     cudnnConvolutionDescriptor_t convDesc;  //!< convolution operation descriptor, as in forward
     cudnnTensorDescriptor_t inputDesc;      //!< input (x) descriptor
     cudnnTensorDescriptor_t gradDesc;       //!< output value gradient (dy) descriptor (which is an input of this operation)
     cudnnFilterDescriptor_t kernelDesc;     //!< kernel gradient (dw) descriptor (output of this operation)
 
    public:
-    ScalarConv2DGradFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) : dataFormat(dataFormat),
-                                                                                                                            stride(stride),
-                                                                                                                            dilation(dilation),
-                                                                                                                            requireInputGrad(requireInputGrad) {
+    ScalarConv2DGradFunctor(upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) : context(static_cast<cudnn::Context&>(context)),
+                                                                                                                                                        dataFormat(dataFormat),
+                                                                                                                                                        stride(stride),
+                                                                                                                                                        dilation(dilation),
+                                                                                                                                                        requireInputGrad(requireInputGrad) {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&gradDesc));
@@ -241,6 +262,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
 
     /**
      * @brief Performs backend-related operation configuration
+     * @param device            A device the operation will be executed on
      * @param inputShape        Input tensor shape
      * @param kernelShape       kernel tensor shape
      * @param gradShape         grad tensor shape
@@ -248,7 +270,8 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void configure(const Shape& inputShape,
+    void configure(device::CUDA& device,
+                   const Shape& inputShape,
                    const Shape& kernelShape,
                    const Shape& gradShape,
                    const IntPair& padBefore,
@@ -300,6 +323,17 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
             cudnn::getDataType<T>(),
             CUDNN_TENSOR_NCHW,  // OIHW according to the docs
             kernelShape[0], kernelShape[1], kernelShape[2], kernelShape[3]));
+
+        // choose algorithms
+        size_t inputScratchpadSize = 0, kernelScratchpadSize = 0;
+        kernelGradientAlgo = device.selectBackwardFilterAlgo(context, convDesc, inputDesc, gradDesc, kernelDesc, kernelScratchpadSize);
+        if (requireInputGrad)
+            inputGradientAlgo = device.selectBackwardDataAlgo(context, convDesc, inputDesc, gradDesc, kernelDesc, inputScratchpadSize);
+
+        // allocate scratchpad
+        const size_t size = std::max(kernelScratchpadSize, inputScratchpadSize);
+        if (scratchpad.getSize() != size)
+            scratchpad = cudnn::Memory(size);
     }
 
     /**
@@ -336,8 +370,8 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
             inputDesc, inputTensor.getDataPtr(),
             gradDesc, useBuffer ? buffer->getDataPtr() : gradTensor.getDataPtr(),
             convDesc,
-            CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
-            nullptr, 0,
+            kernelGradientAlgo,
+            scratchpad.pointer(), scratchpad.getSize(),
             &beta,
             kernelDesc, kernelGradTensor.getDataPtr()));
 
@@ -348,8 +382,8 @@ class ScalarConv2DGradFunctor<device::CUDA, T> {
                 kernelDesc, kernelTensor.getDataPtr(),
                 gradDesc, useBuffer ? buffer->getDataPtr() : gradTensor.getDataPtr(),
                 convDesc,
-                CUDNN_CONVOLUTION_BWD_DATA_ALGO_0,
-                nullptr, 0,
+                inputGradientAlgo,
+                scratchpad.pointer(), scratchpad.getSize(),
                 &beta,
                 inputDesc, inputGradTensor.getDataPtr()));
         }

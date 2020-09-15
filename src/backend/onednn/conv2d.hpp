@@ -1,5 +1,4 @@
 #pragma once
-#include <assert.h>
 
 #include "../backend.hpp"
 #include "context.hpp"
@@ -20,6 +19,7 @@ static const dnnl::memory::format_tag BIAS_MEMORY_LAYOUT = dnnl::memory::format_
 template <typename T>
 class ScalarConv2DFunctor<device::CPU, T> {
    private:
+    onednn::Context& context;
     dnnl::memory::desc inputMemDesc, kernelMemDesc, biasMemDesc, outputMemDesc;
     dnnl::convolution_forward convPrim, convPrimNoBias;
     const dnnl::memory::format_tag formatTag;
@@ -32,19 +32,23 @@ class ScalarConv2DFunctor<device::CPU, T> {
 
    public:
     /**
-     * @brief Sets main convolution parameters independent from the input, filter and output sizes
+     * @brief Instantiates a Conv2D operation.
+     * Sets main convolution parameters independent from the input, filter and output sizes.
+     * @param context       A context instance
      * @param dataFormat    Expected tensors format
      * @param stride        Convolution stride
      * @param dilation      Convolution dilation
      * @param useBias       If `true`, the bias addition is enabled.
      */
-    ScalarConv2DFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) : formatTag(onednn::dataFormatToFormatTag(dataFormat)),
-                                                                                                               stride(stride),
-                                                                                                               dilation(dilation),
-                                                                                                               useBias(useBias) {}
+    ScalarConv2DFunctor(upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) : context(static_cast<onednn::Context&>(context)),
+                                                                                                                                           formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+                                                                                                                                           stride(stride),
+                                                                                                                                           dilation(dilation),
+                                                                                                                                           useBias(useBias) {}
 
     /**
      * @brief Performs backend-related operation configuration
+     * @param device            A device the operation will be executed on
      * @param inputShape        Input tensor shape
      * @param kernelShape       kernel tensor shape
      * @param biasShape         Bias tensor shape; may be empty if the bias addition is not enabled by `useBias`
@@ -53,7 +57,8 @@ class ScalarConv2DFunctor<device::CPU, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void configure(const Shape& inputShape,
+    void configure(device::CPU& device,
+                   const Shape& inputShape,
                    const Shape& kernelShape,
                    const Shape& biasShape,
                    const Shape& outputShape,
@@ -104,7 +109,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
                                                 dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
                                                 dnnl::memory::dims({padBefore.y, padBefore.x}),
                                                 dnnl::memory::dims({padAfter.y, padAfter.x})),
-                onednn::Context::getInstance().getEngine()));
+                context.getEngine()));
         }
 
         // biasless convolution (it is setup anyway to be able to use both biased and biasless versions)
@@ -116,7 +121,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
                                             dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
                                             dnnl::memory::dims({padBefore.y, padBefore.x}),
                                             dnnl::memory::dims({padAfter.y, padAfter.x})),
-            onednn::Context::getInstance().getEngine()));
+            context.getEngine()));
     }
 
     /**
@@ -131,7 +136,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
                     const Tensor<device::CPU, const T>* biasTensor,
                     Tensor<device::CPU, T>& outputTensor) {
         // instantiate DNNL memory
-        auto& engine = onednn::Context::getInstance().getEngine();
+        auto& engine = context.getEngine();
         dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));
         dnnl::memory kernel(kernelMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
         dnnl::memory output(outputMemDesc, engine, outputTensor.getDataPtr());
@@ -141,14 +146,14 @@ class ScalarConv2DFunctor<device::CPU, T> {
                 throw std::invalid_argument("Bias application is not configured for this scalar Conv2D operation");
 
             dnnl::memory bias(biasMemDesc, engine, const_cast<T*>(biasTensor->getDataPtr()));
-            onednn::Context::getInstance().execute(convPrim, {{DNNL_ARG_SRC, input},
-                                                              {DNNL_ARG_WEIGHTS, kernel},
-                                                              {DNNL_ARG_BIAS, bias},
-                                                              {DNNL_ARG_DST, output}});
+            context.execute(convPrim, {{DNNL_ARG_SRC, input},
+                                       {DNNL_ARG_WEIGHTS, kernel},
+                                       {DNNL_ARG_BIAS, bias},
+                                       {DNNL_ARG_DST, output}});
         } else {
-            onednn::Context::getInstance().execute(convPrimNoBias, {{DNNL_ARG_SRC, input},
-                                                                    {DNNL_ARG_WEIGHTS, kernel},
-                                                                    {DNNL_ARG_DST, output}});
+            context.execute(convPrimNoBias, {{DNNL_ARG_SRC, input},
+                                             {DNNL_ARG_WEIGHTS, kernel},
+                                             {DNNL_ARG_DST, output}});
         }
     }
 };
@@ -160,6 +165,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
 template <typename T>
 class ScalarConv2DGradFunctor<device::CPU, T> {
    private:
+    onednn::Context& context;
     dnnl::memory::desc inputMemDesc, kernelMemDesc, gradMemDesc, kernelGradMemDesc, inputGradMemDesc;
     dnnl::convolution_backward_data convBackDataPrim;
     dnnl::convolution_backward_weights convBackWeightsPrim;
@@ -171,13 +177,15 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
     IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
 
    public:
-    ScalarConv2DGradFunctor(DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) : formatTag(onednn::dataFormatToFormatTag(dataFormat)),
-                                                                                                                            stride(stride),
-                                                                                                                            dilation(dilation),
-                                                                                                                            requireInputGrad(requireInputGrad) {}
+    ScalarConv2DGradFunctor(upstride::Context& context,DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) : context(static_cast<onednn::Context&>(context)),
+                                                                                                                                                       formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+                                                                                                                                                       stride(stride),
+                                                                                                                                                       dilation(dilation),
+                                                                                                                                                       requireInputGrad(requireInputGrad) {}
 
     /**
      * @brief Performs backend-related operation configuration
+     * @param device            A device the operation will be executed on
      * @param inputShape        Input tensor shape
      * @param kernelShape       kernel tensor shape
      * @param gradShape         grad tensor shape
@@ -185,7 +193,8 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void configure(const Shape& inputShape,
+    void configure(device::CPU& device,
+                   const Shape& inputShape,
                    const Shape& kernelShape,
                    const Shape& gradShape,
                    const IntPair& padBefore,
@@ -229,7 +238,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                                             dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
                                             dnnl::memory::dims({padBefore.y, padBefore.x}),
                                             dnnl::memory::dims({padAfter.y, padAfter.x})),
-            onednn::Context::getInstance().getEngine());
+            context.getEngine());
 
         // instantiate backward conv primitive to compute the kernel gradient
         convBackWeightsPrim = dnnl::convolution_backward_weights(
@@ -243,7 +252,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                     dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
                     dnnl::memory::dims({padBefore.y, padBefore.x}),
                     dnnl::memory::dims({padAfter.y, padAfter.x})),
-                onednn::Context::getInstance().getEngine(),
+                context.getEngine(),
                 convPd));
 
         // instantiate backward conv primitive to compute the input gradient (only if required)
@@ -259,7 +268,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                         dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
                         dnnl::memory::dims({padBefore.y, padBefore.x}),
                         dnnl::memory::dims({padAfter.y, padAfter.x})),
-                    onednn::Context::getInstance().getEngine(),
+                    context.getEngine(),
                     convPd));
         }
     }
@@ -282,7 +291,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                     Tensor<device::CPU, T>& kernelGradTensor,
                     Tensor<device::CPU, T>& inputGradTensor) {
         // instantiate DNNL memory
-        auto& engine = onednn::Context::getInstance().getEngine();
+        auto& engine = context.getEngine();
         dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));
         dnnl::memory kernel(kernelMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
         dnnl::memory grad(gradMemDesc, engine, const_cast<T*>(gradTensor.getDataPtr()));
@@ -291,12 +300,12 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
         dnnl::memory inputGrad(inputGradMemDesc, engine, inputGradTensor.getDataPtr());
 
         // g-g-go
-        onednn::Context::getInstance().execute(convBackWeightsPrim, {{DNNL_ARG_SRC, input},
+        context.execute(convBackWeightsPrim, {{DNNL_ARG_SRC, input},
                                                                      {DNNL_ARG_DIFF_DST, grad},
                                                                      {DNNL_ARG_DIFF_WEIGHTS, kernelGrad}}  // output
         );
         if (requireInputGrad) {
-            onednn::Context::getInstance().execute(convBackDataPrim, {{DNNL_ARG_WEIGHTS, kernel},
+            context.execute(convBackDataPrim, {{DNNL_ARG_WEIGHTS, kernel},
                                                                       {DNNL_ARG_DIFF_DST, grad},
                                                                       {DNNL_ARG_DIFF_SRC, inputGrad}}  //output
             );

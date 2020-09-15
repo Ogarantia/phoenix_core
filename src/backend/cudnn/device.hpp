@@ -1,11 +1,14 @@
 #pragma once
 #include <cuda.h>
 #include <cudnn.h>
+#include "../backend.hpp"
+#include "conv2d_algo_select.hpp"
 
 namespace upstride {
 namespace device {
 class CUDA {
    private:
+    cudnn::Conv2DAlgorithmSelector conv2dAlgorithms;    //!< runtime conv2d algorithms selector
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
 
@@ -40,6 +43,65 @@ class CUDA {
      */
     inline const cudnnHandle_t& handle() const {
         return cudnnHandle;
+    }
+
+    /**
+     * @brief Selects the fastest forward 2D convolution algorithm applicable for a given convolution setting.
+     * @param context           A context instance
+     * @param convDesc          The 2D convolution operation descriptor
+     * @param input             The convolution input tensor descriptor
+     * @param kernel            The convolution kernel (filter) tensor descriptor
+     * @param output            The convolution output tensor descriptor
+     * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @return the fastest algorithm for the given 2D convolution parameter set.
+     */
+    inline cudnnConvolutionFwdAlgo_t selectForwardAlgo(const Context& context,
+                                                       const cudnnConvolutionDescriptor_t& convDesc,
+                                                       const cudnnTensorDescriptor_t& input,
+                                                       const cudnnFilterDescriptor_t& kernel,
+                                                       const cudnnTensorDescriptor_t& output,
+                                                       size_t& scratchpadSize) {
+        return conv2dAlgorithms.selectForwardAlgo(context, cudnnHandle, convDesc, input, kernel, output, scratchpadSize);
+    }
+
+    /**
+     * @brief Selects the fastest backward 2D convolution algorithm computing the filter gradient, applicable for
+     * a given convolution setting.
+     * @param context           A context instance
+     * @param convDesc          The 2D convolution operation descriptor
+     * @param input             The convolution input tensor descriptor
+     * @param grad              The loss function gradient tensor descriptor
+     * @param kernel            The convolution kernel (filter) tensor descriptor
+     * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @return the fastest algorithm for the given 2D convolution parameter set.
+     */
+    inline cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const Context& context,
+                                                                    const cudnnConvolutionDescriptor_t& convDesc,
+                                                                    const cudnnTensorDescriptor_t& input,
+                                                                    const cudnnTensorDescriptor_t& grad,
+                                                                    const cudnnFilterDescriptor_t& kernel,
+                                                                    size_t& scratchpadSize) {
+        return conv2dAlgorithms.selectBackwardFilterAlgo(context, cudnnHandle, convDesc, input, grad, kernel, scratchpadSize);
+    }
+
+    /**
+     * @brief Selects the fastest backward 2D convolution algorithm computing the input (data) gradient, applicable for
+     * a given convolution setting.
+     * @param context           A context instance
+     * @param convDesc          The 2D convolution operation descriptor
+     * @param input             The convolution input tensor descriptor
+     * @param grad              The loss function gradient tensor descriptor
+     * @param kernel            The convolution kernel (filter) tensor descriptor
+     * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @return the fastest algorithm for the given 2D convolution parameter set.
+     */
+    inline cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const Context& context,
+                                                                const cudnnConvolutionDescriptor_t& convDesc,
+                                                                const cudnnTensorDescriptor_t& input,
+                                                                const cudnnTensorDescriptor_t& grad,
+                                                                const cudnnFilterDescriptor_t& kernel,
+                                                                size_t& scratchpadSize) {
+        return conv2dAlgorithms.selectBackwardDataAlgo(context, cudnnHandle, convDesc, input, grad, kernel, scratchpadSize);
     }
 };
 }  // namespace device

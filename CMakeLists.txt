@@ -15,6 +15,7 @@ message("     cuDNN: ${WITH_CUDNN}")
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 set(CPP_SOURCES_FOLDER "${CMAKE_CURRENT_LIST_DIR}/src")
 set(SOURCES ${SOURCES} 
+    ${CPP_SOURCES_FOLDER}/backend/backend.cc
     ${CPP_SOURCES_FOLDER}/algebras.cc
     ${CPP_SOURCES_FOLDER}/utils.cc
 )
@@ -27,7 +28,7 @@ else ()
   set(VECTORIZATION_FLAGS "-ftree-vectorize -march=native")
 endif()
 
-set(CMAKE_CXX_FLAGS "${OPTIM_FLAGS} ${VECTORIZATION_FLAGS} ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_ALLOW_VERBOSE")
 
 #######################
 #    ONEDNN SETUP     #
@@ -59,6 +60,7 @@ endif()
 if (WITH_CUDNN)
   set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS} ${CMAKE_CXX_FLAGS}")
   set(SOURCES ${SOURCES}
+      ${CPP_SOURCES_FOLDER}/backend/cudnn/conv2d_algo_select.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/cudnn.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels.cu
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels_quat.cu

@@ -17,14 +17,21 @@
 #include "../algebras.hpp"
 #include "tensor.hpp"
 
-namespace upstride {
 
 /**
- * @brief Backend enumeration
+ * @brief Defining UPSTRIDE_SAYS macro used for debugging.
+ * To enable the verbose mode of the engine, assign to UPSTRIDE_VERBOSE environment variable a non-empty value, e.g.
+ *   UPSTRIDE_VERBOSE=1 python test.py
+ * This only works when UPSTRIDE_ALLOW_VERBOSE macro is defined in compilation to avoid the debugging format string
+ * appear in the compiled binary.
  */
-namespace device {
+#ifdef UPSTRIDE_ALLOW_VERBOSE
+#define UPSTRIDE_SAYS(CTX, FMT, ...) (CTX).verbosePrintf("\033[1;33m" FMT "\033[0m\n", ##__VA_ARGS__)
+#else
+#define UPSTRIDE_SAYS(...)
+#endif
 
-}  // namespace device
+namespace upstride {
 
 /**
  * @brief A fairly generic integer tuple
@@ -55,8 +62,11 @@ class IntPair {
  * @brief Base class of a context shared between different operations
  */
 class Context {
+   private:
+    const bool envVerbose;
+    const bool envOptimizeMemoryUse;
    protected:
-    Context() {}
+    Context();
 
    public:
     /**
@@ -64,7 +74,9 @@ class Context {
      * @return true when it is allowed to consume more memory for better speed.
      * @return false when it is preferable to use less memory at the cost of slower processing.
      */
-    inline static bool preferSpeedToMemory() { return true; }
+    inline bool preferSpeedToMemory() const { return !envOptimizeMemoryUse; }
+
+    void verbosePrintf(const char* format, ...) const;
 };
 
 /**

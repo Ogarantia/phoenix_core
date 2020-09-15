@@ -3,7 +3,7 @@
 #include "kernels.hpp"
 #include "tensor.hpp"
 
-static const int NUM_THREADS = 256;  //!< default number of threads
+static const int NUM_THREADS = 1024;  //!< default number of threads
 
 
 /**
@@ -16,7 +16,8 @@ template <typename T>
 __global__ void decomposeLeftInput(const T* input0, const T* input1, const T* input2, const T* input3,
                                    T* output0, T* output1, T* output2, T* output3, T* output4, T* output5, T* output6, T* output7,
                                    int length) {
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += blockDim.x * gridDim.x) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length) {
         output0[i] = input3[i] + input1[i];
         output1[i] = input0[i] - input2[i];
         output2[i] = input0[i] + input2[i];
@@ -32,7 +33,8 @@ template <typename T>
 __global__ void decomposeRightInput(const T* input0, const T* input1, const T* input2, const T* input3,
                                     T* output0, T* output1, T* output2, T* output3, T* output4, T* output5, T* output6, T* output7,
                                     int length) {
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += blockDim.x * gridDim.x) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length) {
         output0[i] = input1[i] + input2[i];
         output1[i] = input0[i] + input3[i];
         output2[i] = input0[i] - input3[i];
@@ -48,7 +50,8 @@ template <typename T>
 __global__ void decomposeOutputGrad(const T* input0, const T* input1, const T* input2, const T* input3,
                                     T* output0, T* output1, T* output2, T* output3, T* output4, T* output5, T* output6, T* output7,
                                     int length) {
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += blockDim.x * gridDim.x) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length) {
         const T t1 = input0[i] + input1[i];
         const T t3 = input0[i] - input1[i];
         const T t2 = input2[i] + input3[i];
@@ -68,7 +71,8 @@ template <typename T>
 __global__ void recomposeOutput(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
                                 T* output0, T* output1, T* output2, T* output3,
                                 int length) {
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += blockDim.x * gridDim.x) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length) {
         const T a2 = input0[i] + input1[i] + input2[i];
         const T a5 = 0.5 * (a2 + input3[i]);
         output0[i] = a5 - input0[i] + input4[i];
@@ -82,7 +86,8 @@ template <typename T>
 __global__ void recomposeLeftInputGrad(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
                                        T* output0, T* output1, T* output2, T* output3,
                                        int length) {
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += blockDim.x * gridDim.x) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length) {
         output0[i] = input1[i] + input2[i] + input5[i] + input6[i];
         output1[i] = input0[i] - input3[i] + input5[i] - input6[i];
         output2[i] = input2[i] - input1[i] - input4[i] + input7[i];
@@ -93,7 +98,8 @@ template <typename T>
 __global__ void recomposeRightInputGrad(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
                                         T* output0, T* output1, T* output2, T* output3,
                                         int length) {
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += blockDim.x * gridDim.x) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < length) {
         output0[i] = input1[i] + input2[i] + input5[i] + input7[i];
         output1[i] = input0[i] + input3[i] + input5[i] - input7[i];
         output2[i] = input0[i] - input3[i] + input4[i] + input6[i];

@@ -51,10 +51,12 @@ class Context : public upstride::Context {
    private:
     std::map<cudaStream_t, device::CUDA> devices;  //!< the devices; they are indexed by CUDA streams
 
+   public:
+    static const int MAX_BLOCK_DEPTH = 64;      //!< maximum number of CUDA threads per block along Z dimension
+
     Context() {}
     ~Context() {}
 
-   public:
     /**
      * @brief Checks a cuDNN operation status and throws an exception if the operation was not successful with the a message containing the status.
      * @param status    The status value to check
@@ -83,18 +85,58 @@ class Context : public upstride::Context {
     }
 
     /**
-     * @brief Provides the instance of cuDNN context.
-     * @return the context
-     */
-    static Context& getInstance();
-
-    /**
      * @brief Retrieves or creates a device attached to a specific CUDA stream.
      * @param stream the CUDA stream
      * @return the device instance.
      */
-    const device::CUDA& registerDevice(const cudaStream_t& stream);
+    device::CUDA& registerDevice(const cudaStream_t& stream);
 };
+
+
+/**
+ * @brief A device memory buffer and its allocation/disposition routines
+ * Often acts as a pointer due to the nicely defined conversion operators.
+ */
+class Memory {
+   private:
+    void* ptr;
+    size_t size;
+
+    Memory(const Memory&) = delete;  // deleting copying constructor
+   public:
+    Memory() : ptr(nullptr), size(0) {}
+    Memory(size_t sizeBytes);
+    Memory(Memory&&);
+    Memory& operator=(Memory&&);
+    ~Memory();
+
+    /**
+     * @brief Fills the memory buffer with zeros.
+     */
+    void zero();
+
+    /**
+     * @brief Frees the pointed memory if any.
+     */
+    void free();
+
+    /**
+     * @brief Checks pointer validity.
+     *
+     * @return true if the pointer points to a valid memory.
+     * @return false otherwise
+     */
+    inline operator bool() const { return ptr != nullptr; }
+
+    inline size_t getSize() const { return size; }
+
+    template <typename T = void>
+    inline T* pointer() { return static_cast<T*>(ptr); }
+
+    template <typename T = void>
+    inline const T* pointer() const { return static_cast<const T*>(ptr); }
+};
+
 
 /**
  * @brief Fills a cuDNN tensor descriptor

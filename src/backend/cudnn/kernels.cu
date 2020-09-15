@@ -7,7 +7,7 @@
 
 using namespace upstride;
 
-static const int NUM_THREADS = 64;  //!< default number of threads
+static const int NUM_THREADS = 1024;  //!< default number of CUDA threads per block
 
 template <typename T>
 __global__ void accumulateAdd(T* acc, const T* term, int length) {
@@ -88,13 +88,13 @@ __global__ void addBiasNCHW(T* tensor, const T* bias, int width, int height, int
  */
 inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim3& threads, dim3& blocks, const int numThreads = NUM_THREADS) {
     const int depth = shape.depth(dataFormat) * shape[0];
-    const int z = std::min(numThreads, depth);
+    const int z = std::min(cudnn::Context::MAX_BLOCK_DEPTH, depth);
     const int xy = (int)std::sqrt(numThreads / z);
     threads = dim3(xy, xy, z);
     blocks = dim3(
         ceili(shape.width(dataFormat), threads.x),
         ceili(shape.height(dataFormat), threads.y),
-        ceili(shape.depth(dataFormat) * shape[0], threads.z));
+        ceili(depth, threads.z));
 }
 
 namespace upstride {
