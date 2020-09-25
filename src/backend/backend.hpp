@@ -39,6 +39,15 @@ namespace upstride {
 typedef std::vector<int32_t> IntTuple;
 
 /**
+ * @brief Specifies how convolutions are performed for 16-bit floating points inputs and outputs
+ */
+enum class ConvFp16ComputePolicy {
+    FULL_16,                    //!< always use 16-bit floating point computations
+    FORWARD_16_BACKWARD_32,     //!< compute forward pass in 16 bits mode and backward pass in 32 bits mode
+    FULL_32                     //!< always use 32-bit floating point computations
+};
+
+/**
  * @brief A lightweight pair of integer numbers
  */
 class IntPair {
@@ -65,6 +74,7 @@ class Context {
    private:
     const bool envVerbose;
     const bool envOptimizeMemoryUse;
+    const ConvFp16ComputePolicy convFp16ComputePolicy;
    protected:
     Context();
 
@@ -75,6 +85,14 @@ class Context {
      * @return false when it is preferable to use less memory at the cost of slower processing.
      */
     inline bool preferSpeedToMemory() const { return !envOptimizeMemoryUse; }
+
+    inline bool isFp16ConvForwardAllowed() const {
+        return convFp16ComputePolicy == ConvFp16ComputePolicy::FULL_16 || convFp16ComputePolicy == ConvFp16ComputePolicy::FORWARD_16_BACKWARD_32;
+    }
+
+    inline bool isFp16ConvBackwardAllowed() const {
+        return convFp16ComputePolicy == ConvFp16ComputePolicy::FULL_16;
+    }
 
     void verbosePrintf(const char* format, ...) const;
 };

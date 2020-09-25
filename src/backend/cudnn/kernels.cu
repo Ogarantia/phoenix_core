@@ -97,11 +97,8 @@ inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim
         ceili(depth, threads.z));
 }
 
-namespace upstride {
-namespace cudnn {
-
-template <>
-void crop(const Tensor<device::CUDA, float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
+template <typename T>
+void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset) {
     // check stuff
     const Shape& inShape = input.getShape();
     const Shape& outShape = output.getShape();
@@ -131,11 +128,33 @@ void crop(const Tensor<device::CUDA, float>& input, Tensor<device::CUDA, float>&
         outShape.width(dataFormat), outShape.height(dataFormat),
         inShape.depth(dataFormat) * inShape[0]);
 
-    Context::raiseIfError();
+    cudnn::Context::raiseIfError();
 }
 
-template <>
-void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
+template <typename T>
+void addBias(Tensor<device::CUDA, T>& tensor, const Tensor<device::CUDA, const T>& bias, DataFormat dataFormat) {
+    if (dataFormat != DataFormat::NCHW)
+        throw std::runtime_error("Unsupported data format");
+
+    const Shape& shape = tensor.getShape();
+    if (shape.getSize() != 4)
+        throw std::runtime_error("Expecting a four-dimenisonal tensor");
+    if (shape.depth(dataFormat) != bias.getShape().numel())
+        throw std::runtime_error("Tensor and bias sizes mismatch");
+
+    dim3 threads, blocks;
+    makeGridConfig(shape, dataFormat, threads, blocks);
+
+    addBiasNCHW<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
+        tensor.getDataPtr(), bias.getDataPtr(),
+        shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]
+    );
+
+    cudnn::Context::raiseIfError();
+}
+
+template <typename T>
+void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset) {
     // check stuff
     const Shape& inShape = input.getShape();
     const Shape& outShape = output.getShape();
@@ -165,27 +184,25 @@ void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA,
         outShape.width(dataFormat), outShape.height(dataFormat),
         outShape.depth(dataFormat) * outShape[0]);
 
-    Context::raiseIfError();
+    cudnn::Context::raiseIfError();
+}
+
+namespace upstride {
+namespace cudnn {
+
+template <>
+void crop(const Tensor<device::CUDA, float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
+    ::crop(input, output, dataFormat, offset);
+}
+
+template <>
+void insert(const Tensor<device::CUDA, const float>& input, Tensor<device::CUDA, float>& output, DataFormat dataFormat, const IntPair& offset) {
+    ::insert(input, output, dataFormat, offset);
 }
 
 template<>
 void addBias(Tensor<device::CUDA, float>& tensor, const Tensor<device::CUDA, const float>& bias, DataFormat dataFormat) {
-    if (dataFormat != DataFormat::NCHW)
-        throw std::runtime_error("Unsupported data format");
-
-    const Shape& shape = tensor.getShape();
-    if (shape.getSize() != 4)
-        throw std::runtime_error("Expecting a four-dimenisonal tensor");
-    if (shape.depth(dataFormat) != bias.getShape().numel())
-        throw std::runtime_error("Tensor and bias sizes mismatch");
-
-    dim3 threads, blocks;
-    makeGridConfig(shape, dataFormat, threads, blocks);
-
-    addBiasNCHW<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
-        tensor.getDataPtr(), bias.getDataPtr(),
-        shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]
-    );
+    ::addBias(tensor, bias, dataFormat);
 }
 
 template <>
@@ -197,6 +214,35 @@ template <>
 void accumulateSub(const device::CUDA& device, float* accumulator, const float* term, int length) {
     ::accumulateSub<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
 }
+
+#ifdef UPSTRIDE_ENABLE_FP16
+template <>
+void crop(const Tensor<device::CUDA, half>& input, Tensor<device::CUDA, half>& output, DataFormat dataFormat, const IntPair& offset) {
+    ::crop(input, output, dataFormat, offset);
+}
+
+template <>
+void insert(const Tensor<device::CUDA, const half>& input, Tensor<device::CUDA, half>& output, DataFormat dataFormat, const IntPair& offset) {
+    ::insert(input, output, dataFormat, offset);
+}
+
+template<>
+void addBias(Tensor<device::CUDA, half>& tensor, const Tensor<device::CUDA, const half>& bias, DataFormat dataFormat) {
+    ::addBias(tensor, bias, dataFormat);
+}
+
+template <>
+void accumulateAdd(const device::CUDA& device, half* accumulator, const half* term, int length) {
+    ::accumulateAdd<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
+    cudnn::Context::raiseIfError();
+}
+
+template <>
+void accumulateSub(const device::CUDA& device, half* accumulator, const half* term, int length) {
+    ::accumulateSub<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
+    cudnn::Context::raiseIfError();
+}
+#endif
 
 }  // namespace cudnn
 

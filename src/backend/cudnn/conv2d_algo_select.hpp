@@ -29,8 +29,10 @@ private:
      */
     class Conv2DConfigDescriptor {
     private:
-        IntPair pad, stride, dilation;
+        cudnnDataType_t computeType;    //!< datatype used to perform the computation
+        cudnnDataType_t tensorType;     //!< input, kernel and output tensor elements datatype (may differ from computeType)
         Shape inputShape, kernelShape;
+        IntPair pad, stride, dilation;
         int groups;
     public:
         /**
@@ -51,31 +53,36 @@ private:
          * @brief Prints the convolution configuration in verbose mode.
          * @param context   A context instance
          */
-        void printOut(const upstride::Context& context);
+        void printOut(const upstride::Context& context) const;
     };
 
+    typedef struct {
+        size_t scratchpadSize;      //!< size in bytes of a memory buffer needed by the algorithm
+        float time;                 //!< execution time in ms
+    } AlgorithmCharacteristics;
+
     /**
-     * @brief A forward algorithm option and its corresponding scratchpad size
+     * @brief A forward algorithm option
      */
     typedef struct {
+        AlgorithmCharacteristics characteristics;
         cudnnConvolutionFwdAlgo_t algorithm;
-        size_t scratchpadSize;  //!< size in bytes of a memory buffer needed by the algorithm
     } ForwardAlgorithmChoice;
 
     /**
-     * @brief A backward filter algorithm option and its corresponding scratchpad size
+     * @brief A backward filter algorithm
      */
     typedef struct {
+        AlgorithmCharacteristics characteristics;
         cudnnConvolutionBwdFilterAlgo_t algorithm;
-        size_t scratchpadSize;  //!< size in bytes of a memory buffer needed by the algorithm
     } BackwardFilterAlgorithmChoice;
 
     /**
-     * @brief A backwar data algorithm option and its corresponding scratchpad size
+     * @brief A backwar data algorithm
      */
     typedef struct {
+        AlgorithmCharacteristics characteristics;
         cudnnConvolutionBwdDataAlgo_t algorithm;
-        size_t scratchpadSize;  //!< size in bytes of a memory buffer needed by the algorithm
     } BackwardDataAlgorithmChoice;
 
     std::mutex accessControl;   //!< ensures thread safety of the algorithm choice mappings
@@ -96,6 +103,7 @@ public:
      * @param input             The convolution input tensor descriptor
      * @param kernel            The convolution kernel (filter) tensor descriptor
      * @param output            The convolution output tensor descriptor
+     * @param executionTime     Returns execution time in milliseconds took by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
@@ -105,6 +113,7 @@ public:
                                                 const cudnnTensorDescriptor_t& input,
                                                 const cudnnFilterDescriptor_t& kernel,
                                                 const cudnnTensorDescriptor_t& output,
+                                                float& executionTime,
                                                 size_t& scratchpadSize);
 
     /**
@@ -118,6 +127,7 @@ public:
      * @param input             The convolution input tensor descriptor
      * @param grad              The loss function gradient tensor descriptor
      * @param kernel            The convolution kernel (filter) tensor descriptor
+     * @param executionTime     Returns execution time in milliseconds took by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
@@ -127,6 +137,7 @@ public:
                                                              const cudnnTensorDescriptor_t& input,
                                                              const cudnnTensorDescriptor_t& grad,
                                                              const cudnnFilterDescriptor_t& kernel,
+                                                             float& executionTime,
                                                              size_t& scratchpadSize);
 
     /**
@@ -140,6 +151,7 @@ public:
      * @param input             The convolution input tensor descriptor
      * @param grad              The loss function gradient tensor descriptor
      * @param kernel            The convolution kernel (filter) tensor descriptor
+     * @param executionTime     Returns execution time in milliseconds took by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
@@ -149,6 +161,7 @@ public:
                                                          const cudnnTensorDescriptor_t& input,
                                                          const cudnnTensorDescriptor_t& grad,
                                                          const cudnnFilterDescriptor_t& kernel,
+                                                         float& executionTime,
                                                          size_t& scratchpadSize);
 };
 

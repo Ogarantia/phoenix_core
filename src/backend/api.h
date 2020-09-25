@@ -13,6 +13,7 @@
 
 // cuDNN GPU backend implementation
 #ifdef BACKEND_CUDNN
+#include "cudnn/half.hpp"
 #include "cudnn/tensor.hpp"
 #include "cudnn/conv2d.hpp"
 #endif

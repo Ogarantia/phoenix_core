@@ -13,6 +13,7 @@
 
 #include "../backend.hpp"
 #include "device.hpp"
+#include "half.hpp"
 
 namespace upstride {
 namespace cudnn {
@@ -43,6 +44,9 @@ static inline cudnnDataType_t getDataType();
 
 template <>
 inline cudnnDataType_t getDataType<float>() { return CUDNN_DATA_FLOAT; }
+
+template <>
+inline cudnnDataType_t getDataType<half>() { return CUDNN_DATA_HALF; }
 
 /**
  * @brief cuDNN-specific shareable singleton context

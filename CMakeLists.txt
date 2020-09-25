@@ -2,19 +2,25 @@ cmake_minimum_required(VERSION 2.8)
 
 project(UpStride)
 
-option(BUILD_TESTS "Build tests" ON)
-option(WITH_ONEDNN "Enable oneDNN backend (CPU)" ON)
-option(WITH_CUDNN "Enable cuDNN backend (GPU)" OFF)
+option(BUILD_TESTS    "Build tests" ON)
+option(WITH_ONEDNN    "Enable oneDNN backend (CPU)" ON)
+option(WITH_CUDNN     "Enable cuDNN backend (GPU)" OFF)
+option(WITH_FP16      "Enable fp16 support on GPU" ON)
+option(WITH_FP16      "Enable fp16 support on GPU" ON)
+option(ALLOW_VERBOSE  "Allows verbose messaging" ON)
 
 message("-- BUILD_TESTS: ${BUILD_TESTS}")
 message("-- Used backends:")
 message("     oneDNN: ${WITH_ONEDNN}")
 message("     cuDNN: ${WITH_CUDNN}")
+if (WITH_CUDNN)
+  message("       fp16 support: ${WITH_FP16}")
+endif()
 
 # list source code files
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 set(CPP_SOURCES_FOLDER "${CMAKE_CURRENT_LIST_DIR}/src")
-set(SOURCES ${SOURCES} 
+set(SOURCES ${SOURCES}
     ${CPP_SOURCES_FOLDER}/backend/backend.cc
     ${CPP_SOURCES_FOLDER}/algebras.cc
     ${CPP_SOURCES_FOLDER}/utils.cc
@@ -28,7 +34,13 @@ else ()
   set(VECTORIZATION_FLAGS "-ftree-vectorize -march=native")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_ALLOW_VERBOSE")
+if (ALLOW_VERBOSE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_ALLOW_VERBOSE")
+  string(ASCII 27 Esc)
+  set(ColorCyan  "${Esc}[36m")
+  set(ColorReset "${Esc}[m")
+  message("-- ${ColorCyan}VERBOSE MESSAGES ENABLED. This is not a production build.${ColorReset}")
+endif()
 
 #######################
 #    ONEDNN SETUP     #
@@ -59,6 +71,10 @@ endif()
 
 if (WITH_CUDNN)
   set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS} ${CMAKE_CXX_FLAGS}")
+  if (WITH_FP16)
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -gencode arch=compute_53,code=sm_53 -gencode arch=compute_75,code=sm_75")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_ENABLE_FP16")
+  endif()
   set(SOURCES ${SOURCES}
       ${CPP_SOURCES_FOLDER}/backend/cudnn/conv2d_algo_select.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/cudnn.cc

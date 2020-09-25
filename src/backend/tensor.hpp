@@ -403,6 +403,8 @@ class Tensor {
         TensorManipulations<Device>::zero(*this);
     }
 
+#pragma push
+#pragma diag_suppress = conversion_function_not_usable  // disabling NVCC warning about unapplied conversion operator
     /**
      * @brief Conversion to the immutable representation of the same data.
      * @return tensor having const-qualified pointer.
@@ -411,6 +413,7 @@ class Tensor {
         return reinterpret_cast<Tensor<Device, const T>&>(*this);
         // static_cast causes endless recursion
     }
+#pragma pop
 
     const Device& getDevice() const {
         return device;
