@@ -6,7 +6,6 @@ option(BUILD_TESTS    "Build tests" ON)
 option(WITH_ONEDNN    "Enable oneDNN backend (CPU)" ON)
 option(WITH_CUDNN     "Enable cuDNN backend (GPU)" OFF)
 option(WITH_FP16      "Enable fp16 support on GPU" ON)
-option(WITH_FP16      "Enable fp16 support on GPU" ON)
 option(ALLOW_VERBOSE  "Allows verbose messaging" ON)
 
 message("-- BUILD_TESTS: ${BUILD_TESTS}")
@@ -15,6 +14,7 @@ message("     oneDNN: ${WITH_ONEDNN}")
 message("     cuDNN: ${WITH_CUDNN}")
 if (WITH_CUDNN)
   message("       fp16 support: ${WITH_FP16}")
+  find_package(CUDA)
 endif()
 
 # list source code files
@@ -70,9 +70,13 @@ endif()
 #######################
 
 if (WITH_CUDNN)
+
   set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS} ${CMAKE_CXX_FLAGS}")
   if (WITH_FP16)
-    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -gencode arch=compute_53,code=sm_53 -gencode arch=compute_75,code=sm_75")
+    set(ARCHITECTURES "53;60;70;75")  # CUDA compute capabilities PTX code is generated for
+    foreach (CC ${ARCHITECTURES})
+      set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -gencode arch=compute_${CC},code=sm_${CC}")
+    endforeach()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_ENABLE_FP16")
   endif()
   set(SOURCES ${SOURCES}
