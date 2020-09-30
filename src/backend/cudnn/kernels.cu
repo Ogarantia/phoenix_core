@@ -77,6 +77,14 @@ __global__ void addBiasNCHW(T* tensor, const T* bias, int width, int height, int
             tensor[((n * depth + z) * height + y) * width + x] += bias[z];
 }
 
+template <typename T>
+__global__ void addBiasNC(T* tensor, const T* bias, int length, int batchSize) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x < length)
+        for (int n = 0; n < batchSize; ++n)
+            tensor[n * length + x] += bias[x];
+}
+
 
 /**
  * @brief Sets up a simple CUDA kernel grid config for a pointwise operation
@@ -131,26 +139,32 @@ void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output,
     cudnn::Context::raiseIfError();
 }
 
-template <typename T>
+template<typename T>
 void addBias(Tensor<device::CUDA, T>& tensor, const Tensor<device::CUDA, const T>& bias, DataFormat dataFormat) {
-    if (dataFormat != DataFormat::NCHW)
+    if (dataFormat != DataFormat::NCHW && dataFormat != DataFormat::NC)
         throw std::runtime_error("Unsupported data format");
-
     const Shape& shape = tensor.getShape();
-    if (shape.getSize() != 4)
-        throw std::runtime_error("Expecting a four-dimenisonal tensor");
+    if (dataFormat == DataFormat::NCHW && shape.getSize() != 4)
+        throw std::runtime_error("Expecting a four-dimensional tensor");
+    if (dataFormat == DataFormat::NC && shape.getSize() != 2)
+        throw std::runtime_error("Expecting a two-dimensional tensor");
     if (shape.depth(dataFormat) != bias.getShape().numel())
         throw std::runtime_error("Tensor and bias sizes mismatch");
 
-    dim3 threads, blocks;
-    makeGridConfig(shape, dataFormat, threads, blocks);
-
-    addBiasNCHW<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
-        tensor.getDataPtr(), bias.getDataPtr(),
-        shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]
-    );
-
-    cudnn::Context::raiseIfError();
+    if (dataFormat == DataFormat::NCHW) {
+        dim3 threads, blocks;
+        makeGridConfig(shape, dataFormat, threads, blocks);
+        addBiasNCHW<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
+            tensor.getDataPtr(), bias.getDataPtr(),
+            shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]);
+    }
+    else if (dataFormat == DataFormat::NC) {
+        const int length = shape.depth(dataFormat);
+        addBiasNC<<<ceili(shape[1], NUM_THREADS), NUM_THREADS, 0, tensor.getDevice().stream()>>>(
+            tensor.getDataPtr(), bias.getDataPtr(), shape[1], shape[0]);
+    }
+    else
+        throw std::runtime_error("addBias is currently not implemented for the given dataFormat.");
 }
 
 template <typename T>

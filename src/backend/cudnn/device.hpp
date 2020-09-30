@@ -3,6 +3,7 @@
 #include <cudnn.h>
 #include "../backend.hpp"
 #include "conv2d_algo_select.hpp"
+#include "cublas_v2.h"
 
 namespace upstride {
 namespace device {
@@ -11,6 +12,7 @@ class CUDA {
     cudnn::Conv2DAlgorithmSelector conv2dAlgorithms;    //!< runtime conv2d algorithms selector
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
+    cublasHandle_t cublasHandle;
 
     CUDA(const CUDA&) = delete;  // disable copying
 
@@ -21,11 +23,17 @@ class CUDA {
             throw std::runtime_error(std::string("Cannot create cuDNN handle, ") + cudnnGetErrorString(status));
         status = cudnnSetStream(cudnnHandle, cudaStream);
         if (status != CUDNN_STATUS_SUCCESS)
-            throw std::runtime_error(std::string("Cannot set cuDNN stream, ") + cudnnGetErrorString(status));
+            throw std::runtime_error(cudnnGetErrorString(status));
+
+        if (cublasCreate(&cublasHandle) != CUBLAS_STATUS_SUCCESS)
+            throw std::runtime_error("Cannot create cuBLAS handle.");
+        if (cublasSetStream(cublasHandle, cudaStream) != CUBLAS_STATUS_SUCCESS)
+            throw std::runtime_error("Cannot set CUDA stream for cuBLAS.");
     }
 
     inline ~CUDA() {
         cudnnDestroy(cudnnHandle);
+        cublasDestroy(cublasHandle);
     }
 
     /**
@@ -108,6 +116,14 @@ class CUDA {
                                                                 float& executionTime,
                                                                 size_t& scratchpadSize) {
         return conv2dAlgorithms.selectBackwardDataAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize);
+    }
+
+    /**
+     * @brief Retrieves cuBLAS handle associated with the device.
+     * @return const cublasHandle_t&
+     */
+    inline const cublasHandle_t& getCublasHandle() const {
+        return cublasHandle;
     }
 };
 }  // namespace device

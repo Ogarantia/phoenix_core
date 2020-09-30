@@ -10,3 +10,4 @@
 
 #include "utils.hpp"
 #include "conv2d.hpp"
+#include "dense.hpp"

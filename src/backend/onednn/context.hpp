@@ -5,6 +5,7 @@
 #include "dnnl.hpp"
 
 namespace upstride {
+
 namespace onednn {
 
 /**
@@ -29,6 +30,10 @@ static inline dnnl::memory::format_tag dataFormatToFormatTag(DataFormat df) {
             return dnnl::memory::format_tag::nchw;
         case DataFormat::NHWC:
             return dnnl::memory::format_tag::nhwc;
+        case DataFormat::NC:
+            return dnnl::memory::format_tag::nc;
+        case DataFormat::CN:
+            return dnnl::memory::format_tag::cn;
         default:
             throw std::invalid_argument("Unimplemented valid DataFormat.");
     }

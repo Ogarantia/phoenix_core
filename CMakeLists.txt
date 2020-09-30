@@ -85,7 +85,18 @@ if (WITH_CUDNN)
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels.cu
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels_quat.cu
   )
-  link_libraries(cudnn)
+
+  # FIXME: use find_package(CUDAToolkit) introduced in CMake 3.17, when the latter becomes available in standard repositories.
+  # Searching in a fixed location for now.
+  # https://forums.developer.nvidia.com/t/cublas-for-10-1-is-missing/71015
+  set(CUDA_PATH "/usr/local/cuda-10.2")
+  if (EXISTS ${CUDA_PATH})
+    include_directories("${CUDA_PATH}/include")
+    link_directories("${CUDA_PATH}/lib64")
+  else()
+    message(FATAL_ERROR "Cannot find CUDA installation in ${CUDA_PATH}")
+  endif()
+  link_libraries(cudnn cublas)
 endif()
 
 #######################

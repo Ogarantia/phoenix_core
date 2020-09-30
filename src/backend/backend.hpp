@@ -113,4 +113,20 @@ class ScalarConv2DFunctor;
 template <typename Device, typename T>
 class ScalarConv2DGradFunctor;
 
+/**
+ * @brief Scalar dense operation
+ * @tparam Device       A device the specific implementation is designed for
+ * @tparam T            A scalar datatype
+ */
+template <typename Device, typename T>
+class ScalarDenseFunctor;
+
+/**
+ * @brief Scalar dense operation gradient
+ * @tparam Device       A device the specific implementation is designed for
+ * @tparam T            A scalar datatype
+ */
+template <typename Device, typename T>
+class ScalarDenseGradFunctor;
+
 }  // namespace upstride

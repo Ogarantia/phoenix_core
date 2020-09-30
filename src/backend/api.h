@@ -10,10 +10,12 @@
 // oneDNN CPU backend implementation
 #include "onednn/tensor.hpp"
 #include "onednn/conv2d.hpp"
+#include "onednn/dense.hpp"
 
 // cuDNN GPU backend implementation
 #ifdef BACKEND_CUDNN
 #include "cudnn/half.hpp"
 #include "cudnn/tensor.hpp"
 #include "cudnn/conv2d.hpp"
+#include "cudnn/dense.hpp"
 #endif

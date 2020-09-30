@@ -10,7 +10,7 @@ namespace upstride {
  */
 static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT = dnnl::memory::format_tag::oihw;
 static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT_DW = dnnl::memory::format_tag::goihw;
-static const dnnl::memory::format_tag BIAS_MEMORY_LAYOUT = dnnl::memory::format_tag::x;
+static const dnnl::memory::format_tag BIAS_CONV2D_MEMORY_LAYOUT = dnnl::memory::format_tag::x;
 
 /**
  * @brief 2D convolution implementation using oneDNN
@@ -94,7 +94,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
 
         // bias vector must be of the output channel size, otherwise that mean that we don't use a bias
         if (useBias)
-            biasMemDesc = dnnl::memory::desc(dnnl::memory::dims{biasShape.numel()}, onednn::getDataType<T>(), BIAS_MEMORY_LAYOUT);
+            biasMemDesc = dnnl::memory::desc(dnnl::memory::dims{biasShape.numel()}, onednn::getDataType<T>(), BIAS_CONV2D_MEMORY_LAYOUT);
 
         outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
 
