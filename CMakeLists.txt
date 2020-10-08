@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.18)
 
 project(UpStride)
 
@@ -14,7 +14,8 @@ message("     oneDNN: ${WITH_ONEDNN}")
 message("     cuDNN: ${WITH_CUDNN}")
 if (WITH_CUDNN)
   message("       fp16 support: ${WITH_FP16}")
-  find_package(CUDA)
+  enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
 endif()
 
 # list source code files
@@ -70,15 +71,20 @@ endif()
 #######################
 
 if (WITH_CUDNN)
+  # set flags
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS}")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBACKEND_CUDNN")
 
-  set(CMAKE_CXX_FLAGS "-DNDEBUG -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS} ${CMAKE_CXX_FLAGS}")
+  # define target GPU architectures the binaries are compiled for
+  set(CMAKE_CUDA_ARCHITECTURES 53 60 70 75)
   if (WITH_FP16)
-    set(ARCHITECTURES "53;60;70;75")  # CUDA compute capabilities PTX code is generated for
-    foreach (CC ${ARCHITECTURES})
-      set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -gencode arch=compute_${CC},code=sm_${CC}")
-    endforeach()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_ENABLE_FP16")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DUPSTRIDE_ENABLE_FP16")
+  else()
+    set(CMAKE_CUDA_ARCHITECTURES "37 ${CMAKE_CUDA_ARCHITECTURES}")
   endif()
+
+  # list sources
   set(SOURCES ${SOURCES}
       ${CPP_SOURCES_FOLDER}/backend/cudnn/conv2d_algo_select.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/cudnn.cc
@@ -86,16 +92,9 @@ if (WITH_CUDNN)
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels_quat.cu
   )
 
-  # FIXME: use find_package(CUDAToolkit) introduced in CMake 3.17, when the latter becomes available in standard repositories.
-  # Searching in a fixed location for now.
-  # https://forums.developer.nvidia.com/t/cublas-for-10-1-is-missing/71015
-  set(CUDA_PATH "/usr/local/cuda-10.2")
-  if (EXISTS ${CUDA_PATH})
-    include_directories("${CUDA_PATH}/include")
-    link_directories("${CUDA_PATH}/lib64")
-  else()
-    message(FATAL_ERROR "Cannot find CUDA installation in ${CUDA_PATH}")
-  endif()
+  # specify include path and link
+  include_directories(${CUDAToolkit_INCLUDE_DIRS})
+  link_directories(${CUDAToolkit_LIBRARY_DIR})
   link_libraries(cudnn cublas)
 endif()
 
@@ -108,9 +107,6 @@ if (BUILD_TESTS)
   include_directories(tests/cpp_tests/doctest)
   link_directories(${CMAKE_CURRENT_LIST_DIR}/src/cc)
 
-  add_executable(tests
-      ${SOURCES}
-      ${CMAKE_CURRENT_LIST_DIR}/tests/tests.cpp)
-  
+  add_executable(tests ${SOURCES} ${CMAKE_CURRENT_LIST_DIR}/tests/tests.cpp)
   add_test(tests tests)
 endif()

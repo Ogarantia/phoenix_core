@@ -56,7 +56,7 @@ class Context : public upstride::Context {
     std::map<cudaStream_t, device::CUDA> devices;  //!< the devices; they are indexed by CUDA streams
 
    public:
-    static const int MAX_BLOCK_DEPTH = 64;      //!< maximum number of CUDA threads per block along Z dimension
+    static const int MAX_BLOCK_DEPTH;      //!< maximum number of CUDA threads per block along Z dimension
 
     Context() {}
     ~Context() {}

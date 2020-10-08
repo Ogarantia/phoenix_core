@@ -13,8 +13,11 @@ pipelines:
           caches:
             - build-folder    # cache build folder with the compiled binaries
           script:
-            - apt update && apt install -y git cmake
-            - dpkg -i toolchain/gcc-8.4_8.4-1_amd64.deb
+            - apt update && apt install -y wget git apt-transport-https ca-certificates gnupg software-properties-common
+            - wget --tries=10 --retry-connrefused -q -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+            - apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main'
+            - apt update && apt install -y cmake=3.18.3-0kitware1 cmake-data=3.18.3-0kitware1
+            - dpkg -i toolchain/gcc-8.4_8.4-1_x86_64.deb
             - git submodule update --init --recursive
             - find thirdparty -type f -exec touch -t 202009040000 {} +
             - mkdir -p build && cd build
