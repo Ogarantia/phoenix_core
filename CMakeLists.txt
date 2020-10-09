@@ -6,7 +6,7 @@ option(BUILD_TESTS    "Build tests" ON)
 option(WITH_ONEDNN    "Enable oneDNN backend (CPU)" ON)
 option(WITH_CUDNN     "Enable cuDNN backend (GPU)" OFF)
 option(WITH_FP16      "Enable fp16 support on GPU" ON)
-option(ALLOW_VERBOSE  "Allows verbose messaging" ON)
+option(UPSTRIDE_DEBUG "Enable development features" ON)
 
 message("-- BUILD_TESTS: ${BUILD_TESTS}")
 message("-- Used backends:")
@@ -35,12 +35,12 @@ else ()
   set(VECTORIZATION_FLAGS "-ftree-vectorize -march=native")
 endif()
 
-if (ALLOW_VERBOSE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_ALLOW_VERBOSE")
+if (UPSTRIDE_DEBUG)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -DUPSTRIDE_DEBUG")
   string(ASCII 27 Esc)
   set(ColorCyan  "${Esc}[36m")
   set(ColorReset "${Esc}[m")
-  message("-- ${ColorCyan}VERBOSE MESSAGES ENABLED. This is not a production build.${ColorReset}")
+  message("-- ${ColorCyan}This is NOT a production build.${ColorReset}")
 endif()
 
 #######################
@@ -50,9 +50,9 @@ endif()
 if (WITH_ONEDNN)
   # add dependency to oneDNN
   set(ONEDNN_SUBMODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/thirdparty/onednn")
-  option(DNNL_BUILD_TESTS "Build DNLL tests" OFF)
-  option(DNNL_BUILD_EXAMPLES "Build DNLL examples" OFF)
-  set(DNNL_ARCH_OPT_FLAGS "${OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS}" CACHE INTERNAL "" )
+  option(DNNL_BUILD_TESTS "Build DNNL tests" OFF)
+  option(DNNL_BUILD_EXAMPLES "Build DNNL examples" OFF)
+  set(DNNL_ARCH_OPT_FLAGS "${OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS}" CACHE INTERNAL "")
   message("**************** Compiling oneDNN: ****************")
   add_subdirectory(${ONEDNN_SUBMODULE_PATH})
   message("**************** ***************** ****************")
@@ -72,8 +72,12 @@ endif()
 
 if (WITH_CUDNN)
   # set flags
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS}")
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBACKEND_CUDNN")
+  if (UPSTRIDE_DEBUG)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DUPSTRIDE_DEBUG")
+  endif()
 
   # define target GPU architectures the binaries are compiled for
   set(CMAKE_CUDA_ARCHITECTURES 53 60 70 75)
@@ -110,3 +114,15 @@ if (BUILD_TESTS)
   add_executable(tests ${SOURCES} ${CMAKE_CURRENT_LIST_DIR}/tests/tests.cpp)
   add_test(tests tests)
 endif()
+
+#######################
+#     Misc stuff      #
+#######################
+
+# define a custom target executing a shell script generating a header file that hides function names
+set(HIDENAMES_HEADER ${CMAKE_CURRENT_LIST_DIR}/src/backend/cudnn/hidenames.h)
+add_custom_target(hidenames ALL
+  COMMAND ${CMAKE_CURRENT_LIST_DIR}/scripts/hidenames.sh > ${HIDENAMES_HEADER}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+  BYPRODUCTS ${HIDENAMES_HEADER}
+  COMMENT "Generating hidenames.h")

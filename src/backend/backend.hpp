@@ -22,10 +22,10 @@
  * @brief Defining UPSTRIDE_SAYS macro used for debugging.
  * To enable the verbose mode of the engine, assign to UPSTRIDE_VERBOSE environment variable a non-empty value, e.g.
  *   UPSTRIDE_VERBOSE=1 python test.py
- * This only works when UPSTRIDE_ALLOW_VERBOSE macro is defined in compilation to avoid the debugging format string
- * appear in the compiled binary.
+ * This only works when UPSTRIDE_DEBUG macro is defined in compilation to avoid the debugging format string appear
+ * in the compiled binary.
  */
-#ifdef UPSTRIDE_ALLOW_VERBOSE
+#ifdef UPSTRIDE_DEBUG
 #define UPSTRIDE_SAYS(CTX, FMT, ...) (CTX).verbosePrintf("\033[1;33m" FMT "\033[0m\n", ##__VA_ARGS__)
 #else
 #define UPSTRIDE_SAYS(...)

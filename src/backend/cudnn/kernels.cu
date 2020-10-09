@@ -4,20 +4,21 @@
 
 #include "context.hpp"
 #include "kernels.hpp"
+#include "hidenames.h"
 
 using namespace upstride;
 
 static const int NUM_THREADS = 1024;  //!< default number of CUDA threads per block
 
 template <typename T>
-__global__ void accumulateAdd(T* acc, const T* term, int length) {
+__global__ void HIDENAME(accumulateAdd)(T* acc, const T* term, int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < length)
         acc[i] += term[i];
 }
 
 template <typename T>
-__global__ void accumulateSub(T* acc, const T* term, int length) {
+__global__ void HIDENAME(accumulateSub)(T* acc, const T* term, int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < length)
         acc[i] -= term[i];
@@ -37,7 +38,7 @@ __global__ void accumulateSub(T* acc, const T* term, int length) {
  * @param depth         the depth of both input and output tensors (N times C times the element size)
  */
 template <typename T>
-__global__ void cropNCHW(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
+__global__ void HIDENAME(cropNCHW)(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     int z = blockIdx.z * blockDim.z + threadIdx.z;
@@ -59,7 +60,7 @@ __global__ void cropNCHW(const T* in, T* out, int dx, int dy, int inWidth, int i
  * @param depth         the depth of both input and output tensors (N times C times the element size)
  */
 template <typename T>
-__global__ void insertNCHW(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
+__global__ void HIDENAME(insertNCHW)(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     int z = blockIdx.z * blockDim.z + threadIdx.z;
@@ -68,7 +69,7 @@ __global__ void insertNCHW(const T* in, T* out, int dx, int dy, int inWidth, int
 }
 
 template <typename T>
-__global__ void addBiasNCHW(T* tensor, const T* bias, int width, int height, int depth, int batchSize) {
+__global__ void HIDENAME(addBiasNCHW)(T* tensor, const T* bias, int width, int height, int depth, int batchSize) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     int z = blockIdx.z * blockDim.z + threadIdx.z;
@@ -78,7 +79,7 @@ __global__ void addBiasNCHW(T* tensor, const T* bias, int width, int height, int
 }
 
 template <typename T>
-__global__ void addBiasNC(T* tensor, const T* bias, int length, int batchSize) {
+__global__ void HIDENAME(addBiasNC)(T* tensor, const T* bias, int length, int batchSize) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x < length)
         for (int n = 0; n < batchSize; ++n)
@@ -128,7 +129,7 @@ void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output,
     makeGridConfig(inShape, dataFormat, threads, blocks);
 
     // launching the kernel
-    cropNCHW<<<blocks, threads, 0, input.getDevice().stream()>>>(
+    HIDENAME(cropNCHW)<<<blocks, threads, 0, input.getDevice().stream()>>>(
         input.getDataPtr(),
         output.getDataPtr(),
         offset.x, offset.y,
@@ -154,13 +155,13 @@ void addBias(Tensor<device::CUDA, T>& tensor, const Tensor<device::CUDA, const T
     if (dataFormat == DataFormat::NCHW) {
         dim3 threads, blocks;
         makeGridConfig(shape, dataFormat, threads, blocks);
-        addBiasNCHW<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
+        HIDENAME(addBiasNCHW)<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
             tensor.getDataPtr(), bias.getDataPtr(),
             shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]);
     }
     else if (dataFormat == DataFormat::NC) {
         const int length = shape.depth(dataFormat);
-        addBiasNC<<<ceili(shape[1], NUM_THREADS), NUM_THREADS, 0, tensor.getDevice().stream()>>>(
+        HIDENAME(addBiasNC)<<<ceili(shape[1], NUM_THREADS), NUM_THREADS, 0, tensor.getDevice().stream()>>>(
             tensor.getDataPtr(), bias.getDataPtr(), shape[1], shape[0]);
     }
     else
@@ -190,7 +191,7 @@ void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>&
     makeGridConfig(outShape, dataFormat, threads, blocks);
 
     // launching the kernel
-    insertNCHW<<<blocks, threads, 0, input.getDevice().stream()>>>(
+    HIDENAME(insertNCHW)<<<blocks, threads, 0, input.getDevice().stream()>>>(
         input.getDataPtr(),
         output.getDataPtr(),
         offset.x, offset.y,
@@ -221,12 +222,12 @@ void addBias(Tensor<device::CUDA, float>& tensor, const Tensor<device::CUDA, con
 
 template <>
 void accumulateAdd(const device::CUDA& device, float* accumulator, const float* term, int length) {
-    ::accumulateAdd<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
+    ::HIDENAME(accumulateAdd)<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
 }
 
 template <>
 void accumulateSub(const device::CUDA& device, float* accumulator, const float* term, int length) {
-    ::accumulateSub<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
+    ::HIDENAME(accumulateSub)<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
 }
 
 #ifdef UPSTRIDE_ENABLE_FP16
@@ -247,13 +248,13 @@ void addBias(Tensor<device::CUDA, half>& tensor, const Tensor<device::CUDA, cons
 
 template <>
 void accumulateAdd(const device::CUDA& device, half* accumulator, const half* term, int length) {
-    ::accumulateAdd<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
+    ::HIDENAME(accumulateAdd)<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
     cudnn::Context::raiseIfError();
 }
 
 template <>
 void accumulateSub(const device::CUDA& device, half* accumulator, const half* term, int length) {
-    ::accumulateSub<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
+    ::HIDENAME(accumulateSub)<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, device.stream()>>>(accumulator, term, length);
     cudnn::Context::raiseIfError();
 }
 #endif

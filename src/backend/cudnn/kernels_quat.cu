@@ -2,6 +2,7 @@
 
 #include "kernels.hpp"
 #include "tensor.hpp"
+#include "hidenames.h"
 
 static const int NUM_THREADS = 1024;  //!< default number of threads
 
@@ -13,7 +14,7 @@ static const int NUM_THREADS = 1024;  //!< default number of threads
 namespace kernels {
 
 template <typename T>
-__global__ void decomposeLeftInput(const T* input0, const T* input1, const T* input2, const T* input3,
+__global__ void HIDENAME(decomposeLeftInput)(const T* input0, const T* input1, const T* input2, const T* input3,
                                    T* output0, T* output1, T* output2, T* output3, T* output4, T* output5, T* output6, T* output7,
                                    int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -30,7 +31,7 @@ __global__ void decomposeLeftInput(const T* input0, const T* input1, const T* in
 }
 
 template <typename T>
-__global__ void decomposeRightInput(const T* input0, const T* input1, const T* input2, const T* input3,
+__global__ void HIDENAME(decomposeRightInput)(const T* input0, const T* input1, const T* input2, const T* input3,
                                     T* output0, T* output1, T* output2, T* output3, T* output4, T* output5, T* output6, T* output7,
                                     int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -47,7 +48,7 @@ __global__ void decomposeRightInput(const T* input0, const T* input1, const T* i
 }
 
 template <typename T>
-__global__ void decomposeOutputGrad(const T* input0, const T* input1, const T* input2, const T* input3,
+__global__ void HIDENAME(decomposeOutputGrad)(const T* input0, const T* input1, const T* input2, const T* input3,
                                     T* output0, T* output1, T* output2, T* output3, T* output4, T* output5, T* output6, T* output7,
                                     int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -68,7 +69,7 @@ __global__ void decomposeOutputGrad(const T* input0, const T* input1, const T* i
 }
 
 template <typename T>
-__global__ void recomposeOutput(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
+__global__ void HIDENAME(recomposeOutput)(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
                                 T* output0, T* output1, T* output2, T* output3,
                                 int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -83,7 +84,7 @@ __global__ void recomposeOutput(const T* input0, const T* input1, const T* input
 }
 
 template <typename T>
-__global__ void recomposeLeftInputGrad(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
+__global__ void HIDENAME(recomposeLeftInputGrad)(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
                                        T* output0, T* output1, T* output2, T* output3,
                                        int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -96,7 +97,7 @@ __global__ void recomposeLeftInputGrad(const T* input0, const T* input1, const T
 }
 
 template <typename T>
-__global__ void recomposeRightInputGrad(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
+__global__ void HIDENAME(recomposeRightInputGrad)(const T* input0, const T* input1, const T* input2, const T* input3, const T* input4, const T* input5, const T* input6, const T* input7,
                                         T* output0, T* output1, T* output2, T* output3,
                                         int length) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -116,13 +117,13 @@ template <typename T>
 void decomposeQuaternionInputs(const TensorSplit<device::CUDA, const T, 4>& inLeft, AllocatedTensor<device::CUDA, T>* outLeft[8],
                                const TensorSplit<device::CUDA, const T, 4>& inRight, AllocatedTensor<device::CUDA, T>* outRight[8]) {
     const int leftLen = inLeft.shape().numel();
-    ::kernels::decomposeLeftInput<<<ceili(leftLen, NUM_THREADS), NUM_THREADS, 0, inLeft[0].getDevice().stream()>>>(
+    ::kernels::HIDENAME(decomposeLeftInput)<<<ceili(leftLen, NUM_THREADS), NUM_THREADS, 0, inLeft[0].getDevice().stream()>>>(
         inLeft[0].getDataPtr(), inLeft[1].getDataPtr(), inLeft[2].getDataPtr(), inLeft[3].getDataPtr(),
         outLeft[0]->getDataPtr(), outLeft[1]->getDataPtr(), outLeft[2]->getDataPtr(), outLeft[3]->getDataPtr(),
         outLeft[4]->getDataPtr(), outLeft[5]->getDataPtr(), outLeft[6]->getDataPtr(), outLeft[7]->getDataPtr(),
         leftLen);
     const int rightLen = inRight.shape().numel();
-    ::kernels::decomposeRightInput<<<ceili(rightLen, NUM_THREADS), NUM_THREADS, 0, inRight[0].getDevice().stream()>>>(
+    ::kernels::HIDENAME(decomposeRightInput)<<<ceili(rightLen, NUM_THREADS), NUM_THREADS, 0, inRight[0].getDevice().stream()>>>(
         inRight[0].getDataPtr(), inRight[1].getDataPtr(), inRight[2].getDataPtr(), inRight[3].getDataPtr(),
         outRight[0]->getDataPtr(), outRight[1]->getDataPtr(), outRight[2]->getDataPtr(), outRight[3]->getDataPtr(),
         outRight[4]->getDataPtr(), outRight[5]->getDataPtr(), outRight[6]->getDataPtr(), outRight[7]->getDataPtr(),
@@ -132,7 +133,7 @@ void decomposeQuaternionInputs(const TensorSplit<device::CUDA, const T, 4>& inLe
 template <typename T>
 void decomposeQuaternionOutputGrad(const TensorSplit<device::CUDA, const T, 4>& inGrad, AllocatedTensor<device::CUDA, T>* outGrad[8]) {
     const int length = inGrad.shape().numel();
-    ::kernels::decomposeOutputGrad<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, inGrad[0].getDevice().stream()>>>(
+    ::kernels::HIDENAME(decomposeOutputGrad)<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, inGrad[0].getDevice().stream()>>>(
         inGrad[0].getDataPtr(), inGrad[1].getDataPtr(), inGrad[2].getDataPtr(), inGrad[3].getDataPtr(),
         outGrad[0]->getDataPtr(), outGrad[1]->getDataPtr(), outGrad[2]->getDataPtr(), outGrad[3]->getDataPtr(),
         outGrad[4]->getDataPtr(), outGrad[5]->getDataPtr(), outGrad[6]->getDataPtr(), outGrad[7]->getDataPtr(),
@@ -142,7 +143,7 @@ void decomposeQuaternionOutputGrad(const TensorSplit<device::CUDA, const T, 4>& 
 template <typename T>
 void recomposeQuaternionOutput(AllocatedTensor<device::CUDA, T>* inLanes[8], TensorSplit<device::CUDA, T, 4>& outQuats) {
     const int length = outQuats.shape().numel();
-    ::kernels::recomposeOutput<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, outQuats[0].getDevice().stream()>>>(
+    ::kernels::HIDENAME(recomposeOutput)<<<ceili(length, NUM_THREADS), NUM_THREADS, 0, outQuats[0].getDevice().stream()>>>(
         inLanes[0]->getDataPtr(), inLanes[1]->getDataPtr(), inLanes[2]->getDataPtr(), inLanes[3]->getDataPtr(),
         inLanes[4]->getDataPtr(), inLanes[5]->getDataPtr(), inLanes[6]->getDataPtr(), inLanes[7]->getDataPtr(),
         outQuats[0].getDataPtr(), outQuats[1].getDataPtr(), outQuats[2].getDataPtr(), outQuats[3].getDataPtr(),
@@ -153,13 +154,13 @@ template <typename T>
 void recomposeQuaternionInputsGrad(AllocatedTensor<device::CUDA, T>* inLeftGradLanes[8], TensorSplit<device::CUDA, T, 4>& outLeftGradQuats,
                                    AllocatedTensor<device::CUDA, T>* inRightGradLanes[8], TensorSplit<device::CUDA, T, 4>& outRightGradQuats) {
     const int leftLen = outLeftGradQuats.shape().numel();
-    ::kernels::recomposeLeftInputGrad<<<ceili(leftLen, NUM_THREADS), NUM_THREADS, 0, outLeftGradQuats[0].getDevice().stream()>>>(
+    ::kernels::HIDENAME(recomposeLeftInputGrad)<<<ceili(leftLen, NUM_THREADS), NUM_THREADS, 0, outLeftGradQuats[0].getDevice().stream()>>>(
         inLeftGradLanes[0]->getDataPtr(), inLeftGradLanes[1]->getDataPtr(), inLeftGradLanes[2]->getDataPtr(), inLeftGradLanes[3]->getDataPtr(),
         inLeftGradLanes[4]->getDataPtr(), inLeftGradLanes[5]->getDataPtr(), inLeftGradLanes[6]->getDataPtr(), inLeftGradLanes[7]->getDataPtr(),
         outLeftGradQuats[0].getDataPtr(), outLeftGradQuats[1].getDataPtr(), outLeftGradQuats[2].getDataPtr(), outLeftGradQuats[3].getDataPtr(),
         leftLen);
     const int rightLen = outRightGradQuats.shape().numel();
-    ::kernels::recomposeRightInputGrad<<<ceili(rightLen, NUM_THREADS), NUM_THREADS, 0, outRightGradQuats[0].getDevice().stream()>>>(
+    ::kernels::HIDENAME(recomposeRightInputGrad)<<<ceili(rightLen, NUM_THREADS), NUM_THREADS, 0, outRightGradQuats[0].getDevice().stream()>>>(
         inRightGradLanes[0]->getDataPtr(), inRightGradLanes[1]->getDataPtr(), inRightGradLanes[2]->getDataPtr(), inRightGradLanes[3]->getDataPtr(),
         inRightGradLanes[4]->getDataPtr(), inRightGradLanes[5]->getDataPtr(), inRightGradLanes[6]->getDataPtr(), inRightGradLanes[7]->getDataPtr(),
         outRightGradQuats[0].getDataPtr(), outRightGradQuats[1].getDataPtr(), outRightGradQuats[2].getDataPtr(), outRightGradQuats[3].getDataPtr(),

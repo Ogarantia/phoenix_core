@@ -54,7 +54,7 @@ Context::Context():
 
 
 void Context::verbosePrintf(const char* format, ...) const {
-#ifdef UPSTRIDE_ALLOW_VERBOSE
+#ifdef UPSTRIDE_DEBUG
     if (envVerbose) {
         va_list args;
         va_start(args, format);

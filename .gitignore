@@ -1,3 +1,4 @@
 build
 *.so
 .vscode/
+src/backend/cudnn/hidenames.h
