@@ -53,6 +53,10 @@ namespace upstride {
                         const Tensor<Device, const T> &kernelTensor,
                         const Tensor<Device, const T> *biasTensor,
                         Tensor<Device, T> &outputTensor) {
+            // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
+            if (inputTensor.getShape().empty()) {
+                return;
+            }
             // ensure the object exists within the current thread
             denseOp(context, dataFormat, biasTensor != nullptr);
             denseOp->configure(
@@ -177,6 +181,10 @@ namespace upstride {
                         const Tensor<Device, const T>& gradTensor,
                         Tensor<Device, T>& kernelGradTensor,
                         Tensor<Device, T>& inputGradTensor) {
+            // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
+            if (inputTensor.getShape().empty()) {
+                return;
+            }
             // ensure the object exists within the current thread
             denseOp(context, dataFormat, requireInputGrad);
             denseOp->configure(

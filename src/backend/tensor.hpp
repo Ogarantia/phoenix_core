@@ -121,6 +121,16 @@ class Shape {
     const int* getShapePtr() const { return shape; }
 
     /**
+     * @brief return true if any value of the size or size is equal to 0 
+     */
+    inline bool empty() const { 
+        for (int i=0; i<size; i++){
+            if (shape[i] == 0) return true;
+        }
+        return (size == 0);
+    }
+    
+    /**
      * @brief Accesses shape dimension size by dimension index
      * @param i     A dimension index
      * @return the size of a corresponding dimension

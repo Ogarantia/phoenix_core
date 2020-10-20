@@ -109,6 +109,10 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
+        // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
+        if (inputTensor.getShape().empty()) {
+            return;
+        }
         // ensure the object exists within the current thread
         convOp(context, dataFormat, stride, dilation, biasTensor != nullptr);
 
@@ -251,6 +255,10 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
+        // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
+        if (inputTensor.getShape().empty()) {
+            return;
+        }
         // ensure the object exists within the current thread
         convOp(context, dataFormat, stride, dilation, requireInputGrad);
 
