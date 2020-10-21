@@ -7,11 +7,17 @@ option(WITH_ONEDNN    "Enable oneDNN backend (CPU)" ON)
 option(WITH_CUDNN     "Enable cuDNN backend (GPU)" OFF)
 option(WITH_FP16      "Enable fp16 support on GPU" ON)
 option(UPSTRIDE_DEBUG "Enable development features" ON)
+option(ARCH           "Enable optimization for specific arch (x86_64 / aarch64 / <spe_march>" OFF)
 
 message("-- BUILD_TESTS: ${BUILD_TESTS}")
+if (NOT ARCH)
+  set(ARCH ${CMAKE_SYSTEM_PROCESSOR})
+endif()
+message("-- Arch: ${ARCH}")
 message("-- Used backends:")
 message("     oneDNN: ${WITH_ONEDNN}")
 message("     cuDNN: ${WITH_CUDNN}")
+
 if (WITH_CUDNN)
   message("       fp16 support: ${WITH_FP16}")
   enable_language(CUDA)
@@ -29,10 +35,20 @@ set(SOURCES ${SOURCES}
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops")
-  set(VECTORIZATION_FLAGS "-ftree-vectorize -march=native")
+  set(VECTORIZATION_FLAGS "-ftree-vectorize")
 else ()
   set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize ")
-  set(VECTORIZATION_FLAGS "-ftree-vectorize -march=native")
+  set(VECTORIZATION_FLAGS "-ftree-vectorize")
+endif()
+
+if (ARCH STREQUAL "x86_64")
+  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=skylake -mfma -mavx2")
+# see https://gcc.gnu.org/onlinedocs/gcc-8.1.0/gcc/AArch64-Options.html for more specific option
+elseif (ARCH STREQUAL "aarch64")
+  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=armv8-a+crypto+simd -mcpu=cortex-a57+crypto+simd")
+# The user can provide a specific arch for what he want to cross compile; it can also be "native"
+else()
+  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=${ARCH}")
 endif()
 
 if (UPSTRIDE_DEBUG)
