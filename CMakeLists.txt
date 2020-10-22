@@ -7,12 +7,9 @@ option(WITH_ONEDNN    "Enable oneDNN backend (CPU)" ON)
 option(WITH_CUDNN     "Enable cuDNN backend (GPU)" OFF)
 option(WITH_FP16      "Enable fp16 support on GPU" ON)
 option(UPSTRIDE_DEBUG "Enable development features" ON)
-option(ARCH           "Enable optimization for specific arch (x86_64 / aarch64 / <spe_march>" OFF)
+set(ARCH "native" CACHE STRING "Enable optimization for specific arch (x86_64 / aarch64 / <spe_march>)")
 
 message("-- BUILD_TESTS: ${BUILD_TESTS}")
-if (NOT ARCH)
-  set(ARCH ${CMAKE_SYSTEM_PROCESSOR})
-endif()
 message("-- Arch: ${ARCH}")
 message("-- Used backends:")
 message("     oneDNN: ${WITH_ONEDNN}")
@@ -33,14 +30,16 @@ set(SOURCES ${SOURCES}
     ${CPP_SOURCES_FOLDER}/utils.cc
 )
 
+# Compilation flags according to the compiler
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops")
-  set(VECTORIZATION_FLAGS "-ftree-vectorize")
+  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -O3 -ffast-math -funroll-loops")
+  set(VECTORIZATION_FLAGS "${VECTORIZATION_FLAGS} -ftree-vectorize")
 else ()
-  set(OPTIMIZATION_FLAGS "-O3 -ffast-math -funroll-loops -floop-nest-optimize ")
-  set(VECTORIZATION_FLAGS "-ftree-vectorize")
+  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -O3 -ffast-math -funroll-loops -floop-nest-optimize ")
+  set(VECTORIZATION_FLAGS "${VECTORIZATION_FLAGS} -ftree-vectorize")
 endif()
 
+# Compilation flags according to the target architecture
 if (ARCH STREQUAL "x86_64")
   set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=skylake -mfma -mavx2")
 # see https://gcc.gnu.org/onlinedocs/gcc-8.1.0/gcc/AArch64-Options.html for more specific option
@@ -51,7 +50,11 @@ else()
   set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=${ARCH}")
 endif()
 
+# Adpat flags for development and debuging
 if (UPSTRIDE_DEBUG)
+  # Disable all optimization flags when debug, make things easier when using gdb
+  set(OPTIMIZATION_FLAGS "-Og")
+  set(VECTORIZATION_FLAGS "")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -DUPSTRIDE_DEBUG")
   string(ASCII 27 Esc)
   set(ColorCyan  "${Esc}[36m")
