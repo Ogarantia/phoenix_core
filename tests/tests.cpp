@@ -221,8 +221,7 @@ TEST_CASE("Test:Conv2d") {
         const upstride::IntPair padBefore(0);
         const upstride::IntPair padAfter(0);
         
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor(context);
-        myConv2DFunctor.configure(algebra, upstride::DataFormat::NCHW, st, dil);
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor(context, algebra, upstride::DataFormat::NCHW, st, dil, false);
         myConv2DFunctor(device, inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
 
         bool test = true;

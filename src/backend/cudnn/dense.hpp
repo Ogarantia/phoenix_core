@@ -82,11 +82,12 @@ namespace upstride {
 
         /**
          * @brief Performs backend-related operation configuration
+         * @param device            A device instance
          * @param inputShape        Input tensor shape
          * @param filterShape       Filter tensor shape
          * @param outputTensor      Output tensor shape
          */
-        void configure(const Shape &inputShape, const Shape &filterShape, const Shape &biasShape, const Shape &outputShape) { }
+        void configure(device::CUDA& device, const Shape &inputShape, const Shape &filterShape, const Shape &biasShape, const Shape &outputShape) { }
 
         /**
          * @brief Executes the convolution operation
@@ -146,13 +147,15 @@ namespace upstride {
 
         /**
          * @brief Performs backend-related operation configuration
+         * @param device            A device the operation will be executed on
          * @param inputShape        Input tensor shape
          * @param kernelShape       kernel tensor shape
          * @param gradShape         grad tensor shape
          */
-        void configure(const Shape& inputShape,
-                    const Shape& kernelShape,
-                    const Shape& gradShape) { }
+        void configure(device::CUDA& device,
+                       const Shape& inputShape,
+                       const Shape& kernelShape,
+                       const Shape& gradShape) { }
 
         /**
         * @brief Executes the operation

@@ -7,11 +7,11 @@
 
 #pragma once
 
+#include <mutex>
 #include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
 #include "deferred_allocator.hpp"
-#include "thread_local_ptr.hpp"
 #include "utils.hpp"
 
 namespace upstride {
@@ -22,24 +22,24 @@ namespace upstride {
 
     private:
         Context& context;
-        ThreadLocalPtr<ScalarDenseFunctor<Device, T>> denseOp; //!< scalar dense operator to be used to implement other data types
-        Algebra algebra;
-        DataFormat dataFormat;
+        const Algebra algebra;
+        std::mutex access;
+        ScalarDenseFunctor<Device, T> denseOp;                                      //!< scalar dense operator to be used to implement other data types
         DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], outputLanes[8]; //!< deferred allocators for the factorized quaternion implementation
         DeferredAllocator<Device, T> buffer;                                        //!< deferred allocator for an intermediate buffer for the default implementation
 
     public:
-        UpstrideDenseFunctor(Context& context): context(context) { }
-
         /**
-         * @brief Sets main dense parameters indepentent from the input, filter and output sizes
+         * @brief Instantiate Dense layer operation
+         * @param               A context instance
          * @param algebra       Algebra used to compute the dense. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
          * @param dataFormat    Expected tensors format
          */
-        void configure(Algebra algebra, DataFormat dataFormat) {
-            this->algebra = algebra;
-            this->dataFormat = dataFormat;
-        }
+        UpstrideDenseFunctor(Context& context, Algebra algebra, DataFormat dataFormat, bool useBias):
+            context(context),
+            algebra(algebra),
+            denseOp(context, dataFormat, useBias)
+        {}
 
         /**
          * @brief Executes the dense operation
@@ -49,21 +49,23 @@ namespace upstride {
          * @param biasTensor        Pointer to bias tensor; may be null
          * @param outputTensor      Output tensor
          */
-        void operator()(const Tensor<Device, const T> &inputTensor,
+        void operator()(Device& device,
+                        const Tensor<Device, const T> &inputTensor,
                         const Tensor<Device, const T> &kernelTensor,
                         const Tensor<Device, const T> *biasTensor,
                         Tensor<Device, T> &outputTensor) {
             // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
-            if (inputTensor.getShape().empty()) {
+            if (inputTensor.getShape().empty())
                 return;
-            }
-            // ensure the object exists within the current thread
-            denseOp(context, dataFormat, biasTensor != nullptr);
-            denseOp->configure(
-                inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-                kernelTensor.getShape().slice(-2),
-                biasTensor ? biasTensor->getShape().split(MULTIVECTOR_DIM[algebra]) : Shape(),
-                outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
+
+            // lock access to denseOp
+            std::lock_guard<std::mutex> lock(access);
+
+            denseOp.configure(device,
+                              inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+                              kernelTensor.getShape().slice(-2),
+                              biasTensor ? biasTensor->getShape().split(MULTIVECTOR_DIM[algebra]) : Shape(),
+                              outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
             proceedWithAlgebra(algebra, inputTensor, kernelTensor, biasTensor, outputTensor);
         }
@@ -93,11 +95,11 @@ namespace upstride {
                 // decompose - compute - recompose
                 TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
                 for (int i = 0; i < 4; ++i)
-                    (*denseOp)(*inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
+                    denseOp(*inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
                 for (int i = 4; i < 8; ++i)
                     // According to the factorization formulation, last four lanes are plainly added to the quaternion components (see recomposeQuaternionOutput()).
                     // Adding bias there then!
-                    (*denseOp)(*inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
+                    denseOp(*inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
 
                 TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
                 // free bias
@@ -122,10 +124,10 @@ namespace upstride {
                 // compute the Clifford product
                 BinaryOperation<CliffordProductSpec>::product(
                     [this, &input, &kernel, bias, &output](int left, int right, int dim) {
-                        (*denseOp)(input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
+                        denseOp(input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
                     },
                     [this, &input, &kernel, &output, &buffer](int left, int right, int dim, bool positive) {
-                        (*denseOp)(input[left], kernel[right], nullptr, buffer);
+                        denseOp(input[left], kernel[right], nullptr, buffer);
                         if (positive)
                             output[dim] += buffer;
                         else
@@ -145,27 +147,25 @@ namespace upstride {
 
     private:
         Context& context;
-        ThreadLocalPtr<ScalarDenseGradFunctor<Device, T>> denseOp;  //!< scalar convolution operator to be used to implement other data types
-        Algebra algebra;
-        DataFormat dataFormat;
-        bool requireInputGrad;
+        const Algebra algebra;
+        std::mutex access;
+        ScalarDenseGradFunctor<Device, T> denseOp;  //!< scalar convolution operator to be used to implement other data types
         DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
         DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
 
     public:
-        UpstrideDenseGradFunctor(Context& context): context(context) { }
-
         /**
-         * @brief Sets main convolution parameters indepentent from the input, filter and output sizes
+         * @brief Instantiates Dense layer gradient operator
+         * @param context       A context instance
          * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
          * @param dataFormat    Expected tensors format
          * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
          */
-        void configure(Algebra algebra, DataFormat dataFormat, bool requireInputGrad) {
-            this->algebra = algebra;
-            this->dataFormat = dataFormat;
-            this->requireInputGrad = requireInputGrad;
-        }
+        UpstrideDenseGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, bool requireInputGrad):
+            context(context),
+            algebra(algebra),
+            denseOp(context, dataFormat, requireInputGrad)
+        {}
 
         /**
          * @brief Executes the operation
@@ -176,21 +176,23 @@ namespace upstride {
          * @param kernelGradTensor  output: kernel gradient
          * @param inputGradTensor   output: input gradient
          */
-        void operator()(const Tensor<Device, const T>& inputTensor,
+        void operator()(Device& device,
+                        const Tensor<Device, const T>& inputTensor,
                         const Tensor<Device, const T>& kernelTensor,
                         const Tensor<Device, const T>& gradTensor,
                         Tensor<Device, T>& kernelGradTensor,
                         Tensor<Device, T>& inputGradTensor) {
             // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
-            if (inputTensor.getShape().empty()) {
+            if (inputTensor.getShape().empty())
                 return;
-            }
-            // ensure the object exists within the current thread
-            denseOp(context, dataFormat, requireInputGrad);
-            denseOp->configure(
-                inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-                kernelTensor.getShape().slice(-2),
-                gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
+
+            // lock access to denseOp
+            std::lock_guard<std::mutex> lock(access);
+
+            denseOp.configure(device,
+                              inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+                              kernelTensor.getShape().slice(-2),
+                              gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
             proceedWithAlgebra(algebra, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
         }
@@ -224,7 +226,7 @@ namespace upstride {
                 TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes);
 
                 for (int i = 0; i < 8; ++i)
-                    (*denseOp)(*inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
+                    denseOp(*inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
 
                 TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
             }
@@ -245,10 +247,10 @@ namespace upstride {
                 // compute the Clifford product
                 BinaryOperation<CliffordProductSpec>::productBackprop(
                     [this, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
-                        (*denseOp)(input[left], kernel[right], grad[dim], kernelGrad[dim], inputGrad[dim]);
+                        denseOp(input[left], kernel[right], grad[dim], kernelGrad[dim], inputGrad[dim]);
                     },
                     [this, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
-                        (*denseOp)(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
+                        denseOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
                         if (positive) {
                             kernelGrad[dim] += bufferKernel;
                             inputGrad[dim] += bufferInput;
