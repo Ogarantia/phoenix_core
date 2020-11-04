@@ -13,7 +13,7 @@
 
 #include <cstdint>
 #include <vector>
-
+#include <mutex>
 #include "../algebras.hpp"
 #include "tensor.hpp"
 
@@ -75,8 +75,15 @@ class Context {
     const bool envVerbose;
     const bool envOptimizeMemoryUse;
     const ConvFp16ComputePolicy convFp16ComputePolicy;
+    uint32_t kernelCounter; //!< kernel reference counter.
+    std::mutex mutex;
    protected:
     Context();
+
+    /**
+     * @brief Called when the number of kernels references by the current context reach 0.
+     */
+    virtual void cleanUp() = 0;
 
    public:
     /**
@@ -92,6 +99,25 @@ class Context {
 
     inline bool isFp16ConvBackwardAllowed() const {
         return convFp16ComputePolicy == ConvFp16ComputePolicy::FULL_16;
+    }
+
+    /**
+     * @brief Increase the number of kernels associated to the current context.
+     */
+    inline void increaseKernelCounter() {
+        std::lock_guard<std::mutex> lock(mutex);
+        kernelCounter++;
+    }
+
+    /**
+     * @brief Decrease the number of kernels associated to the current context and clean up memory if needed.
+     */
+    inline void decreaseKernelCounter() {
+        std::lock_guard<std::mutex> lock(mutex);
+        kernelCounter--;
+        if (kernelCounter == 0) {
+            cleanUp();
+        }
     }
 
     void verbosePrintf(const char* format, ...) const;

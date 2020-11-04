@@ -54,6 +54,9 @@ static inline dnnl::memory::dims shapeToDims(const Shape& shape) {
 class Context : public upstride::Context {
     dnnl::engine oneEngine;
     dnnl::stream oneStream;
+   private:
+    inline void cleanUp() {}
+
    public:
     Context() : oneEngine(dnnl::engine::kind::cpu, 0), oneStream(oneEngine) {}
 

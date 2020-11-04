@@ -10,6 +10,7 @@
 
 #include <map>
 #include <stdexcept>
+#include <mutex>
 
 #include "../backend.hpp"
 #include "device.hpp"
@@ -54,6 +55,10 @@ inline cudnnDataType_t getDataType<half>() { return CUDNN_DATA_HALF; }
 class Context : public upstride::Context {
    private:
     std::map<cudaStream_t, device::CUDA> devices;  //!< the devices; they are indexed by CUDA streams
+    std::mutex mutex;
+
+   protected:
+    void cleanUp();
 
    public:
     static const int MAX_BLOCK_DEPTH;      //!< maximum number of CUDA threads per block along Z dimension
