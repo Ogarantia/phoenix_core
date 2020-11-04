@@ -7,6 +7,7 @@
 
 #pragma once
 #include <map>
+#include <mutex>
 
 namespace upstride {
 
@@ -20,6 +21,7 @@ namespace upstride {
 template <typename Device, typename T>
 class DeferredAllocator {
    private:
+    std::mutex mutex;
     std::map<const Device*, AllocatedTensor<Device, T>*> map;
 
    public:
@@ -39,6 +41,7 @@ class DeferredAllocator {
      * @return the tensor
      */
     inline AllocatedTensor<Device, T>& get(const Device& device, const Shape& shape, bool& dirty) {
+        std::lock_guard<std::mutex> lock(mutex);
         auto entry = map.find(&device);
         if (entry == map.end()) {
             // no yet tensor on the device, allocate new one
