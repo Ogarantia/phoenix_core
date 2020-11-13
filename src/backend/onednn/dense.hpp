@@ -43,10 +43,9 @@ namespace upstride
             inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), onednn::getDataType<T>(), PLAIN_2D_TENSOR_MEMORY_LAYOUT);
             kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), formatTag);
 
-            // bias vector must be of the output channel size, otherwise that mean that we don't use a bias
-            if (useBias) {
-                biasMemDesc = dnnl::memory::desc(onednn::shapeToDims(biasShape), onednn::getDataType<T>(), BIAS_DENSE_MEMORY_LAYOUT);
-            }
+            // set up bias memory descriptor; oneDNN requires it to be of shape (1, N)
+            if (useBias)
+                biasMemDesc = dnnl::memory::desc({1, biasShape.numel()}, onednn::getDataType<T>(), BIAS_DENSE_MEMORY_LAYOUT);
 
             outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
 
@@ -75,15 +74,15 @@ namespace upstride
         {
             // instantiate DNNL memory
             auto &engine = context.getEngine();
-            dnnl::memory input(inputMemDesc, engine, const_cast<T *>(inputTensor.getDataPtr()));
-            dnnl::memory kernel(kernelMemDesc, engine, const_cast<T *>(kernelTensor.getDataPtr()));
+            dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));
+            dnnl::memory kernel(kernelMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
             dnnl::memory output(outputMemDesc, engine, outputTensor.getDataPtr());
 
             if (biasTensor) {
                 if (!useBias)
                     throw std::invalid_argument("Bias application is not configured for this scalar Dense operation");
 
-                dnnl::memory bias(biasMemDesc, engine, const_cast<T *>(biasTensor->getDataPtr()));
+                dnnl::memory bias(biasMemDesc, engine, const_cast<T*>(biasTensor->getDataPtr()));
                 context.execute(densePrim, {{DNNL_ARG_SRC, input},
                                             {DNNL_ARG_WEIGHTS, kernel},
                                             {DNNL_ARG_BIAS, bias},
