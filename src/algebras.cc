@@ -6,6 +6,25 @@ const SignTableEntry CliffordProductSpec<Algebra::REAL>::SIGNTABLE[] = {{0, 0, t
 const int CliffordProductSpec<Algebra::REAL>::SIGNTABLE_LAYOUT[] = {0, 1};
 const int CliffordProductSpec<Algebra::REAL>::BACKPROP_ORDER[] = {0};
 
+//
+// COMPLEX ALGEBRA
+//
+const SignTableEntry CliffordProductSpec<Algebra::COMPLEX>::SIGNTABLE[] = {
+    // real part
+    {0, 0, true},   // r*r
+    {1, 1, false},  // -i*i
+    // imaginary part
+    {0, 1, true},   // r*i
+    {1, 0, true}    // i*r
+};
+
+const int CliffordProductSpec<Algebra::COMPLEX>::SIGNTABLE_LAYOUT[] = {0, 2, 4};
+
+const int CliffordProductSpec<Algebra::COMPLEX>::BACKPROP_ORDER[] = {2, 3, 0, 1};
+
+//
+// QUATERNION ALGEBRA
+//
 const SignTableEntry CliffordProductSpec<Algebra::QUATERNION>::SIGNTABLE[] = {
     // real part
     {0, 0, true},   // r*r

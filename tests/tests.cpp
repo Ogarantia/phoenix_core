@@ -45,6 +45,44 @@ void setRandVal(upstride::AllocatedTensor<upstride::device::CPU, int>& t) {
     }
 }
 
+/**
+ * @brief Fills a tensor with a set of values
+ * @tparam T        Tensor scalar datatype
+ * @param tensor    The tensor to fill
+ * @param values    The values
+ */
+template<typename T>
+void assign(upstride::Tensor<upstride::device::CPU, T>& tensor, std::initializer_list<T> values) {
+    if (values.size() != tensor.getShape().numel())
+        throw std::invalid_argument("Number of input values does not match the tensor size");
+    T* ptr = tensor.getDataPtr();
+    for (float val : values) {
+        *ptr = val;
+        ++ptr;
+    }
+}
+
+/**
+ * @brief Performs element-wise comparison of two tensors.
+ * @tparam T            Tensors scalar datatype
+ * @param lhs           Left-hand side tensor
+ * @param rhs           Right-hand side tensor
+ * @param threshold     A threshold
+ * @return true if tensors are of the same shape and their values do not differ by more than the the threshold in absolute value,
+ * @return false otherwise.
+ */
+template <typename T>
+bool compareTensors(const upstride::Tensor<upstride::device::CPU, T>& lhs, upstride::Tensor<upstride::device::CPU, T>& rhs, const T threshold = (T)0) {
+    if (lhs.getShape() != rhs.getShape())
+        return false;
+    const T *l = lhs.getDataPtr(), *r = rhs.getDataPtr();
+    for (int i = 0; i < lhs.getShape().numel(); ++i)
+        if (std::abs(l[i] - r[i]) > threshold)
+            return false;
+    return true;
+}
+
+
 TEST_CASE("Test:Shape") {
     std::cout << "---- Test: Shape creation" << std::endl;
 
@@ -192,11 +230,12 @@ TEST_CASE("Test:Tensor") {
 
 TEST_CASE("Test:Conv2d") {
     std::cout << "---- Test: Conv2d computation" << std::endl;
-    int dim = upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION];
-    int N = 1, C = 2, H = 3, W = 3;
-    int numel = dim * N * C * H * W;
 
     SUBCASE(" Test: Conv2d - quaternion") {
+        const int dim = upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION];
+        const int N = 1, C = 2, H = 3, W = 3;
+        const int numel = dim * N * C * H * W;
+
         std::cout << " Test: Conv2d - quaternion" << std::endl;
         const upstride::Algebra algebra(upstride::Algebra::QUATERNION);
 
@@ -233,6 +272,120 @@ TEST_CASE("Test:Conv2d") {
                 test = false;
         }
         CHECK((test));
+    }
+
+    SUBCASE(" Test: Conv2d - complex") {
+        // convolving a 3x2x2 CHW complex tensor with a 1x1 convolution kernel with 2 channels on output
+        std::cout << " Test: Conv2d - complex" << std::endl;
+        using namespace upstride;
+
+        // set up input tensor
+        AllocatedTensor<device::CPU, float> input(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 3, 2, 2}));
+        assign<float>(input, {
+            // real part
+            0, 0, 0, 0,
+            -1, 0, 0, 0,
+            1, 2, 3, 4,
+
+            // imaginary part
+            1, 1, 1, 1,
+            0, 0, 0, 0,
+            -1, -2, -3, -4
+        });
+
+        // set up filter tensor
+        AllocatedTensor<device::CPU, float> kernel(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2, 3, 1, 1}));
+        assign<float>(kernel, {
+            // real part
+            1, 1, 1,
+            0, 0, 2,
+
+            // imaginary part
+            0, 0, 0,
+            -1, 0, 0
+        });
+
+        // set up reference output
+        AllocatedTensor<device::CPU, float> refOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2, 2, 2}));
+        assign<float>(refOutput, {
+           // real part
+           0, 2, 3, 4,
+           2+1, 4+1, 6+1, 8+1,
+
+           // imaginary part
+           0, -1, -2, -3,
+           -2, -4, -6, -8
+        });
+
+        // init operation
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(
+            context,
+            Algebra::COMPLEX,
+            DataFormat::NCHW,
+            1,
+            1,
+            false
+        );
+
+        // compute test output
+        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2, 2, 2}));
+        op(::device, input, kernel, nullptr, testOutput, 0, 0);
+
+        // compare
+        CHECK(compareTensors(refOutput, testOutput));
+    }
+}
+
+
+TEST_CASE("Test:Dense") {
+    std::cout << "---- Test: Dense computation" << std::endl;
+
+    SUBCASE(" Test: Dense - complex") {
+        std::cout << " Test: Dense - complex" << std::endl;
+        using namespace upstride;
+
+        // set up input tensor
+        AllocatedTensor<device::CPU, float> input(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 3}));
+        assign<float>(input, {
+            +1, 0, 2,
+            0, -1, 2
+        });
+
+        // set up filter tensor
+        AllocatedTensor<device::CPU, float> kernel(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 3, 2}));
+        assign<float>(kernel, {
+            // real part
+            1, 0,
+            0, 0,
+            0, 10,
+
+            // imaginary part
+            0, 0,
+            0, 1,
+            0, 10
+        });
+
+        // set up reference output
+        AllocatedTensor<device::CPU, float> refOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2}));
+        assign<float>(refOutput, {
+           1, 20+1-20,
+           0, 20+20
+        });
+
+        // init operation
+        upstride::UpstrideDenseFunctor<upstride::device::CPU, float> op(
+            context,
+            Algebra::COMPLEX,
+            DataFormat::NC,
+            false
+        );
+
+        // compute test output
+        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2}));
+        op(::device, input, kernel, nullptr, testOutput);
+
+        // compare
+        CHECK(compareTensors(refOutput, testOutput));
     }
 }
 
@@ -349,5 +502,6 @@ TEST_CASE("Test:TensorSplit") {
 
 TEST_CASE("Algebras multivector dimensions") {
     CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::REAL] == 1);
+    CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::COMPLEX] == 2);
     CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION] == 4);
 }

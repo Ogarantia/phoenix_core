@@ -75,6 +75,7 @@ namespace upstride {
                                 const Tensor<Device, const T> &kernelTensor,
                                 const Tensor<Device, const T> *biasTensor,
                                 Tensor<Device, T> &outputTensor) {
+            // factorized quaternion fallback
             if (algebra == Algebra::QUATERNION) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
@@ -106,6 +107,7 @@ namespace upstride {
                 delete bias;
             }
 
+            // generic implementation
             else {
                 using CliffordProductSpec = CliffordProductSpec<algebra>;
 
@@ -203,6 +205,7 @@ namespace upstride {
                                 const Tensor<Device, const T>& gradTensor,
                                 Tensor<Device, T>& kernelGradTensor,
                                 Tensor<Device, T>& inputGradTensor) {
+            // factorized quaternion fallback
             if (algebra == Algebra::QUATERNION) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4>
@@ -231,6 +234,7 @@ namespace upstride {
                 TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
             }
 
+            // generic implementation
             else {
                 using CliffordProductSpec = CliffordProductSpec<algebra>;
 

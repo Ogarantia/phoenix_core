@@ -140,6 +140,8 @@ Algebra upstride::getAlgebraFromType(int uptype) {
     switch (uptype) {
         case 0:
             return Algebra::REAL;
+        case 1:
+            return Algebra::COMPLEX;
         case 2:
             return Algebra::QUATERNION;
     }

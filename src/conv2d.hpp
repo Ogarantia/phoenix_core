@@ -133,6 +133,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
+        // factorized quaternion convolution fallback
         if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
@@ -164,6 +165,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             delete bias;
         }
 
+        // generic implementation
         else {
             using CliffordProductSpec = CliffordProductSpec<algebra>;
 
@@ -275,6 +277,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
+        // factorized quaternion fallback
         if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4>
@@ -303,6 +306,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
         }
 
+        // generic implementation
         else {
             using CliffordProductSpec = CliffordProductSpec<algebra>;
 

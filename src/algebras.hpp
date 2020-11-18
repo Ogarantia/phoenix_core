@@ -16,13 +16,14 @@ namespace upstride {
  */
 enum Algebra {
     REAL,
+    COMPLEX,
     QUATERNION
 };
 
 /**
  * @brief Multivector dimension for a specific algebra
  */
-static const int MULTIVECTOR_DIM[] = {1, 4};
+static const int MULTIVECTOR_DIM[] = {1, 2, 4};
 
 /**
  * @brief Clifford product sign table entry
@@ -46,7 +47,18 @@ class CliffordProductSpec<Algebra::REAL> {
     static const int DIMS = 1;
     static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
     static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
-    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient
+    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient:
+                                              //!< first DIMS terms contribute positively to the output
+};
+
+template <>
+class CliffordProductSpec<Algebra::COMPLEX> {
+   public:
+    static const int DIMS = 2;
+    static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
+    static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
+    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient:
+                                              //!< first DIMS terms contribute positively to the output
 };
 
 template <>
@@ -55,7 +67,8 @@ class CliffordProductSpec<Algebra::QUATERNION> {
     static const int DIMS = 4;
     static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
     static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
-    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient
+    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient:
+                                              //!< first DIMS terms contribute positively to the output
 };
 
 /**

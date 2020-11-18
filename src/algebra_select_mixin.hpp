@@ -34,6 +34,10 @@ class AlgebraSelectionMixin {
                 static_cast<Base*>(this)->template proceedWithAlgebra<Algebra::REAL>(args...);
                 return;
 
+            case Algebra::COMPLEX:
+                static_cast<Base*>(this)->template proceedWithAlgebra<Algebra::COMPLEX>(args...);
+                return;
+
             case Algebra::QUATERNION:
                 static_cast<Base*>(this)->template proceedWithAlgebra<Algebra::QUATERNION>(args...);
                 return;
