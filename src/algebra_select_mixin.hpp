@@ -41,6 +41,10 @@ class AlgebraSelectionMixin {
             case Algebra::QUATERNION:
                 static_cast<Base*>(this)->template proceedWithAlgebra<Algebra::QUATERNION>(args...);
                 return;
+
+            case Algebra::GA_300:
+                static_cast<Base*>(this)->template proceedWithAlgebra<Algebra::GA_300>(args...);
+                return;
         }
 
         throw std::runtime_error("Invalid algebra");

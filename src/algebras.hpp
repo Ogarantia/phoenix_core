@@ -17,13 +17,14 @@ namespace upstride {
 enum Algebra {
     REAL,
     COMPLEX,
-    QUATERNION
+    QUATERNION,
+    GA_300
 };
 
 /**
  * @brief Multivector dimension for a specific algebra
  */
-static const int MULTIVECTOR_DIM[] = {1, 2, 4};
+static const int MULTIVECTOR_DIM[] = {1, 2, 4, 8};
 
 /**
  * @brief Clifford product sign table entry
@@ -48,27 +49,34 @@ class CliffordProductSpec<Algebra::REAL> {
     static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
     static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
     static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient:
-                                              //!< first DIMS terms contribute positively to the output
+                                              //!< first DIMS terms contribute positively to the output of every left and right dimension
 };
 
 template <>
 class CliffordProductSpec<Algebra::COMPLEX> {
    public:
     static const int DIMS = 2;
-    static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
-    static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
-    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient:
-                                              //!< first DIMS terms contribute positively to the output
+    static const SignTableEntry SIGNTABLE[];
+    static const int SIGNTABLE_LAYOUT[];
+    static const int BACKPROP_ORDER[];
 };
 
 template <>
 class CliffordProductSpec<Algebra::QUATERNION> {
    public:
     static const int DIMS = 4;
-    static const SignTableEntry SIGNTABLE[];  //!< specifies the contribution of every left-right component pair to the product
-    static const int SIGNTABLE_LAYOUT[];      //!< index of the first entry of every row in the signtable
-    static const int BACKPROP_ORDER[];        //!< specifies the order of multiplication terms evaluation when backpropagating the gradient:
-                                              //!< first DIMS terms contribute positively to the output
+    static const SignTableEntry SIGNTABLE[];
+    static const int SIGNTABLE_LAYOUT[];
+    static const int BACKPROP_ORDER[];
+};
+
+template <>
+class CliffordProductSpec<Algebra::GA_300> {
+   public:
+    static const int DIMS = 8;
+    static const SignTableEntry SIGNTABLE[];
+    static const int SIGNTABLE_LAYOUT[];
+    static const int BACKPROP_ORDER[];
 };
 
 /**
@@ -137,12 +145,15 @@ struct BinaryOperation {
             const int l = CliffordProductSpec::SIGNTABLE[j].left, r = CliffordProductSpec::SIGNTABLE[j].right;
 
             // find out to which output dimension the term contributes
-            int dim;
-            for (dim = 0; dim < CliffordProductSpec::DIMS && j >= CliffordProductSpec::SIGNTABLE_LAYOUT[dim + 1]; ++dim);
+            int dim = 0;
+            while (dim < CliffordProductSpec::DIMS && j >= CliffordProductSpec::SIGNTABLE_LAYOUT[dim + 1])
+                ++dim;
 
             // for first DIMS terms the output buffer is filled with the result
             if (i < CliffordProductSpec::DIMS) {
-                // the term must have a positive contribution, otherwise a unary reverse is needed and this is inefficient. This is what the backprop order is for.
+                // The term must have a positive contribution, otherwise a unary reverse is needed and this is inefficient. This is what the backprop order is for.
+                // Moreover, first DIMS terms need to cover all left and right indices (not checked here).
+                // Otherwise fillOutputFunc overwrites the previously computed value.
                 if (!CliffordProductSpec::SIGNTABLE[j].positive)
                     throw std::runtime_error("Not implemented");
                 fillOutputFunc(l, r, dim);

@@ -144,6 +144,8 @@ Algebra upstride::getAlgebraFromType(int uptype) {
             return Algebra::COMPLEX;
         case 2:
             return Algebra::QUATERNION;
+        case 3:
+            return Algebra::GA_300;
     }
     throw std::invalid_argument("Invalid datatype index: " + std::to_string(uptype));
 }

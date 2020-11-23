@@ -231,49 +231,6 @@ TEST_CASE("Test:Tensor") {
 TEST_CASE("Test:Conv2d") {
     std::cout << "---- Test: Conv2d computation" << std::endl;
 
-    SUBCASE(" Test: Conv2d - quaternion") {
-        const int dim = upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION];
-        const int N = 1, C = 2, H = 3, W = 3;
-        const int numel = dim * N * C * H * W;
-
-        std::cout << " Test: Conv2d - quaternion" << std::endl;
-        const upstride::Algebra algebra(upstride::Algebra::QUATERNION);
-
-        upstride::Shape sIn({dim*N, C, H, W});
-        upstride::Shape sKer({dim, N, C, H, W});
-        upstride::Shape sBias({});
-        upstride::Shape sOut({dim*N, 1, 1, 1});
-        upstride::AllocatedTensor<upstride::device::CPU, float> inputTensor(device, sIn);
-        upstride::AllocatedTensor<upstride::device::CPU, float> kernelTensor(device, sKer);
-        upstride::AllocatedTensor<upstride::device::CPU, float> outputTensor(device, sOut);
-        outputTensor.zero();
-
-        float* inputTensorPtr = inputTensor.getDataPtr();
-        float* kernelTensorPtr = kernelTensor.getDataPtr();
-        for(int i = 0; i < numel; ++i) {
-            inputTensorPtr[i] = 1;
-            kernelTensorPtr[i] = 1;
-        }
-
-        upstride::IntPair st(1, 1);
-        upstride::IntPair dil(1, 1);
-        const upstride::IntPair padBefore(0);
-        const upstride::IntPair padAfter(0);
-        
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor(context, algebra, upstride::DataFormat::NCHW, st, dil, false);
-        myConv2DFunctor(device, inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
-
-        bool test = true;
-        float* outputTensorPtr = outputTensor.getDataPtr();
-        if (outputTensorPtr[0] != -36.0f)
-            test = false;
-        for (int i = 1; i < 4 && test; ++i) {
-            if (outputTensorPtr[i] != 36.0f)
-                test = false;
-        }
-        CHECK((test));
-    }
-
     SUBCASE(" Test: Conv2d - complex") {
         // convolving a 3x2x2 CHW complex tensor with a 1x1 convolution kernel with 2 channels on output
         std::cout << " Test: Conv2d - complex" << std::endl;
@@ -318,17 +275,109 @@ TEST_CASE("Test:Conv2d") {
         });
 
         // init operation
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(
-            context,
-            Algebra::COMPLEX,
-            DataFormat::NCHW,
-            1,
-            1,
-            false
-        );
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(context, Algebra::COMPLEX, DataFormat::NCHW, 1, 1, false);
 
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2, 2, 2}));
+        op(::device, input, kernel, nullptr, testOutput, 0, 0);
+
+        // compare
+        CHECK(compareTensors(refOutput, testOutput));
+    }
+
+    SUBCASE(" Test: Conv2d - quaternion") {
+        const int dim = upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION];
+        const int N = 1, C = 2, H = 3, W = 3;
+        const int numel = dim * N * C * H * W;
+
+        std::cout << " Test: Conv2d - quaternion" << std::endl;
+        const upstride::Algebra algebra(upstride::Algebra::QUATERNION);
+
+        upstride::Shape sIn({dim*N, C, H, W});
+        upstride::Shape sKer({dim, N, C, H, W});
+        upstride::Shape sBias({});
+        upstride::Shape sOut({dim*N, 1, 1, 1});
+        upstride::AllocatedTensor<upstride::device::CPU, float> inputTensor(device, sIn);
+        upstride::AllocatedTensor<upstride::device::CPU, float> kernelTensor(device, sKer);
+        upstride::AllocatedTensor<upstride::device::CPU, float> outputTensor(device, sOut);
+        outputTensor.zero();
+
+        float* inputTensorPtr = inputTensor.getDataPtr();
+        float* kernelTensorPtr = kernelTensor.getDataPtr();
+        for(int i = 0; i < numel; ++i) {
+            inputTensorPtr[i] = 1;
+            kernelTensorPtr[i] = 1;
+        }
+
+        upstride::IntPair st(1, 1);
+        upstride::IntPair dil(1, 1);
+        const upstride::IntPair padBefore(0);
+        const upstride::IntPair padAfter(0);
+        
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor(context, algebra, upstride::DataFormat::NCHW, st, dil, false);
+        myConv2DFunctor(device, inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
+
+        bool test = true;
+        float* outputTensorPtr = outputTensor.getDataPtr();
+        if (outputTensorPtr[0] != -36.0f)
+            test = false;
+        for (int i = 1; i < 4 && test; ++i) {
+            if (outputTensorPtr[i] != 36.0f)
+                test = false;
+        }
+        CHECK((test));
+    }
+
+    SUBCASE(" Test: Conv2d - GA(3,0,0)") {
+        // convolving a 1x1x1 CHW GA(3,0,0) tensor with a 1x1 convolution kernel with 2 channels on output
+        // cheating: using quaternion dimensions subset
+        std::cout << " Test: Conv2d - GA(3,0,0)" << std::endl;
+        using namespace upstride;
+
+        // set up input tensor
+        AllocatedTensor<device::CPU, float> input(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 1, 1, 1}));
+        assign<float>(input, {
+            1,      // r
+            0,      // e1
+            0,      // e2
+            0,      // e3
+            2,      // e12
+            4,      // e13
+            3,      // e23
+            0,      // e123
+        });
+
+        // set up filter tensor
+        AllocatedTensor<device::CPU, float> kernel(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2, 1, 1, 1}));
+        assign<float>(kernel, {
+            -1,  10,   // r
+             0,   0,   // e1
+             0,   0,   // e2
+             0,   0,   // e3
+            -2,   0,   // e12
+            -4,   0,   // e13
+            -3,   0,   // e23
+             0,   0   // e123
+        });
+
+        // set up reference output
+        AllocatedTensor<device::CPU, float> refOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2, 1, 1}));
+        assign<float>(refOutput, {
+            28,  10,   // r
+             0,   0,   // e1
+             0,   0,   // e2
+             0,   0,   // e3
+            -4,  20,   // e12
+            -8,  40,   // e13
+            -6,  30,   // e23
+             0,   0    // e123
+        });
+
+        // init operation
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(context, Algebra::GA_300, DataFormat::NCHW, 1, 1, false);
+
+        // compute test output
+        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2, 1, 1}));
         op(::device, input, kernel, nullptr, testOutput, 0, 0);
 
         // compare
@@ -382,6 +431,56 @@ TEST_CASE("Test:Dense") {
 
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2}));
+        op(::device, input, kernel, nullptr, testOutput);
+
+        // compare
+        CHECK(compareTensors(refOutput, testOutput));
+    }
+
+    SUBCASE(" Test: Dense - GA(3,0,0)") {
+        std::cout << " Test: Dense - GA(3,0,0)" << std::endl;
+        using namespace upstride;
+
+        // reusing data from Conv2D test; set up input tensor
+        AllocatedTensor<device::CPU, float> input(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 1}));
+        assign<float>(input, {1, 0, 0, 0, 2, 4, 3, 0, });
+
+        // set up filter tensor
+        AllocatedTensor<device::CPU, float> kernel(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 1, 2}));
+        assign<float>(kernel, {
+            -1,  10,   // r
+             0,   0,   // e1
+             0,   0,   // e2
+             0,   0,   // e3
+            -2,   0,   // e12
+            -4,   0,   // e13
+            -3,   0,   // e23
+             0,   0   // e123
+        });
+
+        // set up reference output
+        AllocatedTensor<device::CPU, float> refOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2}));
+        assign<float>(refOutput, {
+            28,  10,   // r
+             0,   0,   // e1
+             0,   0,   // e2
+             0,   0,   // e3
+            -4,  20,   // e12
+            -8,  40,   // e13
+            -6,  30,   // e23
+             0,   0    // e123
+        });
+
+        // init operation
+        upstride::UpstrideDenseFunctor<upstride::device::CPU, float> op(
+            context,
+            Algebra::GA_300,
+            DataFormat::NC,
+            false
+        );
+
+        // compute test output
+        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2}));
         op(::device, input, kernel, nullptr, testOutput);
 
         // compare
@@ -504,4 +603,5 @@ TEST_CASE("Algebras multivector dimensions") {
     CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::REAL] == 1);
     CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::COMPLEX] == 2);
     CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION] == 4);
+    CHECK(upstride::MULTIVECTOR_DIM[upstride::Algebra::GA_300] == 8);
 }

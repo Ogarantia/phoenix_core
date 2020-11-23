@@ -76,7 +76,7 @@ namespace upstride {
                                 const Tensor<Device, const T> *biasTensor,
                                 Tensor<Device, T> &outputTensor) {
             // factorized quaternion fallback
-            if (algebra == Algebra::QUATERNION) {
+            if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
                 TensorSplit<Device, T, 4> output(outputTensor);
@@ -206,7 +206,7 @@ namespace upstride {
                                 Tensor<Device, T>& kernelGradTensor,
                                 Tensor<Device, T>& inputGradTensor) {
             // factorized quaternion fallback
-            if (algebra == Algebra::QUATERNION) {
+            if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4>
                     input(inputTensor),
@@ -251,7 +251,7 @@ namespace upstride {
                 // compute the Clifford product
                 BinaryOperation<CliffordProductSpec>::productBackprop(
                     [this, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
-                        denseOp(input[left], kernel[right], grad[dim], kernelGrad[dim], inputGrad[dim]);
+                        denseOp(input[left], kernel[right], grad[dim], kernelGrad[right], inputGrad[left]);
                     },
                     [this, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
                         denseOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
