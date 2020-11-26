@@ -31,32 +31,33 @@ set(SOURCES ${SOURCES}
     ${CPP_SOURCES_FOLDER}/utils.cc
 )
 
+set(OPTIMIZATION_FLAGS "-O3")
+set(VECTORIZATION_FLAGS "-ftree-vectorize")
+set(COMPUTE_OPTIMIZATION_FLAGS "-ffast-math -funroll-loops")
 # Compilation flags according to the compiler
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -O3 -ffast-math -funroll-loops")
-  set(VECTORIZATION_FLAGS "${VECTORIZATION_FLAGS} -ftree-vectorize")
-else ()
-  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -O3 -ffast-math -funroll-loops -floop-nest-optimize ")
-  set(VECTORIZATION_FLAGS "${VECTORIZATION_FLAGS} -ftree-vectorize")
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  set(COMPUTE_OPTIMIZATION_FLAGS "${COMPUTE_OPTIMIZATION_FLAGS} -floop-nest-optimize ")
 endif()
 
 # Compilation flags according to the target architecture
 if (ARCH STREQUAL "x86_64")
-  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=skylake -mfma -mavx2")
+  set(ARCH_OPTIMIZATION_FLAGS "-march=skylake -mfma -mavx2")
 # see https://gcc.gnu.org/onlinedocs/gcc-8.1.0/gcc/AArch64-Options.html for more specific option
 elseif (ARCH STREQUAL "aarch64")
-  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=armv8-a+crypto+simd -mcpu=cortex-a57+crypto+simd")
+  set(ARCH_OPTIMIZATION_FLAGS "-march=armv8-a+crypto+simd -mcpu=cortex-a57+crypto+simd")
 # The user can provide a specific arch for what he want to cross compile; it can also be "native"
 else()
-  set(OPTIMIZATION_FLAGS "${OPTIMIZATION_FLAGS} -march=${ARCH}")
+  set(ARCH_OPTIMIZATION_FLAGS "-march=${ARCH}")
 endif()
+
 
 # Adpat flags for development and debuging
 if (UPSTRIDE_DEBUG)
   # Disable all optimization flags when debug, make things easier when using gdb
-  set(OPTIMIZATION_FLAGS "-Og")
+  set(OPTIMIZATION_FLAGS "-O0 -g -DUPSTRIDE_DEBUG")
   set(VECTORIZATION_FLAGS "")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -DUPSTRIDE_DEBUG")
+  set(COMPUTE_OPTIMIZATION_FLAGS "")
+  set(ARCH_OPTIMIZATION_FLAGS "")
   string(ASCII 27 Esc)
   set(ColorCyan  "${Esc}[36m")
   set(ColorReset "${Esc}[m")
@@ -72,7 +73,7 @@ if (WITH_ONEDNN)
   set(ONEDNN_SUBMODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/thirdparty/onednn")
   option(DNNL_BUILD_TESTS "Build DNNL tests" OFF)
   option(DNNL_BUILD_EXAMPLES "Build DNNL examples" OFF)
-  set(DNNL_ARCH_OPT_FLAGS "${OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS}" CACHE INTERNAL "")
+  set(DNNL_ARCH_OPT_FLAGS "${OPTIMIZATION_FLAGS} ${COMPUTE_OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS} ${ARCH_OPTIMIZATION_FLAGS}" CACHE INTERNAL "")
   message("**************** Compiling oneDNN: ****************")
   add_subdirectory(${ONEDNN_SUBMODULE_PATH})
   message("**************** ***************** ****************")
@@ -92,11 +93,13 @@ endif()
 
 if (WITH_CUDNN)
   # set flags
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBACKEND_CUDNN ${OPTIMIZATION_FLAGS}")
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBACKEND_CUDNN")
+  set(CMAKE_CXX_FLAGS "-DBACKEND_CUDNN ${OPTIMIZATION_FLAGS} ${COMPUTE_OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS} ${ARCH_OPTIMIZATION_FLAGS}")
+  set(CMAKE_CUDA_FLAGS "-DBACKEND_CUDNN ${OPTIMIZATION_FLAGS}")
   if (UPSTRIDE_DEBUG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DUPSTRIDE_DEBUG")
+    # -g generate debug information for host code and -G generate debug information for device code
+    # For more possibilities: https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#ptxas-options-device-debug
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
   endif()
 
   # define target GPU architectures the binaries are compiled for
@@ -107,6 +110,7 @@ if (WITH_CUDNN)
   else()
     set(CMAKE_CUDA_ARCHITECTURES 37 ${CMAKE_CUDA_ARCHITECTURES})
   endif()
+
 
   # list sources
   set(SOURCES ${SOURCES}
@@ -120,6 +124,7 @@ if (WITH_CUDNN)
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
   link_directories(${CUDAToolkit_LIBRARY_DIR})
   link_libraries(cudnn cublas)
+
 endif()
 
 #######################
@@ -138,11 +143,18 @@ endif()
 #######################
 #     Misc stuff      #
 #######################
-
+if (WITH_CUDNN)
 # define a custom target executing a shell script generating a header file that hides function names
 set(HIDENAMES_HEADER ${CMAKE_CURRENT_LIST_DIR}/src/backend/cudnn/hidenames.h)
 add_custom_target(hidenames ALL
-  COMMAND ${CMAKE_CURRENT_LIST_DIR}/scripts/hidenames.sh > ${HIDENAMES_HEADER}
+  COMMAND ${CMAKE_CURRENT_LIST_DIR}/scripts/hidenames.sh > ${HIDENAMES_HEADER}.new
+  COMMAND  /bin/sh -c "if cmp ${HIDENAMES_HEADER}.new ${HIDENAMES_HEADER} \; \
+                       then \
+                         rm ${HIDENAMES_HEADER}.new  \; \
+                       else \
+                         mv ${HIDENAMES_HEADER}.new ${HIDENAMES_HEADER} \; \
+                       fi" > /dev/null
   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
   BYPRODUCTS ${HIDENAMES_HEADER}
   COMMENT "Generating hidenames.h")
+endif()
