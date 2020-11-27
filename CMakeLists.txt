@@ -97,9 +97,10 @@ if (WITH_CUDNN)
   set(CMAKE_CUDA_FLAGS "-DBACKEND_CUDNN ${OPTIMIZATION_FLAGS}")
   if (UPSTRIDE_DEBUG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG")
-    # -g generate debug information for host code and -G generate debug information for device code
-    # For more possibilities: https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#ptxas-options-device-debug
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
+    # -g/G generate debug information for respectively host/device https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#ptxas-options-device-debug
+    # -G cannot be used because it uses more register than we have. However, --generate-line-info is part of -G without playing with register.
+    # If you really want to enable -G it's own to you; just put it here.
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --generate-line-info")
   endif()
 
   # define target GPU architectures the binaries are compiled for
