@@ -18,4 +18,5 @@
 #include "cudnn/tensor.hpp"
 #include "cudnn/conv2d.hpp"
 #include "cudnn/dense.hpp"
+#include "cudnn/quat_pointwise_conv2d.hpp"
 #endif

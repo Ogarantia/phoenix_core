@@ -65,6 +65,10 @@ class IntPair {
     inline bool operator==(const IntPair& another) const {
         return x == another.x && y == another.y;
     }
+
+    inline bool operator!=(const IntPair& another) const {
+        return !(*this == another);
+    }
 };
 
 /**
@@ -154,5 +158,122 @@ class ScalarDenseFunctor;
  */
 template <typename Device, typename T>
 class ScalarDenseGradFunctor;
+
+
+namespace cuda {
+
+
+/**
+ * @brief Generic manager for NCHW quaternion pointwise convolution kernels
+ *
+ * @tparam Device       Non-dummy implementation only for device::CUDA
+ */
+template<typename Device>
+class QuatKernelPointwiseConvManager {
+public:
+    /**
+     * @brief Constructor for the manager and the inherited classes
+     *
+     * @param context                       global context
+     * @param algebra                       manager is only used with quaternions
+     * @param dataFormat                    manager is only used with NCHW data format
+     * @param stride                        convolution stride
+     * @param dilation                      convolution dilation
+     */
+    QuatKernelPointwiseConvManager(
+        const upstride::Context& context, const Algebra algebra,
+        const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+    ) {}
+
+    /**
+     * @brief Checks if the convolution is pointwise, if so configures the manager
+     *
+     * @param inputShape                    shape of the input data tensor
+     * @param weightsShape                  shape of the weights tensor
+     * @param padBefore                     convolution padding before parameter
+     * @param padAfter                      convolution padding after parameter
+     * @param groups                        convolution groups paramater
+     */
+    void configure(
+        const Shape& inputShape, const Shape& weightsShape,
+        const IntPair& padBefore, const IntPair& padAfter, int groups
+    ) {}
+
+    /**
+     * @brief Checks if the manager is properly configured for NCHW CUDA pointwise convolutions
+     *
+     * Expected to always be run before using the operator() from the derived functor classes
+     */
+    bool canRun() const {
+        return false;
+    }
+};
+
+
+/**
+ * @brief Forward pass functor for NCHW quaternion pointwise convolution using CUDA kernels
+ *
+ * @tparam Device       Non-dummy implementation only for device::CUDA
+ * @tparam T            A scalar datatype
+ */
+template<typename Device, typename T>
+class QuatKernelPointwiseConvForwardFunctor : public QuatKernelPointwiseConvManager<Device> {
+public:
+    // inheriting constructors from the manager
+    using QuatKernelPointwiseConvManager<Device>::QuatKernelPointwiseConvManager;
+
+    /**
+     * @brief Operator used to compute convolution forward pass
+     *
+     * @param device                        device associated with the tensors, holds global kernel configurations cache
+     * @param inputTensor                   input data tensor
+     * @param weightsTensor                 weights tensor
+     * @param biasTensor                    bias tensor
+     * @param outputTensor                  output data tensor
+     */
+    void operator()(
+        Device& device,
+        const Tensor<Device, const T>& inputTensor, const Tensor<Device, const T>& weightsTensor,
+        const Tensor<Device, const T>* biasTensor, Tensor<Device, T>& outputTensor
+    ) {
+        throw std::logic_error("Functor not eligible to run");
+    }
+};
+
+
+/**
+ * @brief Backward pass functor for NCHW quaternion pointwise convolution using CUDA kernels
+ *
+ * @tparam Device       Non-dummy implementation only for device::CUDA
+ * @tparam T            A scalar datatype
+ */
+template<typename Device, typename T>
+class QuatKernelPointwiseConvBackwardFunctor : public QuatKernelPointwiseConvManager<Device> {
+public:
+    // inheriting constructors from the manager
+    using QuatKernelPointwiseConvManager<Device>::QuatKernelPointwiseConvManager;
+
+    /**
+     * @brief Operator used to compute convolution backward pass
+     *
+     * @param device                        device associated with the tensors, holds global kernel configurations cache
+     * @param inputTensor                   input data tensor
+     * @param weightsTensor                 weights tensor
+     * @param gradTensor                    gradient tensor, received from the successive layer
+     * @param weightsGradTensor             tensor for gradient with respect to the weights, to be computed
+     * @param inputGradTensor               tensor for gradient with respect to the input data, to be computed
+     */
+    void operator()(
+        Device& device,
+        const Tensor<Device, const T>& inputTensor, const Tensor<Device, const T>& weightsTensor,
+        const Tensor<Device, const T>& gradTensor, Tensor<Device, T>& weightsGradTensor,
+        Tensor<Device, T>& inputGradTensor
+    ) {
+        throw std::logic_error("Functor not eligible to run");
+    }
+};
+
+
+} // namespace cuda
 
 }  // namespace upstride

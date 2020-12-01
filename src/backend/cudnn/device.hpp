@@ -3,6 +3,7 @@
 #include <cudnn.h>
 #include "../backend.hpp"
 #include "conv2d_algo_select.hpp"
+#include "kernels_utils.hpp"
 #include "cublas_v2.h"
 
 namespace upstride {
@@ -10,6 +11,7 @@ namespace device {
 class CUDA {
    private:
     cudnn::Conv2DAlgorithmSelector conv2dAlgorithms;    //!< runtime conv2d algorithms selector
+    cuda::ConvKernelsCache convKernelsCache;            //!< cache for runtime selection of custom CUDA kernels for quaternionic convolutions
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
     cublasHandle_t cublasHandle;
@@ -17,6 +19,7 @@ class CUDA {
     CUDA(const CUDA&) = delete;  // disable copying
 
    public:
+
     inline CUDA(const cudaStream_t& stream) : cudaStream(stream) {
         auto status = cudnnCreate(&cudnnHandle);
         if (status != CUDNN_STATUS_SUCCESS)
@@ -116,6 +119,37 @@ class CUDA {
                                                                 float& executionTime,
                                                                 size_t& scratchpadSize) {
         return conv2dAlgorithms.selectBackwardDataAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize);
+    }
+
+    /**
+     * @brief Checks cache for a convolution descriptor, sets optimal kernel configuration if found
+     * 
+     * @param convType          Type of the kernel convolution operation
+     * @param convDesc          Descriptor of the kernel convolution
+     * @param optimalConf       Parameter used to pass the cached optimal kernel configuration and its profiling record, if found
+     * @return                  True if (convType x convDesc) key is found in the cache
+     */
+    inline bool checkCacheForOptimalKernel(
+        const cuda::ConvType convType,
+        const cuda::ConvDesc convDesc,
+        cuda::PerfResult& optimalConf
+    ) {
+        return convKernelsCache.checkCache(convType, convDesc, optimalConf);
+    }
+
+    /**
+     * @brief Adds a kernel configuration and its profiling record to the cache
+     * 
+     * @param convType          Type of the kernel convolution operation
+     * @param convDesc          Descriptor of the kernel convolution
+     * @param optimalConf       The optimal kernel configuration and its profiling record
+     */
+    inline void cacheOptimalKernel(
+        const cuda::ConvType convType,
+        const cuda::ConvDesc convDesc,
+        const cuda::PerfResult& optimalConf
+    ) {
+        convKernelsCache.addToCache(convType, convDesc, optimalConf);
     }
 
     /**

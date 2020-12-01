@@ -14,6 +14,7 @@
 #include "backend/api.h"
 #include "deferred_allocator.hpp"
 #include "utils.hpp"
+// #include "backend/backend.hpp"
 
 namespace upstride {
 
@@ -68,6 +69,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     Context& context;                           //!< a global context the operation belongs to
     const Algebra algebra;
     ScalarConv2DFunctor<Device, T> convOp;      //!< scalar convolution operator to be used to implement other data types
+    cuda::QuatKernelPointwiseConvForwardFunctor<Device, T> quatKernelOp;       //!< custom kernels operator for quaternionic pointwise convolution
     DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], outputLanes[8];  //!< deferred allocators for the factorized quaternion implementation
     DeferredAllocator<Device, T> buffer;                                         //!< deferred allocator for an intermediate buffer for the default implementation
     std::mutex access;
@@ -85,7 +87,8 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     UpstrideConv2DFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias):
         context(context),
         algebra(algebra),
-        convOp(context, dataFormat, stride, dilation, useBias)
+        convOp(context, dataFormat, stride, dilation, useBias),
+        quatKernelOp(context, algebra, dataFormat, stride, dilation)
     {}
 
     /**
@@ -125,16 +128,31 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             padAfter,
             groups);
 
-        proceedWithAlgebra(algebra, inputTensor, kernelTensor, biasTensor, outputTensor);
+        if (algebra == Algebra::QUATERNION) {
+            quatKernelOp.configure(
+                inputTensor.getShape(),
+                kernelTensor.getShape(),
+                padBefore,
+                padAfter,
+                groups);
+        }
+
+        proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, biasTensor, outputTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
+    void proceedWithAlgebra(Device& device,
+                            const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
+        // run custom convolution kernels for quaternions if possible
+        if (quatKernelOp.canRun()) {
+            quatKernelOp(device, inputTensor, kernelTensor, biasTensor, outputTensor);
+        }
+
         // factorized quaternion convolution fallback
-        if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+        else if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
             TensorSplit<Device, T, 4> output(outputTensor);
@@ -209,6 +227,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     Context& context;                                           //!< a global context the operation belongs to
     const Algebra algebra;
     ScalarConv2DGradFunctor<Device, T> convOp;                  //!< scalar convolution operator to be used to implement other data types
+    cuda::QuatKernelPointwiseConvBackwardFunctor<Device, T> quatKernelOp;              //!< custom kernels operator for quaternionic pointwise convolution
     DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
     DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
     std::mutex access;
@@ -226,7 +245,8 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     UpstrideConv2DGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad):
         context(context),
         algebra(algebra),
-        convOp(context, dataFormat, stride, dilation, requireInputGrad)
+        convOp(context, dataFormat, stride, dilation, requireInputGrad),
+        quatKernelOp(context, algebra, dataFormat, stride, dilation)
     {}
 
     /**
@@ -251,7 +271,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                     const IntPair& padBefore,
                     const IntPair& padAfter,
                     int groups = 1) {
-        // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
+        // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it.
         if (inputTensor.getShape().empty()) {
             return;
         }
@@ -268,17 +288,32 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             padAfter,
             groups);
 
-        proceedWithAlgebra(algebra, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        if (algebra == Algebra::QUATERNION) {
+            quatKernelOp.configure(
+                inputTensor.getShape(),
+                kernelTensor.getShape(),
+                padBefore,
+                padAfter,
+                groups);
+        }
+
+        proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
+    void proceedWithAlgebra(Device& device,
+                            const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
-        // factorized quaternion fallback
-        if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+        // run custom convolution kernels for quaternions if possible
+        if (quatKernelOp.canRun()) {
+            quatKernelOp(device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        }
+
+        // factorized quaternion convolution fallback
+        else if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4>
                 input(inputTensor),
