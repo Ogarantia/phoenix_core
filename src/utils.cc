@@ -54,12 +54,12 @@ bool upstride::getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal
             result.x = result.y = tuple[0];
             return true;
         case 2:
-            result.x = tuple[1];
-            result.y = tuple[0];
+            result.x = tuple[0];
+            result.y = tuple[1];
             return true;
         case 4:
-            result.x = tuple[2];
-            result.y = tuple[1];
+            result.x = tuple[1];
+            result.y = tuple[2];
             return tuple[0] == validBatchAndChannelVal && tuple[3] == validBatchAndChannelVal;
     };
     return false;
@@ -123,13 +123,13 @@ Shape upstride::computeConvOutputSize(Algebra algebra, const DataFormat dataForm
     }
 
     // compute output size
-    outputShape.width(dataFormat) = computeWindowedOutputSizeAndPadding(
-        inputShape.width(dataFormat), filterShape[Conv2DKernelLayout::widthDim(algebra)],
+    outputShape.height(dataFormat) = computeWindowedOutputSizeAndPadding(
+        inputShape.height(dataFormat), filterShape[Conv2DKernelLayout::heightDim(algebra)],
         dilation.x, stride.x, paddingPreset,
         padBefore.x, padAfter.x);
 
-    outputShape.height(dataFormat) = computeWindowedOutputSizeAndPadding(
-        inputShape.height(dataFormat), filterShape[Conv2DKernelLayout::heightDim(algebra)],
+    outputShape.width(dataFormat) = computeWindowedOutputSizeAndPadding(
+        inputShape.width(dataFormat), filterShape[Conv2DKernelLayout::widthDim(algebra)],
         dilation.y, stride.y, paddingPreset,
         padBefore.y, padAfter.y);
 

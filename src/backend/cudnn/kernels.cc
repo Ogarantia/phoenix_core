@@ -12,7 +12,7 @@ ConvKernelProfiler<KernelPtr, T>::ConvKernelProfiler(const upstride::Context& co
     : context(context)
 {
     // create CUDA events needed for kernels profiling
-    for (int i = 0; i < PERF_ROUNDS; i++) {
+    for (unsigned i = 0; i < PERF_ROUNDS; i++) {
         cudaEventCreate(&(starts[i]));
         cudaEventCreate(&(stops[i]));
     }
@@ -22,7 +22,7 @@ ConvKernelProfiler<KernelPtr, T>::ConvKernelProfiler(const upstride::Context& co
 template<typename KernelPtr, typename T>
 ConvKernelProfiler<KernelPtr, T>::~ConvKernelProfiler() {
     // destroy CUDA events
-    for (int i = 0; i < PERF_ROUNDS; i++) {
+    for (unsigned i = 0; i < PERF_ROUNDS; i++) {
         cudaEventDestroy(starts[i]);
         cudaEventDestroy(stops[i]);
     }
@@ -57,14 +57,14 @@ void ConvKernelProfiler<KernelPtr, T>::profileKernel(
     const auto& stream = tensors.outputTensor.getDevice().stream();
 
     // profile a kernel run perfRounds times
-    for (int i = 0; i < PERF_ROUNDS; i++) {
+    for (unsigned i = 0; i < PERF_ROUNDS; i++) {
         cudaEventRecord(starts[i], stream);
         launchKernel(kernelPack, convDesc, tensors);
         cudaEventRecord(stops[i], stream);
     }
 
     // wait for the events registered in the stream to be completed
-    cuStreamSynchronize(stream);
+    cudaStreamSynchronize(stream);
 }
 
 
@@ -73,7 +73,7 @@ PerfRecord ConvKernelProfiler<KernelPtr, T>::collectProfiledData() {
     float runningTimeTotal {0};
 
     // calculate the running time for each profiling round
-    for (int i = 0; i < PERF_ROUNDS; i++) {
+    for (unsigned i = 0; i < PERF_ROUNDS; i++) {
         float elapsedTime {0};
         cudaEventElapsedTime(&elapsedTime, starts[i], stops[i]);
         runningTimeTotal += elapsedTime;

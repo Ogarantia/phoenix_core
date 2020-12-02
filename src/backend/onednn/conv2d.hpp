@@ -69,10 +69,10 @@ class ScalarConv2DFunctor<device::CPU, T> {
                 dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
                                                 dnnl::algorithm::convolution_auto,
                                                 inputMemDesc, kernelMemDesc, biasMemDesc, outputMemDesc,
-                                                dnnl::memory::dims({stride.y, stride.x}),
-                                                dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
-                                                dnnl::memory::dims({padBefore.y, padBefore.x}),
-                                                dnnl::memory::dims({padAfter.y, padAfter.x})),
+                                                dnnl::memory::dims({stride.x, stride.y}),
+                                                dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
+                                                dnnl::memory::dims({padBefore.x, padBefore.y}),
+                                                dnnl::memory::dims({padAfter.x, padAfter.y})),
                 context.getEngine()));
         }
 
@@ -81,10 +81,10 @@ class ScalarConv2DFunctor<device::CPU, T> {
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
                                             dnnl::algorithm::convolution_auto,
                                             inputMemDesc, kernelMemDesc, outputMemDesc,
-                                            dnnl::memory::dims({stride.y, stride.x}),
-                                            dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
-                                            dnnl::memory::dims({padBefore.y, padBefore.x}),
-                                            dnnl::memory::dims({padAfter.y, padAfter.x})),
+                                            dnnl::memory::dims({stride.x, stride.y}),
+                                            dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
+                                            dnnl::memory::dims({padBefore.x, padBefore.y}),
+                                            dnnl::memory::dims({padAfter.x, padAfter.y})),
             context.getEngine()));
     }
 
@@ -247,10 +247,10 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
                                             dnnl::algorithm::convolution_auto,
                                             inputMemDesc, kernelMemDesc, gradMemDesc,
-                                            dnnl::memory::dims({stride.y, stride.x}),
-                                            dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
-                                            dnnl::memory::dims({padBefore.y, padBefore.x}),
-                                            dnnl::memory::dims({padAfter.y, padAfter.x})),
+                                            dnnl::memory::dims({stride.x, stride.y}),
+                                            dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
+                                            dnnl::memory::dims({padBefore.x, padBefore.y}),
+                                            dnnl::memory::dims({padAfter.x, padAfter.y})),
             context.getEngine());
 
         // instantiate backward conv primitive to compute the kernel gradient
@@ -261,10 +261,10 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                     inputMemDesc,   // conv_diff_dst_md
                     kernelMemDesc,  // conv_diff_weights_md
                     gradMemDesc,    //  conv_bwd_src_md
-                    dnnl::memory::dims({stride.y, stride.x}),
-                    dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
-                    dnnl::memory::dims({padBefore.y, padBefore.x}),
-                    dnnl::memory::dims({padAfter.y, padAfter.x})),
+                    dnnl::memory::dims({stride.x, stride.y}),
+                    dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
+                    dnnl::memory::dims({padBefore.x, padBefore.y}),
+                    dnnl::memory::dims({padAfter.x, padAfter.y})),
                 context.getEngine(),
                 convPd));
 
@@ -277,10 +277,10 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                         inputMemDesc,   // conv_diff_dst_md
                         kernelMemDesc,  // conv_diff_weights_md
                         gradMemDesc,    //  conv_bwd_src_md
-                        dnnl::memory::dims({stride.y, stride.x}),
-                        dnnl::memory::dims({dilation.y - 1, dilation.x - 1}),
-                        dnnl::memory::dims({padBefore.y, padBefore.x}),
-                        dnnl::memory::dims({padAfter.y, padAfter.x})),
+                        dnnl::memory::dims({stride.x, stride.y}),
+                        dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
+                        dnnl::memory::dims({padBefore.x, padBefore.y}),
+                        dnnl::memory::dims({padAfter.x, padAfter.y})),
                     context.getEngine(),
                     convPd));
         }

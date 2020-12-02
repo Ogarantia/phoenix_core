@@ -116,8 +116,8 @@ void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output,
         throw std::runtime_error("Unsupported data format");
     if (inShape.getSize() != 4 || outShape.getSize() != 4)
         throw std::runtime_error("Expecting four-dimenisonal input and output tensors");
-    if (outShape.width(dataFormat) + offset.x < inShape.width(dataFormat) ||
-        outShape.height(dataFormat) + offset.y < inShape.height(dataFormat))
+    if (outShape.width(dataFormat) + offset.y < inShape.width(dataFormat) ||
+        outShape.height(dataFormat) + offset.x < inShape.height(dataFormat))
         throw std::runtime_error("Cannot fit output tensor into input tensor");
     if (inShape.depth(dataFormat) != outShape.depth(dataFormat))
         throw std::runtime_error("Input / output depth mismatch");
@@ -132,7 +132,7 @@ void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output,
     HIDENAME(cropNCHW)<<<blocks, threads, 0, input.getDevice().stream()>>>(
         input.getDataPtr(),
         output.getDataPtr(),
-        offset.x, offset.y,
+        offset.y, offset.x,
         inShape.width(dataFormat), inShape.height(dataFormat),
         outShape.width(dataFormat), outShape.height(dataFormat),
         inShape.depth(dataFormat) * inShape[0]);
@@ -178,8 +178,8 @@ void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>&
         throw std::runtime_error("Unsupported data format");
     if (inShape.getSize() != 4 || outShape.getSize() != 4)
         throw std::runtime_error("Expecting four-dimenisonal input and output tensors");
-    if (inShape.width(dataFormat) + offset.x > outShape.width(dataFormat) ||
-        inShape.height(dataFormat) + offset.y > outShape.height(dataFormat))
+    if (inShape.width(dataFormat) + offset.y > outShape.width(dataFormat) ||
+        inShape.height(dataFormat) + offset.x > outShape.height(dataFormat))
         throw std::runtime_error("Cannot fit input tensor into output tensor");
     if (inShape.depth(dataFormat) != outShape.depth(dataFormat))
         throw std::runtime_error("Input / output depth mismatch");
@@ -194,7 +194,7 @@ void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>&
     HIDENAME(insertNCHW)<<<blocks, threads, 0, input.getDevice().stream()>>>(
         input.getDataPtr(),
         output.getDataPtr(),
-        offset.x, offset.y,
+        offset.y, offset.x,
         inShape.width(dataFormat), inShape.height(dataFormat),
         outShape.width(dataFormat), outShape.height(dataFormat),
         outShape.depth(dataFormat) * outShape[0]);

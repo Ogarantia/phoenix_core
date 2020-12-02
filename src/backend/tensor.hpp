@@ -197,7 +197,7 @@ class Shape {
     /**
      * @return the number of elements in the tensor.
      */
-    int numel() const {
+    unsigned numel() const {
         int numel = shape[0];
         for (int i = 1; i < size; i++)
             numel *= shape[i];

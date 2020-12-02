@@ -46,8 +46,8 @@ class ScalarConv2DBase {
    protected:
     cudnn::Context& context;
 
-    const IntPair stride, dilation;
     const DataFormat dataFormat;
+    const IntPair stride, dilation;
 
     Shape inputShape, filterShape, outputShape;
 
@@ -80,7 +80,7 @@ class ScalarConv2DBase {
     template <typename datatype>
     void setConvDescriptor(cudnnConvolutionDescriptor_t& descriptor, int groups) {
         cudnn::Context::raiseIfError(cudnnSetConvolution2dDescriptor(
-            descriptor, actualPad.y, actualPad.x, stride.y, stride.x, dilation.y, dilation.x, CUDNN_CROSS_CORRELATION,
+            descriptor, actualPad.x, actualPad.y, stride.x, stride.y, dilation.x, dilation.y, CUDNN_CROSS_CORRELATION,
             cudnn::getDataType<datatype>()));
 
         if (groups > 1)
@@ -176,8 +176,8 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
             useBuffer = false;
         } else {
             actualPad = symmetrizePadding(repaddingOffset);
-            repaddedOutputShape.width(dataFormat) += repaddingOffset.x;
-            repaddedOutputShape.height(dataFormat) += repaddingOffset.y;
+            repaddedOutputShape.height(dataFormat) += repaddingOffset.x;
+            repaddedOutputShape.width(dataFormat) += repaddingOffset.y;
             useBuffer = true;
         }
 
@@ -330,23 +330,10 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
             useBuffer = false;
         } else {
             actualPad = symmetrizePadding(repaddingOffset);
-            repaddedGradShape.width(dataFormat) += repaddingOffset.x;
-            repaddedGradShape.height(dataFormat) += repaddingOffset.y;
+            repaddedGradShape.height(dataFormat) += repaddingOffset.x;
+            repaddedGradShape.width(dataFormat) += repaddingOffset.y;
             useBuffer = true;
         }
-
-        // setup convolution descriptor
-        cudnn::Context::raiseIfError(cudnnSetConvolution2dDescriptor(
-            convDesc,
-            actualPad.y, actualPad.x,
-            stride.y, stride.x,
-            dilation.y, dilation.x,
-            CUDNN_CROSS_CORRELATION,
-            cudnn::getDataType<T>()));
-
-        // enable groups
-        if (groups > 1)
-            cudnn::Context::raiseIfError(cudnnSetConvolutionGroupCount(convDesc, groups));
 
         // setup tensors
         cudnn::setTensorDescriptor<T>(inputDesc, inputShape, dataFormat);
@@ -396,6 +383,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
         }
         // algorithm selection, other datatypes
         else {
+            setConvDescriptor<T>(convDesc, groups);
             float executionTime;
             kernelGradientAlgo = device.selectBackwardFilterAlgo(context, convDesc, inputDesc, gradDesc, filterDesc, executionTime, kernelScratchpadSize);
             if (requireInputGrad)

@@ -27,7 +27,7 @@ Memory::Memory(size_t sizeBytes) : size(sizeBytes) {
         throw std::runtime_error(cudaGetErrorString(status));
 }
 
-Memory::Memory(Memory&& another) : size(another.size), ptr(another.ptr) {
+Memory::Memory(Memory&& another) : ptr(another.ptr), size(another.size){
     another.ptr = nullptr;
     another.size = 0;
 }

@@ -65,6 +65,7 @@ void applyTuple(Object* object, void (Object::*method)(ArgsF...), std::tuple<Arg
 class Callable {
 public:
     virtual void operator()() = 0;
+    virtual ~Callable() {};
 };
 
 

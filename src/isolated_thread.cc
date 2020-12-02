@@ -43,11 +43,10 @@ void IsolatedThread::threadFunc() {
     }
 }
 
-
 IsolatedThread::IsolatedThread():
     isRunning(true),
-    submittedMsgNumber(0), processedMsgNumber(0),
-    thread(&IsolatedThread::threadFunc, this)
+    thread(&IsolatedThread::threadFunc, this),
+    submittedMsgNumber(0), processedMsgNumber(0)
 {}
 
 

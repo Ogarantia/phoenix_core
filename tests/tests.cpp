@@ -31,7 +31,7 @@ void setRandVal(upstride::AllocatedTensor<upstride::device::CPU, float>& t) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dist(-1.0f, 1.0f);
-    for (int i = 0; i < t.getShape().numel(); i++) {
+    for (unsigned i = 0; i < t.getShape().numel(); i++) {
         t.getDataPtr()[i] = dist(gen);
     }
 }
@@ -40,7 +40,7 @@ void setRandVal(upstride::AllocatedTensor<upstride::device::CPU, int>& t) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dist(-10, 10);
-    for (int i = 0; i < t.getShape().numel(); i++) {
+    for (unsigned i = 0; i < t.getShape().numel(); i++) {
         t.getDataPtr()[i] = dist(gen);
     }
 }
@@ -76,7 +76,7 @@ bool compareTensors(const upstride::Tensor<upstride::device::CPU, T>& lhs, upstr
     if (lhs.getShape() != rhs.getShape())
         return false;
     const T *l = lhs.getDataPtr(), *r = rhs.getDataPtr();
-    for (int i = 0; i < lhs.getShape().numel(); ++i)
+    for (unsigned i = 0; i < lhs.getShape().numel(); ++i)
         if (std::abs(l[i] - r[i]) > threshold)
             return false;
     return true;
@@ -142,19 +142,19 @@ template <typename T>
 bool accumulatorTest(const upstride::AllocatedTensor<upstride::device::CPU, T>& srcTensor, upstride::AllocatedTensor<upstride::device::CPU, T>& dstTensor, binop op) {
     upstride::AllocatedTensor<upstride::device::CPU, T> dstCopyTensor(device, dstTensor.getShape());
 
-    for (int i = 0; i < dstTensor.getShape().numel(); i++) {
+    for (unsigned i = 0; i < dstTensor.getShape().numel(); i++) {
         dstCopyTensor.getDataPtr()[i] = dstTensor.getDataPtr()[i];
     }
     if (op == binop::plus) {
         dstTensor += srcTensor;
-        for (int i = 0; i < dstTensor.getShape().numel(); i++) {
+        for (unsigned i = 0; i < dstTensor.getShape().numel(); i++) {
             if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] + srcTensor.getDataPtr()[i]) {
                 return false;
             }
         }
     } else if (op == binop::minus) {
         dstTensor -= srcTensor;
-        for (int i = 0; i < dstTensor.getShape().numel(); i++) {
+        for (unsigned i = 0; i < dstTensor.getShape().numel(); i++) {
             if (dstTensor.getDataPtr()[i] != dstCopyTensor.getDataPtr()[i] - srcTensor.getDataPtr()[i]) {
                 return false;
             }
@@ -304,7 +304,7 @@ TEST_CASE("Test:Conv2d") {
 
         float* inputTensorPtr = inputTensor.getDataPtr();
         float* kernelTensorPtr = kernelTensor.getDataPtr();
-        for(int i = 0; i < numel; ++i) {
+        for(unsigned i = 0; i < numel; ++i) {
             inputTensorPtr[i] = 1;
             kernelTensorPtr[i] = 1;
         }
@@ -580,7 +580,7 @@ TEST_CASE("Test:TensorSplit") {
         upstride::TensorSplit<upstride::device::CPU, const int, TEST_BATCH_SIZE> split(testInputTensor, true);
         static const upstride::Shape EXPECTED_PART_SHAPE{1, 2, 1, 1};
 
-        for (int i = 0; i < TEST_BATCH_SIZE; ++i) {
+        for (unsigned i = 0; i < TEST_BATCH_SIZE; ++i) {
             CHECK(split[i].getShape() == EXPECTED_PART_SHAPE);
             const int* ptr = split[i].getDataPtr();
             CHECK(*ptr == i + 1);
@@ -591,7 +591,7 @@ TEST_CASE("Test:TensorSplit") {
         upstride::TensorSplit<upstride::device::CPU, const int, TEST_BATCH_SIZE> split(testInputTensor, false);
         static const upstride::Shape EXPECTED_PART_SHAPE{2, 1, 1};
 
-        for (int i = 0; i < TEST_BATCH_SIZE; ++i) {
+        for (unsigned i = 0; i < TEST_BATCH_SIZE; ++i) {
             CHECK(split[i].getShape() == EXPECTED_PART_SHAPE);
             const int* ptr = split[i].getDataPtr();
             CHECK(*ptr == i + 1);
