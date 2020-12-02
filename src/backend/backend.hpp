@@ -58,6 +58,23 @@ class IntPair {
     IntPair(int val) : x(val), y(val) {}
     IntPair(int x, int y) : x(x), y(y) {}
 
+    /**
+     * @brief Construct an IntPair from a tuple.
+     * If the tuple contains a single element, it is assigned to the both elements of the tuple.
+     * If there are two elements, they are taken as is. Otherwise, an exception is thrown.
+     * @param tuple         The input tuple
+     */
+    IntPair(const IntTuple& tuple) {
+        if (tuple.size() == 1)
+            x = y = tuple[0];
+        else if (tuple.size() == 2) {
+            x = tuple[0];
+            y = tuple[1];
+        }
+        else
+            throw std::invalid_argument("Cannot construct an integer pair from a tuple of " + std::to_string(tuple.size()) + " elements");
+    }
+
     inline IntPair operator+(const IntPair& another) const {
         return IntPair(x + another.x, y + another.y);
     }
