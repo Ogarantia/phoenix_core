@@ -31,16 +31,18 @@ set(SOURCES ${SOURCES}
     ${CPP_SOURCES_FOLDER}/utils.cc
 )
 
+# Common set of flags independent of development or production build
+set(COMMON_FLAGS "--std=c++14")
+# Set of optimization flags
 set(OPTIMIZATION_FLAGS "-O3")
-set(MISC_FLAGS "-Wno-unknown-pragmas")
 set(VECTORIZATION_FLAGS "-ftree-vectorize")
 set(COMPUTE_OPTIMIZATION_FLAGS "-ffast-math -funroll-loops")
-# Compilation flags according to the compiler
+# Set of compiler specific compilation flags
 if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(COMPUTE_OPTIMIZATION_FLAGS "${COMPUTE_OPTIMIZATION_FLAGS} -floop-nest-optimize ")
 endif()
 
-# Compilation flags according to the target architecture
+# Set of target architecture specific compilation flags
 if (ARCH STREQUAL "x86_64")
   set(ARCH_OPTIMIZATION_FLAGS "-march=skylake -mfma -mavx2")
 # see https://gcc.gnu.org/onlinedocs/gcc-8.1.0/gcc/AArch64-Options.html for more specific option
@@ -74,7 +76,7 @@ if (WITH_ONEDNN)
   set(ONEDNN_SUBMODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/thirdparty/onednn")
   option(DNNL_BUILD_TESTS "Build DNNL tests" OFF)
   option(DNNL_BUILD_EXAMPLES "Build DNNL examples" OFF)
-  set(DNNL_ARCH_OPT_FLAGS "${MISC_FLAGS} ${OPTIMIZATION_FLAGS} ${COMPUTE_OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS} ${ARCH_OPTIMIZATION_FLAGS}" CACHE INTERNAL "")
+  set(DNNL_ARCH_OPT_FLAGS "${COMMON_FLAGS} ${OPTIMIZATION_FLAGS} ${COMPUTE_OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS} ${ARCH_OPTIMIZATION_FLAGS}" CACHE INTERNAL "")
   message("**************** Compiling oneDNN: ****************")
   add_subdirectory(${ONEDNN_SUBMODULE_PATH})
   message("**************** ***************** ****************")
@@ -94,8 +96,8 @@ endif()
 
 if (WITH_CUDNN)
   # set flags
-  set(CMAKE_CXX_FLAGS "-DBACKEND_CUDNN ${MISC_FLAGS} ${OPTIMIZATION_FLAGS} ${COMPUTE_OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS} ${ARCH_OPTIMIZATION_FLAGS}")
-  set(CMAKE_CUDA_FLAGS "-DBACKEND_CUDNN ${OPTIMIZATION_FLAGS}")
+  set(CMAKE_CXX_FLAGS "-DBACKEND_CUDNN ${COMMON_FLAGS} ${OPTIMIZATION_FLAGS} ${COMPUTE_OPTIMIZATION_FLAGS} ${VECTORIZATION_FLAGS} ${ARCH_OPTIMIZATION_FLAGS}")
+  set(CMAKE_CUDA_FLAGS "-DBACKEND_CUDNN ${COMMON_FLAGS} ${OPTIMIZATION_FLAGS}")
   if (UPSTRIDE_DEBUG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG")
     # -g/G generate debug information for respectively host/device https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#ptxas-options-device-debug
