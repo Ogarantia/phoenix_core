@@ -154,6 +154,7 @@ namespace upstride {
         ScalarDenseGradFunctor<Device, T> denseOp;  //!< scalar convolution operator to be used to implement other data types
         DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
         DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
+        bool requireInputGrad;                      //!< if `true`, the input gradient is computed
 
     public:
         /**
@@ -166,7 +167,8 @@ namespace upstride {
         UpstrideDenseGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, bool requireInputGrad):
             context(context),
             algebra(algebra),
-            denseOp(context, dataFormat, requireInputGrad)
+            denseOp(context, dataFormat, requireInputGrad),
+            requireInputGrad(requireInputGrad)
         {}
 
         /**
@@ -256,11 +258,13 @@ namespace upstride {
                     [this, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
                         denseOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
                         if (positive) {
-                            kernelGrad[dim] += bufferKernel;
-                            inputGrad[dim] += bufferInput;
+                            kernelGrad[right] += bufferKernel;
+                            if (requireInputGrad)
+                                inputGrad[left] += bufferInput;
                         } else {
-                            kernelGrad[dim] -= bufferKernel;
-                            inputGrad[dim] -= bufferInput;
+                            kernelGrad[right] -= bufferKernel;
+                            if (requireInputGrad)
+                                inputGrad[left] -= bufferInput;
                         }
                     }
                 );
