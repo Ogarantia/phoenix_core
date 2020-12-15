@@ -29,7 +29,7 @@ ConvManager::QuatKernelPointwiseConvManager(
 
 
 void ConvManager::configure(
-    const Shape& inputShape, const Shape& weightsShape,
+    device::CUDA& device, const Shape& inputShape, const Shape& weightsShape,
     const IntPair& padBefore, const IntPair& padAfter, int groups
 ) {
     // only run if eligibleToRun was set to true in the constructor
@@ -41,6 +41,8 @@ void ConvManager::configure(
             cached = false;
             return;
         }
+
+        registersPerThreadBlock = device.getRegistersPerThreadBlock();
 
         // do not reconfigure if the parameters necessary for convDesc haven't changed
         if (inputShape == this->inputShape && weightsShape == this->weightsShape) {
@@ -182,6 +184,9 @@ const std::vector<ConvKernelConfiguration>& BackwardFunctor<T>::getInputGradConf
 template<typename T>
 const std::vector<ConvKernelConfiguration>& BackwardFunctor<T>::getWeightsGradConfigs() {
     static const std::vector<ConvKernelConfiguration> weightsGradKernelConfigs {
+        {ConvKernelType::pointwiseWeightsGrad_3DThreadBlock, {4, 4, 32}},
+        {ConvKernelType::pointwiseWeightsGrad_3DThreadBlock, {8, 8, 8}},
+        {ConvKernelType::pointwiseWeightsGrad_3DThreadBlock, {16, 16, 2}},
         {ConvKernelType::pointwiseWeightsGrad_3DThreadBlock, {4, 4, 64}},
         {ConvKernelType::pointwiseWeightsGrad_3DThreadBlock, {8, 8, 16}},
         {ConvKernelType::pointwiseWeightsGrad_3DThreadBlock, {16, 16, 4}},

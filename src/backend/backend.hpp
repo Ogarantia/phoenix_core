@@ -212,7 +212,7 @@ public:
      * @param groups                        convolution groups paramater
      */
     void configure(
-        const Shape& inputShape, const Shape& weightsShape,
+        Device& device, const Shape& inputShape, const Shape& weightsShape,
         const IntPair& padBefore, const IntPair& padAfter, int groups
     ) {}
 

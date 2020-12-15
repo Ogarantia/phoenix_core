@@ -120,6 +120,7 @@ if (WITH_CUDNN)
   set(SOURCES ${SOURCES}
       ${CPP_SOURCES_FOLDER}/backend/cudnn/conv2d_algo_select.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/cudnn.cc
+      ${CPP_SOURCES_FOLDER}/backend/cudnn/device.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels_utils.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/quat_pointwise_conv2d.cc
       ${CPP_SOURCES_FOLDER}/backend/cudnn/quat_pointwise_conv2d.cu

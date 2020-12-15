@@ -21,8 +21,8 @@ namespace cudnn {
 
 /**
  * @brief Retrieves cuDNN tensor format corresponding to a specific dataFormat by UpStride
- * @param dataFormat 
- * @return cudnnTensorFormat_t 
+ * @param dataFormat
+ * @return cudnnTensorFormat_t
  */
 static inline cudnnTensorFormat_t dataFormatToTensorFormat(DataFormat dataFormat) {
     switch (dataFormat) {
@@ -91,6 +91,18 @@ class Context : public upstride::Context {
         auto error = cudaPeekAtLastError();
         if (error != cudaError::cudaSuccess)
             throw std::runtime_error(cudaGetErrorString(error));
+    }
+
+    /**
+     * @brief Checks the last CUDA operation error code, if the operation was not successful prints message and throws an exception.
+     * @param msg     Additional message to be printed before throwing the error
+     */
+    inline static void raiseIfError(const char* msg) {
+        auto error = cudaPeekAtLastError();
+        if (error != cudaError::cudaSuccess) {
+            std::cerr << msg << "\n";
+            throw std::runtime_error(cudaGetErrorString(error));
+        }
     }
 
     /**
@@ -180,7 +192,7 @@ class Memory {
 
 /**
  * @brief Fills a cuDNN tensor descriptor
- * 
+ *
  * @tparam T scalar datatype
  * @param descriptor    the descriptor to fill
  * @param shape         tensor shape

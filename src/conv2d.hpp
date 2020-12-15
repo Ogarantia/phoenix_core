@@ -130,6 +130,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 
         if (algebra == Algebra::QUATERNION) {
             quatKernelOp.configure(
+                device,
                 inputTensor.getShape(),
                 kernelTensor.getShape(),
                 padBefore,
@@ -290,6 +291,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
 
         if (algebra == Algebra::QUATERNION) {
             quatKernelOp.configure(
+                device,
                 inputTensor.getShape(),
                 kernelTensor.getShape(),
                 padBefore,

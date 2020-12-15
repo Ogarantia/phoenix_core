@@ -48,7 +48,7 @@ public:
      * @param groups                        convolution groups paramater
      */
     void configure(
-        const Shape& inputShape, const Shape& weightsShape,
+        device::CUDA& device, const Shape& inputShape, const Shape& weightsShape,
         const IntPair& padBefore, const IntPair& padAfter, int groups
     );
 
@@ -68,6 +68,7 @@ protected:
 
     ConvDesc convDesc {0};                  //!< descriptor of the convolution to be run
     bool cached {false};                    //!< determines if the optimal kernel for the convolution is locally cached
+    int registersPerThreadBlock;            //!< number of available registers per thread block on the current device
 
 private:
     bool pointwiseConv {false};             //!< determines if the convolution to be run is pointwise

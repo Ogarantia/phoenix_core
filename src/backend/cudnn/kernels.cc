@@ -119,6 +119,10 @@ template<typename KernelPtr, typename T>
 PerfResult ConvKernelProfiler<KernelPtr, T>::profileOptimalKernel(
     const ConvDesc& convDesc, const std::vector<ConvKernelConfiguration>& configsToRun, const TensorsPack& tensors
 ) {
+    if (configsToRun.empty()) {
+        throw std::logic_error("No configurations to profile");
+    }
+
     // gather profiling results for all available kernels
     auto perfResults = this->measureKernelsPerf(convDesc, configsToRun, tensors);
 

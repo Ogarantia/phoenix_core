@@ -123,7 +123,7 @@ class CUDA {
 
     /**
      * @brief Checks cache for a convolution descriptor, sets optimal kernel configuration if found
-     * 
+     *
      * @param convType          Type of the kernel convolution operation
      * @param convDesc          Descriptor of the kernel convolution
      * @param optimalConf       Parameter used to pass the cached optimal kernel configuration and its profiling record, if found
@@ -139,7 +139,7 @@ class CUDA {
 
     /**
      * @brief Adds a kernel configuration and its profiling record to the cache
-     * 
+     *
      * @param convType          Type of the kernel convolution operation
      * @param convDesc          Descriptor of the kernel convolution
      * @param optimalConf       The optimal kernel configuration and its profiling record
@@ -159,6 +159,13 @@ class CUDA {
     inline const cublasHandle_t& getCublasHandle() const {
         return cublasHandle;
     }
+
+    /**
+     * @brief Get the number of registers available per thread block for either the current device or across all devices
+     *
+     * @param acrossAllDevices                  determines whether the number of registers should be calculated as a minimum across all devices or only for the current one
+     */
+    int getRegistersPerThreadBlock(bool acrossAllDevices=false);
 };
 }  // namespace device
 }  // namespace upstride

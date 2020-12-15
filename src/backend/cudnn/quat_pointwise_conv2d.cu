@@ -638,7 +638,7 @@ inline bool sameDim3(const dim3 &a, const dim3 &b) {
  *
  * @param conf                          kernel configuration with the thread block to check
  */
-void assertEqualDimXDimY(const ConvKernelConfiguration& conf) {
+inline void assertEqualDimXDimY(const ConvKernelConfiguration& conf) {
     if (conf.threads.x != conf.threads.y) {
         const std::string error_msg = "Thread block x and y dimensions must be equal for the chosen kernel: " + conf.toString();
         throw std::invalid_argument(error_msg);
@@ -652,11 +652,27 @@ void assertEqualDimXDimY(const ConvKernelConfiguration& conf) {
  * @param kernelSet                     control boolean
  * @param conf                          kernel configuration to print in the error message
  */
-void assertKernelSet(bool kernelSet, const ConvKernelConfiguration& conf) {
+inline void assertKernelSet(bool kernelSet, const ConvKernelConfiguration& conf) {
     if (!kernelSet) {
         const std::string error_msg = "Unhandled kernel configuration: " + conf.toString();
         throw std::invalid_argument(error_msg);
     }
+}
+
+
+/**
+ * @brief Check if the number of registers per thread block is enough for the chosen thread block size
+ *
+ * Currently used kernel threads often use between 32 and 64 registers, as checked with Nsight Compute.
+ * Running kernels using too many registers causes the 'too many resources requested for launch' CUDA error.
+ *
+ * @param threads                       thread block dimensions
+ * @param registersPerThreadBlock       number of available registers per thread block on the current device
+ */
+inline bool checkEnoughRegistersForLaunch(const dim3& threads, int registersPerThreadBlock) {
+    const int threadBlockSize = threads.x * threads.y * threads.z;
+    const int MAX_REGISTER_USAGE = 64;
+    return ((threadBlockSize * MAX_REGISTER_USAGE) <= registersPerThreadBlock);
 }
 
 
@@ -677,12 +693,11 @@ template<typename T, unsigned int blockDimXY, unsigned int bankSkew>
 bool trySetKernelForward2DSharedMemory(
     const ConvKernelConfiguration& conf, ForwardKernelPtr<T>& kernel
 ) {
-    bool kernelSet {false};
     if (sameDim3(conf.threads, dim3{blockDimXY, blockDimXY, 1})) {
         kernel = pointwise_conv_forward_2D_shared_mem<T, blockDimXY, blockDimXY, bankSkew>;
-        kernelSet = true;
+        return true;
     }
-    return kernelSet;
+    return false;
 }
 
 
@@ -798,7 +813,7 @@ void QuatKernelPointwiseConvForwardFunctor<device::CUDA, T>::launchKernel(
         convDesc.batchSize, convDesc.inputChannels,
         convDesc.outputChannels, convDesc.imageSize
     );
-    cudnn::Context::raiseIfError();
+    cudnn::Context::raiseIfError("ForwardFunctor launchKernel failed");
 }
 
 
@@ -811,7 +826,14 @@ bool QuatKernelPointwiseConvForwardFunctor<device::CUDA, T>::interpretKernelConf
     dim3 threads = conf.threads;
     bool kernelSet {false};
 
+    if (!checkEnoughRegistersForLaunch(threads, this->registersPerThreadBlock)) {
+        return false;
+    }
+
     switch (conf.kernel) {
+    case ConvKernelType::skip:
+        return false;
+
     case ConvKernelType::pointwiseForward_2DSharedMemory:
         blocks = dim3(
             ceili(convDesc.imageSize, threads.x),
@@ -852,7 +874,14 @@ bool QuatKernelPointwiseConvBackwardFunctor<device::CUDA, T>::interpretKernelCon
     dim3 threads = conf.threads;
     bool kernelSet {false};
 
+    if (!checkEnoughRegistersForLaunch(threads, this->registersPerThreadBlock)) {
+        return false;
+    }
+
     switch(conf.kernel) {
+    case ConvKernelType::skip:
+        return false;
+
     case ConvKernelType::pointwiseInputGrad_2DSharedMemory:
         blocks = dim3(
             ceili(convDesc.imageSize, threads.x),
@@ -881,8 +910,11 @@ bool QuatKernelPointwiseConvBackwardFunctor<device::CUDA, T>::interpretKernelCon
         kernelSet =
             trySetKernelWeightsGrad3DThreadBlock<T, 32, 1, 1>(conf, kernel)
             || trySetKernelWeightsGrad3DThreadBlock<T, 16, 4, 1>(conf, kernel)
+            || trySetKernelWeightsGrad3DThreadBlock<T, 16, 2, 1>(conf, kernel)
             || trySetKernelWeightsGrad3DThreadBlock<T, 8, 16, 1>(conf, kernel)
-            || trySetKernelWeightsGrad3DThreadBlock<T, 4, 64, 1>(conf, kernel);
+            || trySetKernelWeightsGrad3DThreadBlock<T, 8, 8, 1>(conf, kernel)
+            || trySetKernelWeightsGrad3DThreadBlock<T, 4, 64, 1>(conf, kernel)
+            || trySetKernelWeightsGrad3DThreadBlock<T, 4, 32, 1>(conf, kernel);
 
         break;
 
@@ -929,7 +961,7 @@ void QuatKernelPointwiseConvBackwardFunctor<device::CUDA, T>::launchKernel(
         convDesc.batchSize, convDesc.inputChannels,
         convDesc.outputChannels, convDesc.imageSize
     );
-    cudnn::Context::raiseIfError();
+    cudnn::Context::raiseIfError("BackwardFunctor launchKernel failed");
 }
 
 

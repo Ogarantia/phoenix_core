@@ -1,4 +1,5 @@
 #include "kernels_utils.hpp"
+#include "context.hpp"
 
 namespace upstride {
 namespace cuda {

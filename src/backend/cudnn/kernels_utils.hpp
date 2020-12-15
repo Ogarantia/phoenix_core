@@ -38,6 +38,7 @@ enum class ConvType {
  */
 enum class ConvKernelType {
     invalid = 0,
+    skip,
 
     // pointwise convolution kernels
     pointwiseForward_2DSharedMemory,
@@ -168,6 +169,14 @@ struct ConvKernelTensorsPack {
     const Tensor<Device, const T>* inputTensor3;            //!< third input data tensor (used only for bias)
     Tensor<Device, T>& outputTensor;                        //!< output data tensor
 };
+
+
+/**
+ * @brief Get the number of registers available per thread block for either the current device or across all devices
+ *
+ * @param acrossAllDevices                  determines whether the number of registers should be calculated as a minimum across all devices or only for the current one
+ */
+int getRegistersPerThreadBlock(bool acrossAllDevices=false);
 
 
 /**
