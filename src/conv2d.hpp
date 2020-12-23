@@ -72,23 +72,26 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     cuda::QuatKernelPointwiseConvForwardFunctor<Device, T> quatKernelOp;       //!< custom kernels operator for quaternionic pointwise convolution
     DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], outputLanes[8];  //!< deferred allocators for the factorized quaternion implementation
     DeferredAllocator<Device, T> buffer;                                         //!< deferred allocator for an intermediate buffer for the default implementation
+    const bool realValuedInput;                 //!< if `true`, the input tensor is real-valued (contains the real part only)
     std::mutex access;
 
    public:
     /**
      * @brief Instantiates convolution operator
-     * @param context       A context instance
-     * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-     * @param dataFormat    Expected tensors format
-     * @param stride        Convolution stride
-     * @param dilation      Convolution dilation
-     * @param useBias       If `true`, the bias addition is performed
+     * @param context               A context instance
+     * @param algebra               Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
+     * @param dataFormat            Expected tensors format
+     * @param stride                Convolution stride
+     * @param dilation              Convolution dilation
+     * @param useBias               If `true`, the bias addition is performed
+     * @param realValuedInput       If `true`, the convolution input tensor is real-valued (contains the real part only)
      */
-    UpstrideConv2DFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias):
+    UpstrideConv2DFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias, bool realValuedInput = false):
         context(context),
         algebra(algebra),
         convOp(context, dataFormat, stride, dilation, useBias),
-        quatKernelOp(context, algebra, dataFormat, stride, dilation)
+        quatKernelOp(context, algebra, dataFormat, stride, dilation),
+        realValuedInput(realValuedInput)
     {}
 
     /**
@@ -120,7 +123,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 
         convOp.configure(
             device,
-            inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+            realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             biasTensor ? Shape{biasTensor->getShape().numel() / MULTIVECTOR_DIM[algebra]} : Shape(),
             outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
@@ -128,7 +131,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             padAfter,
             groups);
 
-        if (algebra == Algebra::QUATERNION) {
+        if (algebra == Algebra::QUATERNION && !realValuedInput) {
             quatKernelOp.configure(
                 device,
                 inputTensor.getShape(),
@@ -150,6 +153,42 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         // run custom convolution kernels for quaternions if possible
         if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, biasTensor, outputTensor);
+        }
+
+        // real-valued input
+        else if (realValuedInput && algebra != Algebra::REAL) {
+            using CliffordProductSpec = CliffordProductSpec<algebra>;
+
+            // make sure there is no bias
+            if (biasTensor)
+                throw std::runtime_error("Bias addition is not supported for type0 inputs");
+
+            // split tensors along blades
+            const TensorSplit<Device, const T, CliffordProductSpec::DIMS> kernel(kernelTensor, false);
+            const auto& input(inputTensor);
+            TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
+
+            // allocate a temporary buffer
+            AllocatedTensor<Device, T>& buffer(this->buffer.get(outputTensor.getDevice(), output.shape()));
+
+            // compute the Clifford product
+            BinaryOperation<CliffordProductSpec>::product(
+                [this, &input, &kernel, &output](int left, int right, int dim) {
+                    if (left == 0)
+                        convOp(input, kernel[right], nullptr, output[dim]);
+                    // no else branch: input is zero if left > 0, bias is zero as well
+                },
+
+                [this, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
+                    if (left == 0) {
+                        convOp(input, kernel[right], nullptr, buffer);
+                        if (positive)
+                            output[dim] += buffer;
+                        else
+                            output[dim] -= buffer;
+                    }
+                    // no else branch: input is zero if left > 0, bias is zero as well
+                });
         }
 
         // factorized quaternion convolution fallback
@@ -231,23 +270,28 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     cuda::QuatKernelPointwiseConvBackwardFunctor<Device, T> quatKernelOp;              //!< custom kernels operator for quaternionic pointwise convolution
     DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
     DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
+    const bool requireInputGrad;                                //!< if `true`, the gradient with respect to the input tensor is computed as well
+    const bool realValuedInput;                                 //!< if `true`, the input tensor is real-valued (contains the real part only)
     std::mutex access;
 
    public:
     /**
      * @brief Instantiates convolution operator
-     * @param context       A context instance
-     * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-     * @param dataFormat    Expected tensors format
-     * @param stride        Convolution stride
-     * @param dilation      Convolution dilation
-     * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
+     * @param context               A context instance
+     * @param algebra               Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
+     * @param dataFormat            Expected tensors format
+     * @param stride                Convolution stride
+     * @param dilation              Convolution dilation
+     * @param requireInputGrad      If `true`, the gradient with respect to the input tensor is computed as well
+     * @param realValuedInput       If `true`, the convolution input tensor is real-valued (contains the real part only)
      */
-    UpstrideConv2DGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad):
+    UpstrideConv2DGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad, bool realValuedInput = false):
         context(context),
         algebra(algebra),
         convOp(context, dataFormat, stride, dilation, requireInputGrad),
-        quatKernelOp(context, algebra, dataFormat, stride, dilation)
+        quatKernelOp(context, algebra, dataFormat, stride, dilation),
+        requireInputGrad(requireInputGrad),
+        realValuedInput(realValuedInput)
     {}
 
     /**
@@ -282,14 +326,14 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
 
         convOp.configure(
             device,
-            inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
+            realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             padBefore,
             padAfter,
             groups);
 
-        if (algebra == Algebra::QUATERNION) {
+        if (algebra == Algebra::QUATERNION && !realValuedInput) {
             quatKernelOp.configure(
                 device,
                 inputTensor.getShape(),
@@ -312,6 +356,47 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
         // run custom convolution kernels for quaternions if possible
         if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        }
+
+        else if (realValuedInput && algebra != Algebra::REAL) {
+            using CliffordProductSpec = CliffordProductSpec<algebra>;
+
+            // split tensors along blades
+            const TensorSplit<Device, const T, CliffordProductSpec::DIMS> kernel(kernelTensor, false), grad(gradTensor);
+            const auto& input(inputTensor);
+            TensorSplit<Device, T, CliffordProductSpec::DIMS> kernelGrad(kernelGradTensor);
+
+            // check for input gradient requiredness
+            if (requireInputGrad) {
+                // Computing gradient of a hypercomplex quantity with respect to a real variable; no reason for it to be real
+                // However, the imaginary parts are not even stored. The input gradient cannot be required then.
+                throw std::logic_error("Input gradient required for type0 input tensor");
+            }
+
+            // allocate a temporary buffer
+            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(kernelGradTensor.getDevice(), kernelGrad.shape()));
+
+            // compute the Clifford product
+            BinaryOperation<CliffordProductSpec>::productBackprop(
+                [this, &input, &kernel, &grad, &kernelGrad, &inputGradTensor](int left, int right, int dim) {
+                    if (left == 0)
+                        convOp(input, kernel[right], grad[dim], kernelGrad[right], inputGradTensor);
+                    else {
+                        // input is real: if left != 0, it is zero
+                        kernelGrad[right].zero();
+                    }
+                },
+
+                [this, &input, &kernel, &grad, &kernelGrad, &inputGradTensor, &bufferKernel](int left, int right, int dim, bool positive) {
+                    if (left == 0) {
+                        convOp(input, kernel[right], grad[dim], bufferKernel, inputGradTensor);
+                        if (positive)
+                            kernelGrad[right] += bufferKernel;
+                        else
+                            kernelGrad[right] -= bufferKernel;
+                    }
+                    // nothing to do in else branch since the input is real: if left != 0, it is zero
+                });
         }
 
         // factorized quaternion convolution fallback
@@ -368,10 +453,12 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                     convOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
                     if (positive) {
                         kernelGrad[right] += bufferKernel;
-                        inputGrad[left] += bufferInput;
+                        if (requireInputGrad)
+                            inputGrad[left] += bufferInput;
                     } else {
                         kernelGrad[right] -= bufferKernel;
-                        inputGrad[left] -= bufferInput;
+                        if (requireInputGrad)
+                            inputGrad[left] -= bufferInput;
                     }
                 });
         }

@@ -24,7 +24,7 @@ static upstride::onednn::Context context;
 
 /**
  * @brief Fill a tensor with random floating values.
- * 
+ *
  * @param t Tensor to fill
  */
 void setRandVal(upstride::AllocatedTensor<upstride::device::CPU, float>& t) {
@@ -313,7 +313,7 @@ TEST_CASE("Test:Conv2d") {
         upstride::IntPair dil(1, 1);
         const upstride::IntPair padBefore(0);
         const upstride::IntPair padAfter(0);
-        
+
         upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor(context, algebra, upstride::DataFormat::NCHW, st, dil, false);
         myConv2DFunctor(device, inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
 
@@ -326,6 +326,62 @@ TEST_CASE("Test:Conv2d") {
                 test = false;
         }
         CHECK((test));
+    }
+
+    SUBCASE(" Test: Conv2d - quaternion with real input") {
+        // convolving a 3x2x2 CHW real tensor with a 1x1 convolution kernel with 2 channels on output
+        std::cout << " Test: Conv2d - quaternion with real input" << std::endl;
+        using namespace upstride;
+
+        // set up a real input tensor
+        AllocatedTensor<device::CPU, float> input(::device, Shape({1, 3, 2, 2}));
+        assign<float>(input, {
+            0, 0, 0, 0,
+            -1, 0, 0, 0,
+            1, 2, 3, 4,
+        });
+
+        // set up a quaternion filter tensor
+        AllocatedTensor<device::CPU, float> kernel(::device, Shape({MULTIVECTOR_DIM[Algebra::QUATERNION], 2, 3, 1, 1}));
+        assign<float>(kernel, {
+            1, 1, 1,
+            0, 0, 2,
+
+            0, 0, 0,
+            -1, -1, -1,
+
+            0, 1, 2,
+            0, 2, 4,
+
+            -1, -2, -3,
+            0, 0, 1
+        });
+
+        // set up a reference output
+        AllocatedTensor<device::CPU, float> refOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::QUATERNION], 2, 2, 2}));
+        assign<float>(refOutput, {
+            0, 2, 3, 4,
+            2, 4, 6, 8,
+
+            0, 0, 0, 0,
+            0, -2, -3, -4,
+
+            1, 4, 6, 8,
+            2, 8, 12, 16,
+
+            -1, -6, -9, -12,
+            1, 2, 3, 4
+        });
+
+        // init operation
+        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(context, Algebra::QUATERNION, DataFormat::NCHW, 1, 1, false, true);
+
+        // compute test output
+        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::QUATERNION], 2, 2, 2}));
+        op(::device, input, kernel, nullptr, testOutput, 0, 0);
+
+        // compare
+        CHECK(compareTensors(refOutput, testOutput));
     }
 
     SUBCASE(" Test: Conv2d - GA(3,0,0)") {
