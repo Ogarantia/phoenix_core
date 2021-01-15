@@ -12,6 +12,7 @@ cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::Conv2DConfigDescriptor(c
     Context::raiseIfError(cudnnGetConvolution2dDescriptor(convDesc, &pad.x, &pad.y, &stride.x, &stride.y,
                                                           &dilation.x, &dilation.y, &mode, &computeType));
     Context::raiseIfError(cudnnGetConvolutionGroupCount(convDesc, &groups));
+    Context::raiseIfError(cudnnGetConvolutionMathType(convDesc, &mathType));
 
     int whatever;   // the value is not used
     Context::raiseIfError(cudnnGetTensor4dDescriptor(
@@ -34,7 +35,8 @@ bool cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::operator==(const Co
         computeType == other.computeType &&
         pad == other.pad &&
         stride == other.stride &&
-        dilation == other.dilation;
+        dilation == other.dilation &&
+        mathType == other.mathType;
 }
 
 
@@ -54,7 +56,8 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
                                                                             const cudnnFilterDescriptor_t& kernel,
                                                                             const cudnnTensorDescriptor_t& output,
                                                                             float& executionTime,
-                                                                            size_t& scratchpadSize) {
+                                                                            size_t& scratchpadSize,
+                                                                            cudnnMathType_t& mathType) {
     std::lock_guard<std::mutex> lock(accessControl);
 
     // build the descriptor
@@ -66,6 +69,7 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
             UPSTRIDE_SAYS(context, "Reusing a forward conv2D algorithm (%u entries in cache)", forwardAlgorithms.size());
             scratchpadSize = entry.second.characteristics.scratchpadSize;
             executionTime = entry.second.characteristics.time;
+            mathType = entry.second.characteristics.mathType;
             return entry.second.algorithm;
         }
 
@@ -87,12 +91,14 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
     // print results (in verbose mode only)
     for (int i = 0; i < algoCount; ++i)
         if (algo[i].status == CUDNN_STATUS_SUCCESS)
-            UPSTRIDE_SAYS(context, "   %d: %0.3f ms", algo[i].algo, algo[i].time);
+            UPSTRIDE_SAYS(context, "   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
 
     // pick the best (fastest) option and store it in the cache
     scratchpadSize = algo[0].memory;
     executionTime = algo[0].time;
-    forwardAlgorithms.emplace_back(desc, ForwardAlgorithmChoice{ {scratchpadSize, executionTime}, algo[0].algo });
+    mathType = algo[0].mathType;
+
+    forwardAlgorithms.emplace_back(desc, ForwardAlgorithmChoice{ {scratchpadSize, executionTime, mathType}, algo[0].algo });
     return algo[0].algo;
 }
 
@@ -104,7 +110,8 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
                                                                                          const cudnnTensorDescriptor_t& grad,
                                                                                          const cudnnFilterDescriptor_t& kernel,
                                                                                          float& executionTime,
-                                                                                         size_t& scratchpadSize) {
+                                                                                         size_t& scratchpadSize,
+                                                                                         cudnnMathType_t& mathType) {
     std::lock_guard<std::mutex> lock(accessControl);
 
     // build the descriptor
@@ -116,6 +123,7 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
             UPSTRIDE_SAYS(context, "Reusing a backward filter conv2D algorithm (%u entries in cache)", backwardFilterAlgorithms.size());
             scratchpadSize = entry.second.characteristics.scratchpadSize;
             executionTime = entry.second.characteristics.time;
+            mathType = entry.second.characteristics.mathType;
             return entry.second.algorithm;
         }
 
@@ -137,12 +145,14 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
     // print results (in verbose mode only)
     for (int i = 0; i < algoCount; ++i)
         if (algo[i].status == CUDNN_STATUS_SUCCESS)
-            UPSTRIDE_SAYS(context, "   %d: %0.3f ms", algo[i].algo, algo[i].time);
+            UPSTRIDE_SAYS(context, "   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
 
     // pick the best (fastest) option and store it in the cache
     scratchpadSize = algo[0].memory;
     executionTime = algo[0].time;
-    backwardFilterAlgorithms.emplace_back(desc, BackwardFilterAlgorithmChoice{ {scratchpadSize, executionTime}, algo[0].algo });
+    mathType = algo[0].mathType;
+
+    backwardFilterAlgorithms.emplace_back(desc, BackwardFilterAlgorithmChoice{ {scratchpadSize, executionTime, mathType}, algo[0].algo });
     return algo[0].algo;
 }
 
@@ -154,7 +164,8 @@ cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardData
                                                                                      const cudnnTensorDescriptor_t& grad,
                                                                                      const cudnnFilterDescriptor_t& kernel,
                                                                                      float& executionTime,
-                                                                                     size_t& scratchpadSize) {
+                                                                                     size_t& scratchpadSize,
+                                                                                     cudnnMathType_t& mathType) {
     std::lock_guard<std::mutex> lock(accessControl);
 
     // build the descriptor
@@ -166,6 +177,7 @@ cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardData
             UPSTRIDE_SAYS(context, "Reusing a backward data conv2D algorithm (%u entries in cache)", backwardDataAlgorithms.size());
             scratchpadSize = entry.second.characteristics.scratchpadSize;
             executionTime = entry.second.characteristics.time;
+            mathType = entry.second.characteristics.mathType;
             return entry.second.algorithm;
         }
 
@@ -187,11 +199,13 @@ cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardData
     // print results (in verbose mode only)
     for (int i = 0; i < algoCount; ++i)
         if (algo[i].status == CUDNN_STATUS_SUCCESS)
-            UPSTRIDE_SAYS(context, "   %d: %0.3f ms", algo[i].algo, algo[i].time);
+            UPSTRIDE_SAYS(context, "   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
 
     // pick the best (fastest) option and store it in the cache
     scratchpadSize = algo[0].memory;
     executionTime = algo[0].time;
-    backwardDataAlgorithms.emplace_back(desc, BackwardDataAlgorithmChoice{ {scratchpadSize, executionTime}, algo[0].algo });
+    mathType = algo[0].mathType;
+
+    backwardDataAlgorithms.emplace_back(desc, BackwardDataAlgorithmChoice{ {scratchpadSize, executionTime, mathType}, algo[0].algo });
     return algo[0].algo;
 }

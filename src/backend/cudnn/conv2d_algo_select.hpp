@@ -34,6 +34,7 @@ private:
         Shape inputShape, kernelShape;
         IntPair pad, stride, dilation;
         int groups;
+        cudnnMathType_t mathType;       //!< math type for the algorithm, using either regular math or Tensor Cores
     public:
         /**
          * @brief Construct a new Conv 2D descriptor object
@@ -59,6 +60,7 @@ private:
     typedef struct {
         size_t scratchpadSize;      //!< size in bytes of a memory buffer needed by the algorithm
         float time;                 //!< execution time in ms
+        cudnnMathType_t mathType;   //!< math type for the algorithm, using either regular math or Tensor Cores
     } AlgorithmCharacteristics;
 
     /**
@@ -105,6 +107,7 @@ public:
      * @param output            The convolution output tensor descriptor
      * @param executionTime     Returns execution time in milliseconds took by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
     cudnnConvolutionFwdAlgo_t selectForwardAlgo(const upstride::Context& context,
@@ -114,7 +117,8 @@ public:
                                                 const cudnnFilterDescriptor_t& kernel,
                                                 const cudnnTensorDescriptor_t& output,
                                                 float& executionTime,
-                                                size_t& scratchpadSize);
+                                                size_t& scratchpadSize,
+                                                cudnnMathType_t& mathType);
 
     /**
      * @brief Selects the fastest backward algorithm computing the filter gradient, applicable for a given convolution
@@ -129,6 +133,7 @@ public:
      * @param kernel            The convolution kernel (filter) tensor descriptor
      * @param executionTime     Returns execution time in milliseconds took by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
     cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const upstride::Context& context,
@@ -138,7 +143,8 @@ public:
                                                              const cudnnTensorDescriptor_t& grad,
                                                              const cudnnFilterDescriptor_t& kernel,
                                                              float& executionTime,
-                                                             size_t& scratchpadSize);
+                                                             size_t& scratchpadSize,
+                                                             cudnnMathType_t& mathType);
 
     /**
      * @brief Selects the fastest backward algorithm computing the input (data) gradient, applicable for a
@@ -153,6 +159,7 @@ public:
      * @param kernel            The convolution kernel (filter) tensor descriptor
      * @param executionTime     Returns execution time in milliseconds took by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
     cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const upstride::Context& context,
@@ -162,7 +169,8 @@ public:
                                                          const cudnnTensorDescriptor_t& grad,
                                                          const cudnnFilterDescriptor_t& kernel,
                                                          float& executionTime,
-                                                         size_t& scratchpadSize);
+                                                         size_t& scratchpadSize,
+                                                         cudnnMathType_t& mathType);
 };
 
 }

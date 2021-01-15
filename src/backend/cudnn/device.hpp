@@ -65,6 +65,7 @@ class CUDA {
      * @param output            The convolution output tensor descriptor
      * @param time              Returns execution time in milliseconds taken by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
     inline cudnnConvolutionFwdAlgo_t selectForwardAlgo(const Context& context,
@@ -73,8 +74,9 @@ class CUDA {
                                                        const cudnnFilterDescriptor_t& kernel,
                                                        const cudnnTensorDescriptor_t& output,
                                                        float& executionTime,
-                                                       size_t& scratchpadSize) {
-        return conv2dAlgorithms.selectForwardAlgo(context, cudnnHandle, convDesc, input, kernel, output, executionTime, scratchpadSize);
+                                                       size_t& scratchpadSize,
+                                                       cudnnMathType_t& mathType) {
+        return conv2dAlgorithms.selectForwardAlgo(context, cudnnHandle, convDesc, input, kernel, output, executionTime, scratchpadSize, mathType);
     }
 
     /**
@@ -87,6 +89,7 @@ class CUDA {
      * @param kernel            The convolution kernel (filter) tensor descriptor
      * @param time              Returns execution time in milliseconds taken by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
     inline cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const Context& context,
@@ -95,8 +98,9 @@ class CUDA {
                                                                     const cudnnTensorDescriptor_t& grad,
                                                                     const cudnnFilterDescriptor_t& kernel,
                                                                     float& executionTime,
-                                                                    size_t& scratchpadSize) {
-        return conv2dAlgorithms.selectBackwardFilterAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize);
+                                                                    size_t& scratchpadSize,
+                                                                    cudnnMathType_t& mathType) {
+        return conv2dAlgorithms.selectBackwardFilterAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
     }
 
     /**
@@ -109,6 +113,7 @@ class CUDA {
      * @param kernel            The convolution kernel (filter) tensor descriptor
      * @param time              Returns execution time in milliseconds taken by the selected algorithm
      * @param scratchpadSize    Returns the memory buffer size in bytes needed for the selected algorithm to run
+     * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
     inline cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const Context& context,
@@ -117,8 +122,9 @@ class CUDA {
                                                                 const cudnnTensorDescriptor_t& grad,
                                                                 const cudnnFilterDescriptor_t& kernel,
                                                                 float& executionTime,
-                                                                size_t& scratchpadSize) {
-        return conv2dAlgorithms.selectBackwardDataAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize);
+                                                                size_t& scratchpadSize,
+                                                                cudnnMathType_t& mathType) {
+        return conv2dAlgorithms.selectBackwardDataAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
     }
 
     /**
