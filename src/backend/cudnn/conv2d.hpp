@@ -432,7 +432,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
         AllocatedTensor<device::CUDA, T>* buffer = nullptr;
         if (useBuffer) {
             bool dirty;
-            buffer = &bufferAllocator.get(gradTensor.getDevice(), repaddedGradShape, dirty);
+            buffer = &bufferAllocator.get(kernelGradTensor.getDevice(), repaddedGradShape, dirty);
             if (dirty)
                 buffer->zero();
             cudnn::insert(gradTensor, *buffer, dataFormat, repaddingOffset);

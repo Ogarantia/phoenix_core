@@ -68,26 +68,25 @@ class AllocatedTensor<device::CUDA, T> : public Tensor<device::CUDA, T> {
     AllocatedTensor(const Shape&, T*) = delete;  // deleting Tensor constructor allowing to wrap an external pointer
     using Tensor<device::CUDA, T>::tensor;
     using Tensor<device::CUDA, T>::shape;
+    using Tensor<device::CUDA, T>::device;
+    int capacity;
 
    public:
-    AllocatedTensor(const device::CUDA& device, const Shape& shape) : Tensor<device::CUDA, T>(device, shape, nullptr) {
-        auto status = cudaMalloc(&tensor, shape.numel() * sizeof(T));
-        if (status != cudaError::cudaSuccess)
-            throw std::runtime_error(cudaGetErrorString(status));
+    AllocatedTensor(device::CUDA& device, const Shape& shape) : Tensor<device::CUDA, T>(device, shape, nullptr), capacity(shape.numel()) {
+        tensor = device.template malloc<T>(shape.numel() * sizeof(T));
     }
 
-    AllocatedTensor(const device::CUDA& device) : Tensor<device::CUDA, T>(device, Shape(), nullptr) {}
-
     ~AllocatedTensor() {
-        cudaFree(tensor);
+        device.free(tensor);
     }
 
     void reshape(const Shape& shape) {
-        if (this->shape != shape) {
-            cudnn::Context::raiseIfError(cudaFree(tensor));
-            cudnn::Context::raiseIfError(cudaMalloc(&tensor, shape.numel() * sizeof(T)));
-            this->shape = shape;
+        if (shape.numel() > capacity) {
+            capacity = shape.numel();
+            device.free(tensor);
+            tensor = device.template malloc<T>(capacity * sizeof(T));
         }
+        this->shape = shape;
     }
 };
 }  // namespace upstride

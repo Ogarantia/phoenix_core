@@ -40,7 +40,7 @@ class DeferredAllocator {
      * @param dirty     becomes `true` if the tensor is about to be allocated, `false` otherwise
      * @return the tensor
      */
-    inline AllocatedTensor<Device, T>& get(const Device& device, const Shape& shape, bool& dirty) {
+    inline AllocatedTensor<Device, T>& get(Device& device, const Shape& shape, bool& dirty) {
         std::lock_guard<std::mutex> lock(mutex);
         auto entry = map.find(&device);
         if (entry == map.end()) {
@@ -62,7 +62,7 @@ class DeferredAllocator {
         }
     }
 
-    inline AllocatedTensor<Device, T>& get(const Device& device, const Shape& shape) {
+    inline AllocatedTensor<Device, T>& get(Device& device, const Shape& shape) {
         bool whatever;
         return get(device, shape, whatever);
     }

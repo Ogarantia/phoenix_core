@@ -20,29 +20,47 @@ int getDeviceRegistersPerThreadBlock(int dev) {
 }
 
 
-int CUDA::getRegistersPerThreadBlock(bool acrossAllDevices) {
-    int registersPerThreadBlock {0};
+void CUDA::attachDevice(int device) {
+    cudaSetDevice(device);
+}
 
-    if (acrossAllDevices) {
-        int deviceCount = 0;
-        cudaGetDeviceCount(&deviceCount);
-        cudnn::Context::raiseIfError("getRegistersPerThreadBlock cudaGetDeviceCount failed");
-        if (deviceCount == 0) {
-            throw std::logic_error("No available devices that support CUDA detected");
-        }
-        // compute minimum of the available registers across the devices
-        registersPerThreadBlock = getDeviceRegistersPerThreadBlock(0);
-        for (int dev = 1; dev < deviceCount; ++dev) {
-            registersPerThreadBlock = std::min(registersPerThreadBlock, getDeviceRegistersPerThreadBlock(dev));
-        }
 
-    } else {
-        int currentDevice {0};
-        cudaGetDevice(&currentDevice);
-        cudnn::Context::raiseIfError("getRegistersPerThreadBlock cudaGetDevice failed");
-        registersPerThreadBlock = getDeviceRegistersPerThreadBlock(currentDevice);
-    }
-    return registersPerThreadBlock;
+void CUDA::internalMalloc(size_t size, void* &memory) {
+    cudnn::Context::raiseIfError(cudaMalloc(&memory, size));
+}
+
+
+void CUDA::internalFree(void* memory) {
+    cudnn::Context::raiseIfError(cudaFree(memory));
+}
+
+
+CUDA::CUDA(const cudaStream_t& stream) : cudaStream(stream) {
+    auto status = cudnnCreate(&cudnnHandle);
+    if (status != CUDNN_STATUS_SUCCESS)
+        throw std::runtime_error(std::string("Cannot create cuDNN handle, ") + cudnnGetErrorString(status));
+    status = cudnnSetStream(cudnnHandle, cudaStream);
+    if (status != CUDNN_STATUS_SUCCESS)
+        throw std::runtime_error(cudnnGetErrorString(status));
+
+    if (cublasCreate(&cublasHandle) != CUBLAS_STATUS_SUCCESS)
+        throw std::runtime_error("Cannot create cuBLAS handle.");
+    if (cublasSetStream(cublasHandle, cudaStream) != CUBLAS_STATUS_SUCCESS)
+        throw std::runtime_error("Cannot set CUDA stream for cuBLAS.");
+
+    // attach the allocator thread to the current CUDA device
+    int currentDevice;
+    if (cudaGetDevice(&currentDevice) != cudaError::cudaSuccess)
+        throw std::runtime_error("cudaGetDevice failed");
+    allocator.call(this, &CUDA::attachDevice, currentDevice);
+
+    // Query number of registers per thread block
+    registersPerThreadBlock = getDeviceRegistersPerThreadBlock(currentDevice);
+}
+
+
+void CUDA::free(void* memory) {
+    allocator.call(this, &CUDA::internalFree, memory);
 }
 
 }

@@ -3,6 +3,7 @@
 #include <cudnn.h>
 #include "../backend.hpp"
 #include "conv2d_algo_select.hpp"
+#include "../../isolated_thread.hpp"
 #include "kernels_utils.hpp"
 #include "cublas_v2.h"
 
@@ -12,27 +13,37 @@ class CUDA {
    private:
     cudnn::Conv2DAlgorithmSelector conv2dAlgorithms;    //!< runtime conv2d algorithms selector
     cuda::ConvKernelsCache convKernelsCache;            //!< cache for runtime selection of custom CUDA kernels for quaternionic convolutions
+    IsolatedThread allocator;                           //!< thread performing memory allocations
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
     cublasHandle_t cublasHandle;
+    int registersPerThreadBlock;                        //!< Maximum number of thread blocks
 
     CUDA(const CUDA&) = delete;  // disable copying
 
+    /**
+     * @brief Attaches a specific CUDA device to the current thread.
+     * @param device    The CUDA device number
+     */
+    void attachDevice(int device);
+
+    /**
+     * @brief Allocates GPU memory.
+     * Wraps a call to a low-level CUDA API. Called from within the allocator thread. Not to be called directly.
+     * @param size      Memory size in bytes
+     * @param memory    Address of the allocated buffer
+     */
+    void internalMalloc(size_t size, void* &memory);
+
+    /**
+     * @brief Frees an allocated buffer on GPU.
+     * Wraps a call to a low-level CUDA API. Called from within the allocator thread. Not to be called directly.
+     * @param memory    Address of the allocated buffer
+     */
+    void internalFree(void* memory);
+
    public:
-
-    inline CUDA(const cudaStream_t& stream) : cudaStream(stream) {
-        auto status = cudnnCreate(&cudnnHandle);
-        if (status != CUDNN_STATUS_SUCCESS)
-            throw std::runtime_error(std::string("Cannot create cuDNN handle, ") + cudnnGetErrorString(status));
-        status = cudnnSetStream(cudnnHandle, cudaStream);
-        if (status != CUDNN_STATUS_SUCCESS)
-            throw std::runtime_error(cudnnGetErrorString(status));
-
-        if (cublasCreate(&cublasHandle) != CUBLAS_STATUS_SUCCESS)
-            throw std::runtime_error("Cannot create cuBLAS handle.");
-        if (cublasSetStream(cublasHandle, cudaStream) != CUBLAS_STATUS_SUCCESS)
-            throw std::runtime_error("Cannot set CUDA stream for cuBLAS.");
-    }
+    CUDA(const cudaStream_t& stream);
 
     inline ~CUDA() {
         cudnnDestroy(cudnnHandle);
@@ -168,10 +179,28 @@ class CUDA {
 
     /**
      * @brief Get the number of registers available per thread block for either the current device or across all devices
-     *
-     * @param acrossAllDevices                  determines whether the number of registers should be calculated as a minimum across all devices or only for the current one
      */
-    int getRegistersPerThreadBlock(bool acrossAllDevices=false);
+    inline int getRegistersPerThreadBlock() const { return registersPerThreadBlock; }
+
+    /**
+     * @brief Allocates GPU memory.
+     * This function is thread-safe. The allocated buffer can be freed in another thread with free() function.
+     * @param size      Size in bytes.
+     * @return the allocated memory address.
+     */
+    template<typename T>
+    inline T* malloc(size_t size) {
+        void* memory;
+        allocator.call(this, &CUDA::internalMalloc, size, memory);
+        return static_cast<T*>(memory);
+    }
+
+    /**
+     * @brief Frees GPU memory.
+     * This function is thread-safe. It can recycle a memory buffer allocated from a different thread.
+     * @param memory    Address of the buffer to free
+     */
+    void free(void* memory);
 };
 }  // namespace device
 }  // namespace upstride

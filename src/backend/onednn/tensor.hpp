@@ -167,11 +167,11 @@ class AllocatedTensor<device::CPU, T> : public Tensor<device::CPU, T> {
     using Tensor<device::CPU, T>::shape;
 
    public:
-    AllocatedTensor(const device::CPU& device, const Shape& shape) : Tensor<device::CPU, T>(device, shape, nullptr) {
+    AllocatedTensor(device::CPU& device, const Shape& shape) : Tensor<device::CPU, T>(device, shape, nullptr) {
         tensor = (T*)malloc(shape.numel() * sizeof(T));
     }
 
-    AllocatedTensor(const device::CPU& device) : Tensor<device::CPU, T>(device, Shape(), nullptr) {}
+    AllocatedTensor(device::CPU& device) : Tensor<device::CPU, T>(device, Shape(), nullptr) {}
 
     ~AllocatedTensor() {
         free(tensor);

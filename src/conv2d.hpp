@@ -169,7 +169,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& buffer(this->buffer.get(outputTensor.getDevice(), output.shape()));
+            AllocatedTensor<Device, T>& buffer(this->buffer.get(device, output.shape()));
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
@@ -203,9 +203,9 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             // get temporary buffers
             AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *outputLanes[8];
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = &this->inputLanes[i].get(inputTensor.getDevice(), input.shape());
-                kernelLanes[i] = &this->kernelLanes[i].get(kernelTensor.getDevice(), kernel.shape());
-                outputLanes[i] = &this->outputLanes[i].get(outputTensor.getDevice(), output.shape());
+                inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
+                kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
+                outputLanes[i] = &this->outputLanes[i].get(device, output.shape());
             }
 
             // decompose - compute - recompose
@@ -237,7 +237,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             TensorSplit<Device, const T, CliffordProductSpec::DIMS>* bias = biasTensor ? new TensorSplit<Device, const T, CliffordProductSpec::DIMS>(*biasTensor) : nullptr;
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& buffer(this->buffer.get(outputTensor.getDevice(), output.shape()));
+            AllocatedTensor<Device, T>& buffer(this->buffer.get(device, output.shape()));
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
@@ -374,7 +374,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             }
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(kernelGradTensor.getDevice(), kernelGrad.shape()));
+            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(device, kernelGrad.shape()));
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
@@ -411,11 +411,11 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             // get temporary buffers
             AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *gradLanes[8], *kernelGradLanes[8], *inputGradLanes[8];
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = &this->inputLanes[i].get(inputTensor.getDevice(), input.shape());
-                kernelLanes[i] = &this->kernelLanes[i].get(kernelTensor.getDevice(), kernel.shape());
-                gradLanes[i] = &this->gradLanes[i].get(gradTensor.getDevice(), grad.shape());
-                kernelGradLanes[i] = &this->kernelGradLanes[i].get(kernelGradTensor.getDevice(), kernelGrad.shape());
-                inputGradLanes[i] = &this->inputGradLanes[i].get(inputGradTensor.getDevice(), inputGrad.shape());
+                inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
+                kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
+                gradLanes[i] = &this->gradLanes[i].get(device, grad.shape());
+                kernelGradLanes[i] = &this->kernelGradLanes[i].get(device, kernelGrad.shape());
+                inputGradLanes[i] = &this->inputGradLanes[i].get(device, inputGrad.shape());
             }
 
             // decompose - compute - recompose
@@ -440,8 +440,8 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorSplit<Device, T, CliffordProductSpec::DIMS> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(kernelGradTensor.getDevice(), kernelGrad.shape()));
-            AllocatedTensor<Device, T>& bufferInput(this->bufferInput.get(inputGradTensor.getDevice(), inputGrad.shape()));
+            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(device, kernelGrad.shape()));
+            AllocatedTensor<Device, T>& bufferInput(this->bufferInput.get(device, inputGrad.shape()));
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
