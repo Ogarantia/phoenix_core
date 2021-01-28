@@ -158,6 +158,18 @@ class Shape {
         return !(*this == another);
     }
 
+    inline bool operator<(const Shape& another) const {
+        // If an element has more dimensions than a second one, the first one is bigger
+        if (size < another.size) return true;
+        else if (another.size < size) return false;
+
+        // identical size, lexicographic comparaison
+        for (int i = 0; i < size; i++)
+            if (shape[i] < another.shape[i])
+                return true;
+        return false;
+    }
+
     /**
      * @brief Accesses the width dimension in function of a specific data format
      * @param fmt   The data format of the tensor

@@ -44,29 +44,36 @@ DataFormat dataFormatFromString(std::string dataFormatString);
 bool getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal, IntPair& result);
 
 /**
- * @brief Computes convolution output shape
- * The filter memory layout is assumed as follows: [blade, filter height, filter_width, input channels, output channels]
- * @param algebra           Algebra used to perform the convolution. The kernel shape is conditioned by the algebra choice.
- * @param dataFormat        Input and output tensors data format
- * @param inputShape        Input tensor shape
- * @param filterShape       Kernel tensor shape
- * @param paddingPreset     Padding preset
- * @param padding           Explicit padding value if the padding preset is explicit
- * @param strides           Convolution stride
- * @param dilations         Convolution dilation rate
- * @param padBefore         Number of zero samples to add at the beginning to height and width input dimensions (computed in function of other parameters)
- * @param padAfter          Number of zero samples to add at the end to height and width input dimensions (computed in function of other parameters)
- * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
- * @return the output tensor shape.
+ * @brief Computes output size and paddings along a single dimension of an operation that samples the input with strided/dilated patches.
+ * @param inputSize         The input size
+ * @param filterSize        The patch size
+ * @param dilation          The patch dilation
+ * @param stride            The patch stride
+ * @param padding           Input padding preset
+ * @param paddingBefore     Resulting zero-padding at the beginning
+ * @param paddingAfter      Resulting zero-padding at the end
+ * @return number of samples resulting from the operation.
  */
-Shape computeConvOutputSize(const Algebra algebra, const DataFormat dataFormat,
-                            const Shape& inputShape, const Shape& filterShape,
-                            Padding paddingPreset,
-                            const IntTuple& explicitPaddings,
-                            const IntTuple& strides,
-                            const IntTuple& dilations,
-                            IntPair& padBefore, IntPair& padAfter,
-                            int groups = 1);
+int computeWindowedOutputSizeAndPadding(int inputSize, int filterSize,
+                                        int dilation, int stride,
+                                        Padding padding,
+                                        int& paddingBefore,
+                                        int& paddingAfter);
+
+/**
+ * @brief Computes output size along a single dimension of an operation that samples the input with strided/dilated patches for a given zero-padding value.
+ * @param inputSize         The input size
+ * @param filterSize        The patch size
+ * @param dilation          The patch dilation
+ * @param stride            The patch stride
+ * @param paddingBefore     Zero padding at the beginning
+ * @param paddingAfter      Zero padding at the end
+ * @return number of samples resulting from the operation.
+ */
+int computeWindowedOutputSizeAndPadding(int inputSize, int filterSize,
+                                        int dilation, int stride,
+                                        int paddingBefore,
+                                        int paddingAfter);
 
 /**
  * @brief Maps abstract user type numbers ("type 1", "type 2", "type 3") to Algebras

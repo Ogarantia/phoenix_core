@@ -79,12 +79,28 @@ class IntPair {
         return IntPair(x + another.x, y + another.y);
     }
 
+    inline IntPair operator-(const IntPair& another) const {
+        return IntPair(x - another.x, y - another.y);
+    }
+
+    inline IntPair operator*(const IntPair& another) const {
+        return IntPair(x * another.x, y * another.y);
+    }
+
+    inline IntPair operator/(const IntPair& another) const {
+        return IntPair(x / another.x, y / another.y);
+    }
+
     inline bool operator==(const IntPair& another) const {
         return x == another.x && y == another.y;
     }
 
     inline bool operator!=(const IntPair& another) const {
         return !(*this == another);
+    }
+
+    inline bool operator<(const IntPair& another) const {
+        return (x < another.x || (x ==  another.x && y < another.y));
     }
 };
 
@@ -178,7 +194,6 @@ class ScalarDenseGradFunctor;
 
 
 namespace cuda {
-
 
 /**
  * @brief Generic manager for NCHW quaternion pointwise convolution kernels

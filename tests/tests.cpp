@@ -274,55 +274,66 @@ TEST_CASE("Test:Conv2d") {
            -2, -4, -6, -8
         });
 
-        // init operation
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(context, Algebra::COMPLEX, DataFormat::NCHW, 1, 1, false);
-
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2, 2, 2}));
-        op(::device, input, kernel, nullptr, testOutput, 0, 0);
+
+        upstride::Conv2DDescriptor descriptor(input.getShape(),
+                                              kernel.getShape(),
+                                              1, //stride
+                                              1, //dilation
+                                              upstride::Padding::VALID, //padding preset
+                                              {},  //explicitPadding
+                                              1,   //groups
+                                              Algebra::COMPLEX, //algebra
+                                              DataFormat::NCHW, //dataformat
+                                              false);   // usebias
+        upstride::conv2DFwd<device::CPU, float>(
+        context,
+        ::device,
+        input,
+        kernel,
+        nullptr,
+        testOutput,
+        descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));
     }
 
     SUBCASE(" Test: Conv2d - quaternion") {
-        const int dim = upstride::MULTIVECTOR_DIM[upstride::Algebra::QUATERNION];
+        using namespace upstride;
+
+        const int dim = MULTIVECTOR_DIM[Algebra::QUATERNION];
         const int N = 1, C = 2, H = 3, W = 3;
         const int numel = dim * N * C * H * W;
 
         std::cout << " Test: Conv2d - quaternion" << std::endl;
-        const upstride::Algebra algebra(upstride::Algebra::QUATERNION);
 
-        upstride::Shape sIn({dim*N, C, H, W});
-        upstride::Shape sKer({dim, N, C, H, W});
-        upstride::Shape sBias({});
-        upstride::Shape sOut({dim*N, 1, 1, 1});
-        upstride::AllocatedTensor<upstride::device::CPU, float> inputTensor(device, sIn);
-        upstride::AllocatedTensor<upstride::device::CPU, float> kernelTensor(device, sKer);
-        upstride::AllocatedTensor<upstride::device::CPU, float> outputTensor(device, sOut);
-        outputTensor.zero();
+        Shape sIn({dim*N, C, H, W});
+        Shape sKer({dim, N, C, H, W});
+        Shape sBias({});
+        Shape sOut({dim*N, 1, 1, 1});
+        AllocatedTensor<device::CPU, float> input(::device, sIn);
+        AllocatedTensor<device::CPU, float> kernel(::device, sKer);
+        AllocatedTensor<device::CPU, float> output(::device, sOut);
+        output.zero();
 
-        float* inputTensorPtr = inputTensor.getDataPtr();
-        float* kernelTensorPtr = kernelTensor.getDataPtr();
+        float* inputPtr = input.getDataPtr();
+        float* kernelPtr = kernel.getDataPtr();
         for(unsigned i = 0; i < numel; ++i) {
-            inputTensorPtr[i] = 1;
-            kernelTensorPtr[i] = 1;
+            inputPtr[i] = 1;
+            kernelPtr[i] = 1;
         }
 
-        upstride::IntPair st(1, 1);
-        upstride::IntPair dil(1, 1);
-        const upstride::IntPair padBefore(0);
-        const upstride::IntPair padAfter(0);
-
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> myConv2DFunctor(context, algebra, upstride::DataFormat::NCHW, st, dil, false);
-        myConv2DFunctor(device, inputTensor, kernelTensor, nullptr, outputTensor, padBefore, padAfter, /*groups=*/1);
+        Conv2DDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false);
+        conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, output, descriptor);
 
         bool test = true;
-        float* outputTensorPtr = outputTensor.getDataPtr();
-        if (outputTensorPtr[0] != -36.0f)
+        float* outputPtr = output.getDataPtr();
+        if (outputPtr[0] != -36.0f)
             test = false;
         for (int i = 1; i < 4 && test; ++i) {
-            if (outputTensorPtr[i] != 36.0f)
+            if (outputPtr[i] != 36.0f)
                 test = false;
         }
         CHECK((test));
@@ -373,12 +384,10 @@ TEST_CASE("Test:Conv2d") {
             1, 2, 3, 4
         });
 
-        // init operation
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(context, Algebra::QUATERNION, DataFormat::NCHW, 1, 1, false, true);
-
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::QUATERNION], 2, 2, 2}));
-        op(::device, input, kernel, nullptr, testOutput, 0, 0);
+        Conv2DDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false, true);
+        conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));
@@ -429,12 +438,10 @@ TEST_CASE("Test:Conv2d") {
              0,   0    // e123
         });
 
-        // init operation
-        upstride::UpstrideConv2DFunctor<upstride::device::CPU, float> op(context, Algebra::GA_300, DataFormat::NCHW, 1, 1, false);
-
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2, 1, 1}));
-        op(::device, input, kernel, nullptr, testOutput, 0, 0);
+        Conv2DDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::GA_300, DataFormat::NCHW, false);
+        conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));
@@ -596,7 +603,7 @@ TEST_CASE("Test:Utils") {
     SUBCASE(" Test: Utils::computeConvOutputSize") {
         std::cout << " Test: Utils::computeConvOutputSize" << std::endl;
 
-        const upstride::DataFormat df = upstride::DataFormat::NCHW;
+        const upstride::DataFormat dataFormat = upstride::DataFormat::NCHW;
 
         const upstride::Shape inputShape({1, 224, 224, 3});
         const upstride::Shape kernelShape({4, 3, 3, 3, 32});
@@ -608,15 +615,19 @@ TEST_CASE("Test:Utils") {
         const std::vector<int32_t>& dilation = {0, 0};
         upstride::IntPair padBefore, padAfter;
 
-        upstride::Shape outputShape = upstride::computeConvOutputSize(upstride::Algebra::QUATERNION,
-                                                                      df,
-                                                                      inputShape,
-                                                                      kernelShape,
-                                                                      paddingPreset,
-                                                                      explicitPadding,
-                                                                      stride,
-                                                                      dilation,
-                                                                      padBefore, padAfter);
+        upstride::Conv2DDescriptor descriptor(inputShape,
+                                              kernelShape,
+                                              stride,
+                                              dilation,
+                                              paddingPreset,
+                                              explicitPadding,
+                                              1,
+                                              upstride::Algebra::QUATERNION,
+                                              dataFormat,
+                                              false);
+
+
+        upstride::Shape outputShape = descriptor.getOutputShape();
 
         std::cout << outputShape << std::endl;
 
