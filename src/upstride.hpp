@@ -21,11 +21,10 @@ void conv2DFwd(Context& context,
                const Tensor<Device, const T>& kernelTensor,
                const Tensor<Device, const T>* biasTensor,
                Tensor<Device, T>& outputTensor,
-               const Conv2DDescriptor& descriptor) {
-
-    UpstrideConv2DFunctor<Device, T> functor(context, descriptor);
-
-    functor(device, inputTensor, kernelTensor, biasTensor, outputTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
+               const Conv2DDescriptor& descriptor)
+{
+    auto& op = device.template getConv2DOperation<UpstrideConv2DFunctor<Device, T>>(descriptor);
+    op(device, inputTensor, kernelTensor, biasTensor, outputTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
 }
 
 }

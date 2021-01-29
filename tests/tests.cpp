@@ -19,8 +19,8 @@
 #include "doctest/doctest.h"
 #include "upstride.hpp"
 
-static upstride::device::CPU device;
 static upstride::onednn::Context context;
+static upstride::device::CPU device(context);
 
 /**
  * @brief Fill a tensor with random floating values.

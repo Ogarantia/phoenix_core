@@ -12,14 +12,16 @@
 #include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
+#include "backend/conv2d_descriptor.hpp"
 #include "backend/tensor.hpp"
 #include "deferred_allocator.hpp"
 #include "utils.hpp"
+#include "operation.hpp"
 
 namespace upstride {
 
 template <typename Device, typename T>
-class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>> {
+class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>, public Operation {
     using AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>::proceedWithAlgebra;
 
    private:

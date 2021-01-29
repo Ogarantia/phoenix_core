@@ -9,7 +9,7 @@ template <class Descriptor, class Operation>
 class OperationsCache {
     private:
         Context& context;
-        std::map<Descriptor, Operation*> cacheMap;      //!< descriptor => operation mapping used for fast search 
+        std::map<Descriptor, Operation*> cacheMap;      //!< descriptor => operation mapping used for fast search
         std::forward_list<Operation*> cacheList;       //!< list of available operations for fast garbage collection
 
         /**
@@ -23,8 +23,10 @@ class OperationsCache {
 
             // reconstruct the map
             cacheMap.clear();
-            for (auto op: cacheList)
-                cacheMap.emplace(inverseMap[op], op);
+            for (auto op: cacheList) {
+                auto it = inverseMap.find(op);
+                cacheMap[it->second] = op;
+            }
         }
 
     public:
@@ -40,48 +42,56 @@ class OperationsCache {
          * @param descriptor        The descriptor
          * @return Operation&       The operation instance
          */
-        inline Operation& operator[](const Descriptor& descriptor) {
+        template<class OpClass>
+        inline OpClass& get(const Descriptor& descriptor) {
             // check if a corresponding operation instance is already available
-            if (auto it = cacheMap.find(descriptor) != cacheMap.end()) {
+            auto it = cacheMap.find(descriptor);
+            if (it != cacheMap.end()) {
                 // an instance is found; put it on top of the list as the most recently used one
                 Operation* op = it->second;
                 cacheList.remove(op);
                 cacheList.push_front(op);
-                return *op;
+                return static_cast<OpClass&>(*op);
             }
 
             // run garbage collection with a default policy (for debugging purposes)
             gc(GarbageCollectingPolicy::KEEP_TOP_50);
 
             // no operation instance available; create a new one
-            Operation* newOp = new Operation(context, descriptor);
+            OpClass* newOp = new OpClass(context, descriptor);
             cacheMap[descriptor] = newOp;
             cacheList.push_front(newOp);
+            return *newOp;
         }
 
         
         /**
          * @brief Runs garbage collection.
-         * 
-         * @param policy        Garbage collection policy defining which instances are recycled. 
+         *
+         * @param policy        Garbage collection policy defining which instances are recycled.
          */
         inline void gc(GarbageCollectingPolicy policy) {
             switch (policy) {
                 // remove everything
                 case GarbageCollectingPolicy::FLUSH:
                     cacheMap.clear();
-                    for (auto it: cacheList)
-                        delete *it;
+                    for (auto op: cacheList)
+                        delete op;
                     cacheList.clear();
                     break;
 
                 // keeps top 50 operations of the list (the most recently used ones)
                 case GarbageCollectingPolicy::KEEP_TOP_50: {
                     auto it = cacheList.cbegin();
-                    for (size_t i = 0; i < 50; ++i)
+                    for (size_t i = 0; i < 49 && it != cacheList.cend(); ++i)
                         it++;
-                    cacheList.erase_after(*it);
-                    updateMap();
+                    if (it != cacheList.cend()) {
+                        auto next(it);
+                        if (++next != cacheList.cend()) {
+                            cacheList.erase_after(it);
+                            updateMap();
+                        }
+                    }
                     break;
                 }
 

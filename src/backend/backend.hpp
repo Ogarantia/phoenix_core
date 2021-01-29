@@ -16,7 +16,6 @@
 #include "tensor.hpp"
 #include "types.hpp"
 
-
 /**
  * @brief Defining UPSTRIDE_SAYS macro used for debugging.
  * To enable the verbose mode of the engine, assign to UPSTRIDE_VERBOSE environment variable a non-empty value, e.g.

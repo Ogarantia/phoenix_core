@@ -35,7 +35,7 @@ void CUDA::internalFree(void* memory) {
 }
 
 
-CUDA::CUDA(const cudaStream_t& stream) : cudaStream(stream) {
+CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cudaStream(stream) {
     auto status = cudnnCreate(&cudnnHandle);
     if (status != CUDNN_STATUS_SUCCESS)
         throw std::runtime_error(std::string("Cannot create cuDNN handle, ") + cudnnGetErrorString(status));

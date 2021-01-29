@@ -1,17 +1,16 @@
 #pragma once
 #include <cuda.h>
 #include <cudnn.h>
-#include "../backend.hpp"
+#include <cublas_v2.h>
 #include "conv2d_algo_select.hpp"
-#include "../../isolated_thread.hpp"
 #include "kernels_utils.hpp"
-#include "../conv2d_descriptor.hpp"
-#include "../operations_cache.hpp"
-#include "cublas_v2.h"
+#include "../backend.hpp"
+#include "../device.hpp"
+#include "../../isolated_thread.hpp"
 
 namespace upstride {
 namespace device {
-class CUDA {
+class CUDA : public Device {
    private:
     cudnn::Conv2DAlgorithmSelector conv2dAlgorithms;    //!< runtime conv2d algorithms selector
     cuda::ConvKernelsCache convKernelsCache;            //!< cache for runtime selection of custom CUDA kernels for quaternionic convolutions
@@ -19,7 +18,6 @@ class CUDA {
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
     cublasHandle_t cublasHandle;
-    //OperationsCache<Conv2DDescriptor, UpstrideConv2DFunctor> conv2dCache;
     int registersPerThreadBlock;                        //!< Maximum number of thread blocks
 
     CUDA(const CUDA&) = delete;  // disable copying
@@ -46,7 +44,7 @@ class CUDA {
     void internalFree(void* memory);
 
    public:
-    CUDA(const cudaStream_t& stream);
+    CUDA(Context& context, const cudaStream_t& stream);
 
     inline ~CUDA() {
         cudnnDestroy(cudnnHandle);
