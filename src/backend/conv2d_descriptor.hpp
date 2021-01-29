@@ -154,20 +154,6 @@ public:
                padAfter == another.padAfter;
     }
 
-
-    template<typename T>
-    static inline bool compareHelper(const T& a, const T& b, bool& result) {
-        if (a < b) {
-            result = true;
-            return true;
-        }
-        if (b < a) {
-            return true;
-        }
-        return false;
-    }
-
-
     inline bool operator<(const Conv2DDescriptor& another) const {
         if (inputShape < another.inputShape) return true;
         if (another.inputShape < inputShape) return false;

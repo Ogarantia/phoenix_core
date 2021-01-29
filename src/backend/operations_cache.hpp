@@ -1,6 +1,7 @@
 #pragma once
 #include <map>
 #include <forward_list>
+#include <iterator>
 #include "backend.hpp"
 
 namespace upstride {
@@ -9,27 +10,30 @@ template <class Descriptor, class Operation>
 class OperationsCache {
     private:
         Context& context;
-        std::map<Descriptor, Operation*> cacheMap;      //!< descriptor => operation mapping used for fast search
-        std::forward_list<Operation*> cacheList;       //!< list of available operations for fast garbage collection
+        std::map<Descriptor, Operation*> cacheMap;      //!< descriptor => operation mapping used for fast search by descriptor
+        std::forward_list<Operation*> cacheList;        //!< list of operations having the most recently used ones in front; for fast garbage collection
 
         /**
          * @brief Updates the cache map according to the contents of the cache list.
          */
         inline void updateMap() {
-            // reconstruct the inverse map first
+            // reconstruct the inverse map first (op ptr => descriptor)
             std::map<Operation*, Descriptor> inverseMap;
             for (auto it: cacheMap)
                 inverseMap.emplace(it.second, it.first);
 
-            // reconstruct the map
+            // rebuild the main map taking keys from the inverse map and values from the list
             cacheMap.clear();
             for (auto op: cacheList) {
                 auto it = inverseMap.find(op);
-                cacheMap[it->second] = op;
+                cacheMap.emplace(it->second, op);
             }
         }
 
     public:
+        /**
+         * @brief Garbage collection policy specification.
+         */
         enum class GarbageCollectingPolicy {
             FLUSH,          //!< recycles all the existing operation instances
             KEEP_TOP_50
@@ -39,7 +43,8 @@ class OperationsCache {
 
         /**
          * @brief Returns an operation instance according to a given descriptor.
-         * @param descriptor        The descriptor
+         * @tparam OpClass          The required operation type
+         * @param descriptor        The operation descriptor
          * @return Operation&       The operation instance
          */
         template<class OpClass>
@@ -49,8 +54,10 @@ class OperationsCache {
             if (it != cacheMap.end()) {
                 // an instance is found; put it on top of the list as the most recently used one
                 Operation* op = it->second;
-                cacheList.remove(op);
-                cacheList.push_front(op);
+                if (cacheList.front() != op) {
+                    cacheList.remove(op);
+                    cacheList.push_front(op);
+                }
                 return static_cast<OpClass&>(*op);
             }
 
@@ -59,12 +66,12 @@ class OperationsCache {
 
             // no operation instance available; create a new one
             OpClass* newOp = new OpClass(context, descriptor);
-            cacheMap[descriptor] = newOp;
+            cacheMap.emplace(descriptor, newOp);
             cacheList.push_front(newOp);
             return *newOp;
         }
 
-        
+
         /**
          * @brief Runs garbage collection.
          *
@@ -80,17 +87,24 @@ class OperationsCache {
                     cacheList.clear();
                     break;
 
-                // keeps top 50 operations of the list (the most recently used ones)
+                // keeps top N=50 operations of the list (the most recently used ones)
                 case GarbageCollectingPolicy::KEEP_TOP_50: {
+                    // skip first N-1 elements
                     auto it = cacheList.cbegin();
                     for (size_t i = 0; i < 49 && it != cacheList.cend(); ++i)
                         it++;
-                    if (it != cacheList.cend()) {
-                        auto next(it);
-                        if (++next != cacheList.cend()) {
-                            cacheList.erase_after(it);
-                            updateMap();
-                        }
+
+                    // check if Nth and (N+1)th ones exist
+                    if (it != cacheList.cend() && std::next(it) != cacheList.cend()) {
+                        // destroy operations starting from the (N+1)th
+                        for (auto j = std::next(it); j != cacheList.cend(); ++j)
+                            delete *j;
+
+                        // truncate the list after Nth element
+                        cacheList.erase_after(it);
+
+                        // synchronize the contents list => map
+                        updateMap();
                     }
                     break;
                 }
