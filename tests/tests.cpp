@@ -287,14 +287,13 @@ TEST_CASE("Test:Conv2d") {
                                               Algebra::COMPLEX, //algebra
                                               DataFormat::NCHW, //dataformat
                                               false);   // usebias
-        upstride::conv2DFwd<device::CPU, float>(
-        context,
-        ::device,
-        input,
-        kernel,
-        nullptr,
-        testOutput,
-        descriptor);
+        upstride::conv2DFwd<device::CPU, float>(context,
+                                                ::device,
+                                                input,
+                                                kernel,
+                                                nullptr,
+                                                testOutput,
+                                                descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));

@@ -3,35 +3,10 @@
 #include <iterator>
 #include <ostream>
 #include <string>
-
-#include "backend/api.h"
+#include "backend/types.hpp"
+#include "backend/tensor.hpp"
 
 namespace upstride {
-
-/**
- * @brief Padding preset specification
- */
-enum class Padding {
-    SAME,
-    VALID,
-    EXPLICIT
-};
-
-/**
- * @brief Retrieves padding preset value from a string.
- * Raises an exception if unable to interpret the string.
- * @param paddingString     The string
- * @return corresponding padding value.
- */
-Padding paddingFromString(std::string paddingString);
-
-/**
- * @brief Retrieves data format value from a string.
- * Raises an exception if unable to interpret the string.
- * @param dataFormatString     The string
- * @return corresponding data format value.
- */
-DataFormat dataFormatFromString(std::string dataFormatString);
 
 /**
  * @brief Retrieves a spatial step information (stride, dilation) along width and height from a tuple.
@@ -74,14 +49,6 @@ int computeWindowedOutputSizeAndPadding(int inputSize, int filterSize,
                                         int dilation, int stride,
                                         int paddingBefore,
                                         int paddingAfter);
-
-/**
- * @brief Maps abstract user type numbers ("type 1", "type 2", "type 3") to Algebras
- * Raises an exception if the input type number is out of a valid range.
- * @param uptype    The user type number
- * @return Algebra corresponding to the type number
- */
-Algebra getAlgebraFromType(int uptype);
 
 }  // namespace upstride
 

@@ -66,36 +66,3 @@ bool upstride::getSpatialStep(const IntTuple& tuple, int validBatchAndChannelVal
     };
     return false;
 }
-
-Padding upstride::paddingFromString(std::string paddingString) {
-    if (paddingString == "SAME")
-        return Padding::SAME;
-    if (paddingString == "VALID")
-        return Padding::VALID;
-    if (paddingString == "EXPLICIT")
-        return Padding::EXPLICIT;
-    throw std::invalid_argument("Invalid padding encountered: " + paddingString);
-}
-
-DataFormat upstride::dataFormatFromString(std::string dataFormatString) {
-    if (dataFormatString == "NHWC")
-        return DataFormat::NHWC;
-    if (dataFormatString == "NCHW")
-        return DataFormat::NCHW;
-    throw std::invalid_argument("Invalid data format encountered: " + dataFormatString);
-}
-
-
-Algebra upstride::getAlgebraFromType(int uptype) {
-    switch (uptype) {
-        case 0:
-            return Algebra::REAL;
-        case 1:
-            return Algebra::COMPLEX;
-        case 2:
-            return Algebra::QUATERNION;
-        case 3:
-            return Algebra::GA_300;
-    }
-    throw std::invalid_argument("Invalid datatype index: " + std::to_string(uptype));
-}

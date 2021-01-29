@@ -5,6 +5,8 @@
 #include "conv2d_algo_select.hpp"
 #include "../../isolated_thread.hpp"
 #include "kernels_utils.hpp"
+#include "../conv2d_descriptor.hpp"
+#include "../operations_cache.hpp"
 #include "cublas_v2.h"
 
 namespace upstride {
@@ -17,6 +19,7 @@ class CUDA {
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
     cublasHandle_t cublasHandle;
+    //OperationsCache<Conv2DDescriptor, UpstrideConv2DFunctor> conv2dCache;
     int registersPerThreadBlock;                        //!< Maximum number of thread blocks
 
     CUDA(const CUDA&) = delete;  // disable copying

@@ -10,18 +10,9 @@
 #include <initializer_list>
 #include <iostream>
 #include <stdexcept>
+#include "types.hpp"
 
 namespace upstride {
-
-/**
- * @brief Data format specification
- */
-enum class DataFormat {
-    NCHW,  // channel-first
-    NHWC,  // channel-last
-    NC,    // plain 2D tensor
-    CN     // permuted 2D tensor
-};
 
 inline int getWidthDimensionNumber(const DataFormat& dataFormat) {
     static const int DIM_NUMBERS[] = {3, 2};  // Dimension numbers matching DataFormat enumeration
