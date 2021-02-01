@@ -65,6 +65,9 @@ class IntPair {
     inline bool operator<(const IntPair& another) const {
         return (x < another.x || (x ==  another.x && y < another.y));
     }
+
+    static const IntPair ZEROS;
+    static const IntPair ONES;
 };
 
 /**
@@ -92,7 +95,7 @@ enum class DataFormat {
  * @param paddingString     The string
  * @return corresponding padding value.
  */
-inline Padding paddingFromString(std::string paddingString)  {
+inline Padding paddingFromString(const std::string& paddingString)  {
     if (paddingString == "SAME")
         return Padding::SAME;
     if (paddingString == "VALID")
@@ -108,12 +111,26 @@ inline Padding paddingFromString(std::string paddingString)  {
  * @param dataFormatString     The string
  * @return corresponding data format value.
  */
-inline DataFormat dataFormatFromString(std::string dataFormatString) {
+inline DataFormat dataFormatFromString(const std::string& dataFormatString) {
     if (dataFormatString == "NHWC")
         return DataFormat::NHWC;
     if (dataFormatString == "NCHW")
         return DataFormat::NCHW;
     throw std::invalid_argument("Invalid data format encountered: " + dataFormatString);
+}
+
+inline const char* dataFormatToString(const DataFormat format) {
+    switch (format) {
+        case DataFormat::NCHW:
+            return "NCHW";
+        case DataFormat::NHWC:
+            return "NHWC";
+        case DataFormat::NC:
+            return "NC";
+        case DataFormat::CN:
+            return "CN";
+    }
+    return "";
 }
 
 }

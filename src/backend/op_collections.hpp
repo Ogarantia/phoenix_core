@@ -3,6 +3,7 @@
 #include <forward_list>
 #include <iterator>
 #include <vector>
+#include <sstream>
 #include "../operation.hpp"
 #include "backend.hpp"
 
@@ -68,8 +69,8 @@ class GlobalOpCollection {
                     for (auto op: list)
                         delete op;
                     list.clear();
-                    for (auto localCache : collections)
-                        localCache->update();
+                    for (auto collection : collections)
+                        collection->update();
                     break;
 
                 // keeps top N=50 operations of the list (the most recently used ones)
@@ -89,8 +90,8 @@ class GlobalOpCollection {
                         list.erase_after(it);
 
                         // synchronize the contents list => map
-                        for (auto localCache : collections)
-                            localCache->update();
+                        for (auto collection : collections)
+                            collection->update();
                     }
                     break;
                 }
@@ -144,6 +145,7 @@ class OpCollection : public OpCollectionInterface {
         OpCollection(Context& context, GlobalOpCollection& allOps):
             context(context), allOps(allOps)
         {
+            // attach this collection to the global ops collection to have the GC working
             allOps.bindCollection(*this);
         }
 
@@ -176,6 +178,22 @@ class OpCollection : public OpCollectionInterface {
             map.emplace(descriptor, newOp);
             allOps.getList().push_front(newOp);
             return *newOp;
+        }
+
+
+        inline std::string toString() const {
+            std::ostringstream str;
+            std::map<Operation*, Descriptor> inverseMap;
+            for (auto it: map)
+                inverseMap.emplace(it.second, it.first);
+
+            int ctr = 0;
+            for (auto op: allOps.getList()) {
+                const auto it = inverseMap.find(op);
+                if (it != inverseMap.cend())
+                    str << ++ctr << ": " << it->second.toString() << std::endl;
+            }
+            return str.str();
         }
 };
 

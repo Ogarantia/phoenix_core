@@ -1,4 +1,5 @@
 #pragma once
+#include <sstream>
 #include "../algebras.hpp"
 #include "tensor.hpp"
 #include "types.hpp"
@@ -184,6 +185,24 @@ public:
         return false;
     }
 
+    inline std::string toString() const {
+        std::ostringstream str;
+        str << inputShape << "x" << filterShape << " " << dataFormatToString(dataFormat);
+        if (algebra != Algebra::REAL)
+            str << ", type " << algebra;
+        if (stride != IntPair::ONES)
+            str << ", stride " << stride.x << "," << stride.y;
+        if (dilation != IntPair::ONES)
+            str << ", dilation " << dilation.x << "," << dilation.y;
+        if (groups != 1)
+            str << ", " << groups << " groups";
+        if (padBefore != IntPair::ZEROS || padAfter != IntPair::ZEROS)
+            str << ", padding " << padBefore.x << "," << padBefore.y << ", " << padAfter.x << "," << padAfter.y;
+        if (realValuedInput)
+            str << ", real-valued";
+        return str.str();
+    }
+
     inline const IntPair& getStride() const { return stride; }
 
     inline const IntPair& getDilation() const { return dilation; }
@@ -263,6 +282,14 @@ public:
         return false;
     }
 
+    inline std::string toString() const {
+        std::ostringstream str;
+        str << Conv2DDescriptor::toString();
+        if (useBias)
+            str << ", with bias";
+        return str.str();
+    }
+
     inline bool isBiasUsed() const { return useBias; }
 };
 
@@ -327,6 +354,14 @@ public:
         if (another.requireInputGrad < requireInputGrad) return false;
 
         return false;
+    }
+
+    inline std::string toString() const {
+        std::ostringstream str;
+        str << Conv2DDescriptor::toString();
+        if (requireInputGrad)
+            str << ", with input gradient";
+        return str.str();
     }
 
     inline bool isInputGradientRequired() const { return requireInputGrad; }

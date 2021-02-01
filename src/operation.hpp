@@ -5,6 +5,9 @@ namespace upstride {
 /**
  * @brief Base class for operations
  */
-class Operation {};
+class Operation {
+public:
+    virtual ~Operation() {}
+};
 
 }
