@@ -463,8 +463,8 @@ TEST_CASE("Test:Dense") {
         });
 
         // set up filter tensor
-        AllocatedTensor<device::CPU, float> kernel(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 3, 2}));
-        assign<float>(kernel, {
+        AllocatedTensor<device::CPU, float> filter(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 3, 2}));
+        assign<float>(filter, {
             // real part
             1, 0,
             0, 0,
@@ -483,17 +483,12 @@ TEST_CASE("Test:Dense") {
            0, 20+20
         });
 
-        // init operation
-        upstride::UpstrideDenseFunctor<upstride::device::CPU, float> op(
-            context,
-            Algebra::COMPLEX,
-            DataFormat::NC,
-            false
-        );
+        // allocate output
+        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2}));
 
         // compute test output
-        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2}));
-        op(::device, input, kernel, nullptr, testOutput);
+        const DenseFwdDescriptor descriptor(input.getShape(), filter.getShape(), Algebra::COMPLEX, DataFormat::NC, false);
+        upstride::denseFwd<upstride::device::CPU, float>(context, ::device, input, filter, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));
@@ -508,8 +503,8 @@ TEST_CASE("Test:Dense") {
         assign<float>(input, {1, 0, 0, 0, 2, 4, 3, 0, });
 
         // set up filter tensor
-        AllocatedTensor<device::CPU, float> kernel(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 1, 2}));
-        assign<float>(kernel, {
+        AllocatedTensor<device::CPU, float> filter(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 1, 2}));
+        assign<float>(filter, {
             -1,  10,   // r
              0,   0,   // e1
              0,   0,   // e2
@@ -533,17 +528,12 @@ TEST_CASE("Test:Dense") {
              0,   0    // e123
         });
 
-        // init operation
-        upstride::UpstrideDenseFunctor<upstride::device::CPU, float> op(
-            context,
-            Algebra::GA_300,
-            DataFormat::NC,
-            false
-        );
+        // allocate test output
+        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2}));
 
         // compute test output
-        AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2}));
-        op(::device, input, kernel, nullptr, testOutput);
+        const DenseFwdDescriptor descriptor(input.getShape(), filter.getShape(), Algebra::COMPLEX, DataFormat::NC, false);
+        upstride::denseFwd<upstride::device::CPU, float>(context, ::device, input, filter, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));

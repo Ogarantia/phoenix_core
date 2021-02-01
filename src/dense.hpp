@@ -8,16 +8,18 @@
 #pragma once
 
 #include <mutex>
+#include "backend/dense_descriptor.hpp"
 #include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
 #include "deferred_allocator.hpp"
 #include "utils.hpp"
+#include "operation.hpp"
 
 namespace upstride {
 
     template <typename Device, typename T>
-    class UpstrideDenseFunctor : public AlgebraSelectionMixin<UpstrideDenseFunctor<Device, T>> {
+    class UpstrideDenseFunctor : public AlgebraSelectionMixin<UpstrideDenseFunctor<Device, T>>, public Operation {
         using AlgebraSelectionMixin<UpstrideDenseFunctor<Device, T>>::proceedWithAlgebra;
 
     private:
@@ -29,16 +31,10 @@ namespace upstride {
         DeferredAllocator<Device, T> buffer;                                        //!< deferred allocator for an intermediate buffer for the default implementation
 
     public:
-        /**
-         * @brief Instantiate Dense layer operation
-         * @param               A context instance
-         * @param algebra       Algebra used to compute the dense. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-         * @param dataFormat    Expected tensors format
-         */
-        UpstrideDenseFunctor(Context& context, Algebra algebra, DataFormat dataFormat, bool useBias):
+        UpstrideDenseFunctor(Context& context, const DenseFwdDescriptor& descriptor):
             context(context),
-            algebra(algebra),
-            denseOp(context, dataFormat, useBias)
+            algebra(descriptor.getAlgebra()),
+            denseOp(context, descriptor.getDataFormat(), descriptor.isBiasUsed())
         {}
 
         /**
@@ -145,7 +141,7 @@ namespace upstride {
     };
 
     template <typename Device, typename T>
-    class UpstrideDenseGradFunctor : public AlgebraSelectionMixin<UpstrideDenseGradFunctor<Device, T>> {
+    class UpstrideDenseGradFunctor : public AlgebraSelectionMixin<UpstrideDenseGradFunctor<Device, T>>, public Operation {
         using AlgebraSelectionMixin<UpstrideDenseGradFunctor<Device, T>>::proceedWithAlgebra;
 
     private:
@@ -165,11 +161,11 @@ namespace upstride {
          * @param dataFormat    Expected tensors format
          * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
          */
-        UpstrideDenseGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, bool requireInputGrad):
+        UpstrideDenseGradFunctor(Context& context, const DenseBwdDescriptor& descriptor):
             context(context),
-            algebra(algebra),
-            denseOp(context, dataFormat, requireInputGrad),
-            requireInputGrad(requireInputGrad)
+            algebra(descriptor.getAlgebra()),
+            denseOp(context, descriptor.getDataFormat(), descriptor.isInputGradientRequired()),
+            requireInputGrad(descriptor.isInputGradientRequired())
         {}
 
         /**

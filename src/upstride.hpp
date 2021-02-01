@@ -41,4 +41,31 @@ void conv2DBwd(Context& context,
     op(device, inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
 }
 
+template <typename Device, typename T>
+void denseFwd(Context& context,
+              Device& device,
+              const Tensor<Device, const T>& inputTensor,
+              const Tensor<Device, const T>& filterTensor,
+              const Tensor<Device, const T>* biasTensor,
+              Tensor<Device, T>& outputTensor,
+              const DenseFwdDescriptor& descriptor)
+{
+    auto& op = device.template getDenseFwdOperation<UpstrideDenseFunctor<Device, T>>(descriptor);
+    op(device, inputTensor, filterTensor, biasTensor, outputTensor);
+}
+
+template <typename Device, typename T>
+void denseBwd(Context& context,
+              Device& device,
+              const Tensor<Device, const T>& inputTensor,
+              const Tensor<Device, const T>& filterTensor,
+              const Tensor<Device, const T>& gradTensor,
+              Tensor<Device, T>& filterGradTensor,
+              Tensor<Device, T>& inputGradTensor,
+              const DenseBwdDescriptor& descriptor)
+{
+    auto& op = device.template getDenseBwdOperation<UpstrideDenseGradFunctor<Device, T>>(descriptor);
+    op(device, inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor);
+}
+
 }

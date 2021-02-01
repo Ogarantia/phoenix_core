@@ -152,39 +152,6 @@ public:
                padAfter == another.padAfter;
     }
 
-    inline bool operator<(const Conv2DDescriptor& another) const {
-        if (inputShape < another.inputShape) return true;
-        if (another.inputShape < inputShape) return false;
-
-        if (filterShape < another.filterShape) return true;
-        if (another.filterShape < filterShape) return false;
-
-        if (stride < another.stride) return true;
-        if (another.stride < stride) return false;
-
-        if (dilation < another.dilation) return true;
-        if (another.dilation < dilation) return false;
-
-        if (groups < another.groups) return true;
-        if (another.groups < groups) return false;
-
-        if (algebra < another.algebra) return true;
-        if (another.algebra < algebra) return false;
-
-        if (dataFormat < another.dataFormat) return true;
-        if (another.dataFormat < dataFormat) return false;
-
-        if (realValuedInput < another.realValuedInput) return true;
-        if (another.realValuedInput < realValuedInput) return false;
-
-        if (padBefore < another.padBefore) return true;
-        if (another.padBefore < padBefore) return false;
-
-        if (padAfter < another.padAfter) return true;
-        if (another.padAfter < padAfter) return false;
-        return false;
-    }
-
     inline std::string toString() const {
         std::ostringstream str;
         str << inputShape << "x" << filterShape << " " << dataFormatToString(dataFormat);
@@ -246,11 +213,13 @@ public:
     }
 
     inline bool operator<(const Conv2DFwdDescriptor& another) const {
-        if (inputShape < another.inputShape) return true;
-        if (another.inputShape < inputShape) return false;
+        int c = inputShape.compare(another.inputShape);
+        if (c < 0) return false;
+        if (c > 0) return true;
 
-        if (filterShape < another.filterShape) return true;
-        if (another.filterShape < filterShape) return false;
+        c = filterShape.compare(another.filterShape);
+        if (c < 0) return false;
+        if (c > 0) return true;
 
         if (stride < another.stride) return true;
         if (another.stride < stride) return false;
@@ -320,11 +289,13 @@ public:
     }
 
     inline bool operator<(const Conv2DBwdDescriptor& another) const {
-        if (inputShape < another.inputShape) return true;
-        if (another.inputShape < inputShape) return false;
+        int c = inputShape.compare(another.inputShape);
+        if (c < 0) return false;
+        if (c > 0) return true;
 
-        if (filterShape < another.filterShape) return true;
-        if (another.filterShape < filterShape) return false;
+        c = filterShape.compare(another.filterShape);
+        if (c < 0) return false;
+        if (c > 0) return true;
 
         if (stride < another.stride) return true;
         if (another.stride < stride) return false;

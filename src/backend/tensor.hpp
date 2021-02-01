@@ -156,17 +156,20 @@ class Shape {
      * @return true if the current shape precedes the other one in the linear ordering sense, false otherwise.
      */
     inline bool operator<(const Shape& another) const {
-        // If an element has more dimensions than a second one, the first one is bigger
-        if (size < another.size) return true;
-        else if (another.size < size) return false;
+        return compare(another) < 0;
+    }
+
+    inline int compare(const Shape& another) const {
+        if (size < another.size) return -1;
+        if (another.size < size) return +1;
 
         // identical size, lexicographic comparaison
-        for (int i = 0; i < size; i++)
-            if (shape[i] < another.shape[i]) return true;
-            else if (another.shape[i] < shape[i]) return false;
+        for (int i = 0; i < size; i++) {
+            if (shape[i] < another.shape[i]) return -1;
+            if (another.shape[i] < shape[i]) return +1;
+        }
 
-        // if passing here, this shape is equal to the other one
-        return false;
+        return 0;
     }
 
     /**
