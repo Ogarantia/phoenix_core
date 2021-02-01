@@ -36,11 +36,11 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 
    public:
     /**
-     * @brief Instantiates convolution operator
+     * @brief Instantiates convolution operator.
      * @param context       A context instance
      * @param descriptor    Operation descriptor
      */
-    UpstrideConv2DFunctor(Context& context, const Conv2DDescriptor& descriptor):
+    UpstrideConv2DFunctor(Context& context, const Conv2DFwdDescriptor& descriptor):
         context(context),
         algebra(descriptor.getAlgebra()),
         convOp(context, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isBiasUsed()),
@@ -214,7 +214,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 };
 
 template <typename Device, typename T>
-class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>> {
+class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>>, public Operation {
     using AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>>::proceedWithAlgebra;
 
    private:
@@ -230,22 +230,17 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
 
    public:
     /**
-     * @brief Instantiates convolution operator
-     * @param context               A context instance
-     * @param algebra               Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-     * @param dataFormat            Expected tensors format
-     * @param stride                Convolution stride
-     * @param dilation              Convolution dilation
-     * @param requireInputGrad      If `true`, the gradient with respect to the input tensor is computed as well
-     * @param realValuedInput       If `true`, the convolution input tensor is real-valued (contains the real part only)
+     * @brief Instantiates convolution operator.
+     * @param context           A context instance
+     * @param descriptor        Operation descriptor
      */
-    UpstrideConv2DGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad, bool realValuedInput = false):
+    UpstrideConv2DGradFunctor(Context& context, const Conv2DBwdDescriptor& descriptor):
         context(context),
-        algebra(algebra),
-        convOp(context, dataFormat, stride, dilation, requireInputGrad),
-        quatKernelOp(context, algebra, dataFormat, stride, dilation),
-        requireInputGrad(requireInputGrad),
-        realValuedInput(realValuedInput)
+        algebra(descriptor.getAlgebra()),
+        convOp(context, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isInputGradientRequired()),
+        quatKernelOp(context, algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
+        requireInputGrad(descriptor.isInputGradientRequired()),
+        realValuedInput(descriptor.isRealValuedInput())
     {}
 
     /**

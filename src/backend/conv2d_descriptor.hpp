@@ -54,7 +54,7 @@ class Conv2DKernelLayout {
  * @brief Describes 2D convolution operation parameters
  */
 class Conv2DDescriptor {
-private:
+protected:
     const Shape inputShape;             //!< operation input tensor shape
     const Shape filterShape;            //!< operation filter tensor shape
     const IntPair stride;               //!< strides along H and W dimensions in pixels
@@ -62,7 +62,6 @@ private:
     const int groups;                   //!< number of groups (for group convolutions)
     const Algebra algebra;              //!< algebra corresponding to UpStride datatype
     const DataFormat dataFormat;        //!< input and output tensors data format (channels-first or channels-last)
-    const bool useBias;                 //!< if `true`, the bias addition is enabled
     const bool realValuedInput;         //!< if `true`, the input tensor is real-valued
     IntPair padBefore;                  //!< top-left zero-padding applied to the input along H and W dimensions in pixels
     IntPair padAfter;                   //!< bottom-right zero-padding applied to the input along H and W dimensions in pixels
@@ -78,11 +77,10 @@ public:
         int groups,
         Algebra algebra,
         DataFormat dataFormat,
-        bool useBias,
         bool realValuedInput = false
     ):
         inputShape(inputShape), filterShape(filterShape),
-        stride(stride), dilation(dilation), groups(groups), algebra(algebra), dataFormat(dataFormat), useBias(useBias), realValuedInput(realValuedInput)
+        stride(stride), dilation(dilation), groups(groups), algebra(algebra), dataFormat(dataFormat), realValuedInput(realValuedInput)
     {
         // Perform shape checks
         if (inputShape.getSize() != 4)
@@ -148,7 +146,6 @@ public:
                groups == another.groups &&
                algebra == another.algebra &&
                dataFormat == another.dataFormat &&
-               useBias == another.useBias &&
                realValuedInput == another.realValuedInput &&
                padBefore == another.padBefore &&
                padAfter == another.padAfter;
@@ -176,9 +173,6 @@ public:
         if (dataFormat < another.dataFormat) return true;
         if (another.dataFormat < dataFormat) return false;
 
-        if (useBias < another.useBias) return true;
-        if (another.useBias < useBias) return false;
-
         if (realValuedInput < another.realValuedInput) return true;
         if (another.realValuedInput < realValuedInput) return false;
 
@@ -189,7 +183,6 @@ public:
         if (another.padAfter < padAfter) return false;
         return false;
     }
-
 
     inline const IntPair& getStride() const { return stride; }
 
@@ -203,11 +196,141 @@ public:
 
     inline bool isRealValuedInput() const { return realValuedInput; }
 
-    inline bool isBiasUsed() const { return useBias; }
-
     inline IntPair getPaddingBefore() const { return padBefore; }
 
     inline IntPair getPaddingAfter() const { return padAfter; }
 };
+
+
+class Conv2DFwdDescriptor : public Conv2DDescriptor {
+    const bool useBias;                 //!< if `true`, the bias addition is enabled
+public:
+    inline Conv2DFwdDescriptor(
+        const Shape& inputShape,
+        const Shape& filterShape,
+        IntPair stride,
+        IntPair dilation,
+        Padding paddingPreset,
+        const IntTuple& explicitPadding,
+        int groups,
+        Algebra algebra,
+        DataFormat dataFormat,
+        bool useBias,
+        bool realValuedInput = false
+    ):
+        Conv2DDescriptor(inputShape, filterShape, stride, dilation, paddingPreset, explicitPadding, groups, algebra, dataFormat, realValuedInput),
+        useBias(useBias)
+    {}
+
+    inline bool operator==(const Conv2DFwdDescriptor& another) const {
+        return this->operator==(another) && useBias == another.useBias;
+    }
+
+    inline bool operator<(const Conv2DFwdDescriptor& another) const {
+        if (inputShape < another.inputShape) return true;
+        if (another.inputShape < inputShape) return false;
+
+        if (filterShape < another.filterShape) return true;
+        if (another.filterShape < filterShape) return false;
+
+        if (stride < another.stride) return true;
+        if (another.stride < stride) return false;
+
+        if (dilation < another.dilation) return true;
+        if (another.dilation < dilation) return false;
+
+        if (groups < another.groups) return true;
+        if (another.groups < groups) return false;
+
+        if (algebra < another.algebra) return true;
+        if (another.algebra < algebra) return false;
+
+        if (dataFormat < another.dataFormat) return true;
+        if (another.dataFormat < dataFormat) return false;
+
+        if (realValuedInput < another.realValuedInput) return true;
+        if (another.realValuedInput < realValuedInput) return false;
+
+        if (padBefore < another.padBefore) return true;
+        if (another.padBefore < padBefore) return false;
+
+        if (padAfter < another.padAfter) return true;
+        if (another.padAfter < padAfter) return false;
+
+        if (useBias < another.useBias) return true;
+        if (another.useBias < useBias) return false;
+
+        return false;
+    }
+
+    inline bool isBiasUsed() const { return useBias; }
+};
+
+
+class Conv2DBwdDescriptor : public Conv2DDescriptor {
+    const bool requireInputGrad;        //!< if `true`, the input gradient is required
+
+public:
+    inline Conv2DBwdDescriptor(
+        const Shape& inputShape,
+        const Shape& filterShape,
+        IntPair stride,
+        IntPair dilation,
+        Padding paddingPreset,
+        const IntTuple& explicitPadding,
+        int groups,
+        Algebra algebra,
+        DataFormat dataFormat,
+        bool requireInputGrad = true,
+        bool realValuedInput = false
+    ):
+        Conv2DDescriptor(inputShape, filterShape, stride, dilation, paddingPreset, explicitPadding, groups, algebra, dataFormat, realValuedInput),
+        requireInputGrad(requireInputGrad)
+    {}
+
+    inline bool operator==(const Conv2DBwdDescriptor& another) const {
+        return this->operator==(another) && requireInputGrad == another.requireInputGrad;
+    }
+
+    inline bool operator<(const Conv2DBwdDescriptor& another) const {
+        if (inputShape < another.inputShape) return true;
+        if (another.inputShape < inputShape) return false;
+
+        if (filterShape < another.filterShape) return true;
+        if (another.filterShape < filterShape) return false;
+
+        if (stride < another.stride) return true;
+        if (another.stride < stride) return false;
+
+        if (dilation < another.dilation) return true;
+        if (another.dilation < dilation) return false;
+
+        if (groups < another.groups) return true;
+        if (another.groups < groups) return false;
+
+        if (algebra < another.algebra) return true;
+        if (another.algebra < algebra) return false;
+
+        if (dataFormat < another.dataFormat) return true;
+        if (another.dataFormat < dataFormat) return false;
+
+        if (realValuedInput < another.realValuedInput) return true;
+        if (another.realValuedInput < realValuedInput) return false;
+
+        if (padBefore < another.padBefore) return true;
+        if (another.padBefore < padBefore) return false;
+
+        if (padAfter < another.padAfter) return true;
+        if (another.padAfter < padAfter) return false;
+
+        if (requireInputGrad < another.requireInputGrad) return true;
+        if (another.requireInputGrad < requireInputGrad) return false;
+
+        return false;
+    }
+
+    inline bool isInputGradientRequired() const { return requireInputGrad; }
+};
+
 
 }

@@ -277,16 +277,16 @@ TEST_CASE("Test:Conv2d") {
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::COMPLEX], 2, 2, 2}));
 
-        upstride::Conv2DDescriptor descriptor(input.getShape(),
+        upstride::Conv2DFwdDescriptor descriptor(input.getShape(),
                                               kernel.getShape(),
-                                              1, //stride
-                                              1, //dilation
+                                              1,                        //stride
+                                              1,                        //dilation
                                               upstride::Padding::VALID, //padding preset
-                                              {},  //explicitPadding
-                                              1,   //groups
-                                              Algebra::COMPLEX, //algebra
-                                              DataFormat::NCHW, //dataformat
-                                              false);   // usebias
+                                              {},                       //explicit padding
+                                              1,                        //groups
+                                              Algebra::COMPLEX,         //algebra
+                                              DataFormat::NCHW,         //dataformat
+                                              false);                   //use bias
         upstride::conv2DFwd<device::CPU, float>(context,
                                                 ::device,
                                                 input,
@@ -324,7 +324,7 @@ TEST_CASE("Test:Conv2d") {
             kernelPtr[i] = 1;
         }
 
-        Conv2DDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false);
+        Conv2DFwdDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false);
         conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, output, descriptor);
 
         bool test = true;
@@ -385,7 +385,7 @@ TEST_CASE("Test:Conv2d") {
 
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::QUATERNION], 2, 2, 2}));
-        Conv2DDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false, true);
+        Conv2DFwdDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false, true);
         conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, testOutput, descriptor);
 
         // compare
@@ -439,7 +439,7 @@ TEST_CASE("Test:Conv2d") {
 
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2, 1, 1}));
-        Conv2DDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::GA_300, DataFormat::NCHW, false);
+        Conv2DFwdDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::GA_300, DataFormat::NCHW, false);
         conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, testOutput, descriptor);
 
         // compare
@@ -614,7 +614,7 @@ TEST_CASE("Test:Utils") {
         const std::vector<int32_t>& dilation = {0, 0};
         upstride::IntPair padBefore, padAfter;
 
-        upstride::Conv2DDescriptor descriptor(inputShape,
+        upstride::Conv2DFwdDescriptor descriptor(inputShape,
                                               kernelShape,
                                               stride,
                                               dilation,

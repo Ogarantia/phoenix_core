@@ -18,13 +18,27 @@ template <typename Device, typename T>
 void conv2DFwd(Context& context,
                Device& device,
                const Tensor<Device, const T>& inputTensor,
-               const Tensor<Device, const T>& kernelTensor,
+               const Tensor<Device, const T>& filterTensor,
                const Tensor<Device, const T>* biasTensor,
                Tensor<Device, T>& outputTensor,
-               const Conv2DDescriptor& descriptor)
+               const Conv2DFwdDescriptor& descriptor)
 {
-    auto& op = device.template getConv2DOperation<UpstrideConv2DFunctor<Device, T>>(descriptor);
-    op(device, inputTensor, kernelTensor, biasTensor, outputTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
+    auto& op = device.template getConv2DFwdOperation<UpstrideConv2DFunctor<Device, T>>(descriptor);
+    op(device, inputTensor, filterTensor, biasTensor, outputTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
+}
+
+template <typename Device, typename T>
+void conv2DBwd(Context& context,
+               Device& device,
+               const Tensor<Device, const T>& inputTensor,
+               const Tensor<Device, const T>& filterTensor,
+               const Tensor<Device, const T>& gradTensor,
+               Tensor<Device, T>& filterGradTensor,
+               Tensor<Device, T>& inputGradTensor,
+               const Conv2DBwdDescriptor& descriptor)
+{
+    auto& op = device.template getConv2DBwdOperation<UpstrideConv2DGradFunctor<Device, T>>(descriptor);
+    op(device, inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
 }
 
 }

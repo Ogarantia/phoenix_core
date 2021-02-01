@@ -135,7 +135,8 @@ class OpCollection : public OpCollectionInterface {
             map.clear();
             for (auto op: allOps.getList()) {
                 auto it = inverseMap.find(op);
-                map.emplace(it->second, op);
+                if (it != inverseMap.end())
+                    map.emplace(it->second, op);
             }
         }
 
