@@ -2,18 +2,19 @@
 
 #include "backend.hpp"
 #include "conv2d_descriptor.hpp"
-#include "operations_cache.hpp"
+#include "op_collections.hpp"
 #include "../operation.hpp"
 
 namespace upstride {
 class Device {
-    OperationsCache<Conv2DDescriptor, Operation> conv2dCache;
+    GlobalOpCollection allOps;
+    OpCollection<Conv2DDescriptor> conv2dFwdOps;
     public:
-        Device(Context& context): conv2dCache(context) {}
+        Device(Context& context): conv2dFwdOps(context, allOps) {}
 
         template<class Conv2DOperationClass>
         inline Conv2DOperationClass& getConv2DOperation(const Conv2DDescriptor& descriptor) {
-            return conv2dCache.get<Conv2DOperationClass>(descriptor);
+            return conv2dFwdOps.get<Conv2DOperationClass>(descriptor);
         }
 };
 }
