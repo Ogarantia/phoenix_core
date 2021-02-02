@@ -47,6 +47,7 @@ class CUDA : public Device {
     CUDA(Context& context, const cudaStream_t& stream);
 
     inline ~CUDA() {
+        freeWorkspaceMemory();
         cudnnDestroy(cudnnHandle);
         cublasDestroy(cublasHandle);
     }
@@ -183,11 +184,11 @@ class CUDA : public Device {
      * @param size      Size in bytes.
      * @return the allocated memory address.
      */
+    void* malloc(size_t size) override;
+
     template<typename T>
     inline T* malloc(size_t size) {
-        void* memory;
-        allocator.call(this, &CUDA::internalMalloc, size, memory);
-        return static_cast<T*>(memory);
+        return static_cast<T*>(malloc(size));
     }
 
     /**
@@ -195,7 +196,7 @@ class CUDA : public Device {
      * This function is thread-safe. It can recycle a memory buffer allocated from a different thread.
      * @param memory    Address of the buffer to free
      */
-    void free(void* memory);
+    void free(void* memory) override;
 };
 }  // namespace device
 }  // namespace upstride

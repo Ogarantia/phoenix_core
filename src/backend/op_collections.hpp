@@ -4,7 +4,7 @@
 #include <iterator>
 #include <vector>
 #include <sstream>
-#include "../operation.hpp"
+#include "operation.hpp"
 #include "backend.hpp"
 
 namespace upstride {

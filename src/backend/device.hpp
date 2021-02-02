@@ -4,10 +4,12 @@
 #include "conv2d_descriptor.hpp"
 #include "dense_descriptor.hpp"
 #include "op_collections.hpp"
-#include "../operation.hpp"
+#include "operation.hpp"
+#include "memory_request.hpp"
 
 namespace upstride {
 class Device {
+    Device(const Device&) = delete;  // disable copying
 private:
     Context& context;
     GlobalOpCollection allOps;                          //!< all operations ready to go on the current device
@@ -16,14 +18,23 @@ private:
     OpCollection<DenseFwdDescriptor> denseFwdOps;       //!< dense forward ops (subset of allOps)
     OpCollection<DenseBwdDescriptor> denseBwdOps;       //!< dense backward ops (subset of allOps)
 
+    void* workspace;                                    //!< memory buffer shared across all operations to store temporary data
+    size_t workspaceSize;                               //!< size of the shared memory buffer
+
+    virtual void* malloc(size_t size) = 0;
+    virtual void free(void* memory) = 0;
+
 public:
     Device(Context& context):
         context(context),
         conv2dFwdOps(allOps),
         conv2dBwdOps(allOps),
         denseFwdOps(allOps),
-        denseBwdOps(allOps)
+        denseBwdOps(allOps),
+        workspace(nullptr), workspaceSize(0)
     {}
+
+    virtual ~Device() {}
 
     inline Context& getContext() { return context; }
 
@@ -45,6 +56,22 @@ public:
     template<class DeviceClass, class OperationClass>
     inline OperationClass& getDenseBwdOperation(const DenseBwdDescriptor& descriptor) {
         return denseBwdOps.get<DeviceClass, OperationClass>(static_cast<DeviceClass&>(*this), descriptor);
+    }
+
+    inline void* requestWorkspaceMemory(size_t size) {
+        if (size > workspaceSize) {
+            UPSTRIDE_SAYS("Memory request causes a reallocation: available %lu MB, requested %lu MB",
+                workspaceSize / (1 << 20), size / (1 << 20));
+            free(workspace);
+            workspaceSize = size;
+            workspace = malloc(size);
+        }
+        return workspace;
+    }
+
+    inline void freeWorkspaceMemory() {
+        free(workspace);
+        workspaceSize = 0;
     }
 };
 }

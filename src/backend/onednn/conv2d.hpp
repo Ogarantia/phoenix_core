@@ -178,12 +178,14 @@ class ScalarConv2DFunctor<device::CPU, T> {
 
     /**
      * @brief Executes the convolution operation
+     * @param memory            Memory request to allocate intermediate buffers
      * @param inputTensor       Input tensor
      * @param kernelTensor      Kernel tensor
      * @param biasTensor        Pointer to bias tensor; may be null
      * @param outputTensor      Output tensor
      */
-    void operator()(const Tensor<device::CPU, const T>& inputTensor,
+    void operator()(MemoryRequest& request,
+                    const Tensor<device::CPU, const T>& inputTensor,
                     const Tensor<device::CPU, const T>& kernelTensor,
                     const Tensor<device::CPU, const T>* biasTensor,
                     Tensor<device::CPU, T>& outputTensor) {
@@ -364,6 +366,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
 
     /**
      * @brief Executes the convolution operation
+     * @param memory            Memory request to allocate intermediate buffers
      * @param inputTensor       forward input tensor
      * @param kernelTensor      forward input kernel tensor
      * @param gradTensor        gradient of the forward output tensor (dy)
@@ -373,7 +376,8 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void operator()(const Tensor<device::CPU, const T>& inputTensor,
+    void operator()(MemoryRequest& memory,
+                    const Tensor<device::CPU, const T>& inputTensor,
                     const Tensor<device::CPU, const T>& kernelTensor,
                     const Tensor<device::CPU, const T>& gradTensor,
                     Tensor<device::CPU, T>& kernelGradTensor,

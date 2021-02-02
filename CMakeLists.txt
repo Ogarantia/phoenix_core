@@ -26,6 +26,7 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 set(CPP_SOURCES_FOLDER "${CMAKE_CURRENT_LIST_DIR}/src")
 set(SOURCES ${SOURCES}
     ${CPP_SOURCES_FOLDER}/backend/backend.cc
+    ${CPP_SOURCES_FOLDER}/backend/memory_request.cc
     ${CPP_SOURCES_FOLDER}/algebras.cc
     ${CPP_SOURCES_FOLDER}/isolated_thread.cc
     ${CPP_SOURCES_FOLDER}/utils.cc

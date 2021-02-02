@@ -14,9 +14,9 @@
 #include "backend/api.h"
 #include "backend/conv2d_descriptor.hpp"
 #include "backend/tensor.hpp"
+#include "backend/operation.hpp"
 #include "deferred_allocator.hpp"
 #include "utils.hpp"
-#include "operation.hpp"
 
 namespace upstride {
 
@@ -101,6 +101,8 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
+        MemoryRequest memory(*this);
+
         // run custom convolution kernels for quaternions if possible
         if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, biasTensor, outputTensor);
@@ -124,15 +126,15 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
-                [this, &input, &kernel, &output](int left, int right, int dim) {
+                [this, &memory, &input, &kernel, &output](int left, int right, int dim) {
                     if (left == 0)
-                        convOp(input, kernel[right], nullptr, output[dim]);
+                        convOp(memory, input, kernel[right], nullptr, output[dim]);
                     // no else branch: input is zero if left > 0, bias is zero as well
                 },
 
-                [this, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
+                [this, &memory, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
                     if (left == 0) {
-                        convOp(input, kernel[right], nullptr, buffer);
+                        convOp(memory, input, kernel[right], nullptr, buffer);
                         if (positive)
                             output[dim] += buffer;
                         else
@@ -162,11 +164,11 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             // decompose - compute - recompose
             TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
             for (int i = 0; i < 4; ++i)
-                convOp(*inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
+                convOp(memory, *inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
             for (int i = 4; i < 8; ++i)
                 // According to the factorization formulation, last four lanes are plainly added to the quaternion components (see recomposeQuaternionOutput()).
                 // Adding bias there then!
-                convOp(*inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
+                convOp(memory, *inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
 
             TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
 
@@ -192,12 +194,12 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
-                [this, &input, &kernel, bias, &output](int left, int right, int dim) {
-                    convOp(input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
+                [this, &memory, &input, &kernel, bias, &output](int left, int right, int dim) {
+                    convOp(memory, input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
                 },
 
-                [this, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
-                    convOp(input[left], kernel[right], nullptr, buffer);
+                [this, &memory, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
+                    convOp(memory, input[left], kernel[right], nullptr, buffer);
                     if (positive)
                         output[dim] += buffer;
                     else
@@ -296,6 +298,8 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
+        MemoryRequest memory(*this);
+
         // run custom convolution kernels for quaternions if possible
         if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
@@ -321,18 +325,18 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGradTensor](int left, int right, int dim) {
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGradTensor](int left, int right, int dim) {
                     if (left == 0)
-                        convOp(input, kernel[right], grad[dim], kernelGrad[right], inputGradTensor);
+                        convOp(memory, input, kernel[right], grad[dim], kernelGrad[right], inputGradTensor);
                     else {
                         // input is real: if left != 0, it is zero
                         kernelGrad[right].zero();
                     }
                 },
 
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGradTensor, &bufferKernel](int left, int right, int dim, bool positive) {
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGradTensor, &bufferKernel](int left, int right, int dim, bool positive) {
                     if (left == 0) {
-                        convOp(input, kernel[right], grad[dim], bufferKernel, inputGradTensor);
+                        convOp(memory, input, kernel[right], grad[dim], bufferKernel, inputGradTensor);
                         if (positive)
                             kernelGrad[right] += bufferKernel;
                         else
@@ -366,7 +370,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes);
 
             for (int i = 0; i < 8; ++i)
-                convOp(*inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
+                convOp(memory, *inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
 
             TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
         }
@@ -388,12 +392,12 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
-                    convOp(input[left], kernel[right], grad[dim], kernelGrad[right], inputGrad[left]);
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
+                    convOp(memory, input[left], kernel[right], grad[dim], kernelGrad[right], inputGrad[left]);
                 },
 
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
-                    convOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
+                    convOp(memory, input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
                     if (positive) {
                         kernelGrad[right] += bufferKernel;
                         if (requireInputGrad)

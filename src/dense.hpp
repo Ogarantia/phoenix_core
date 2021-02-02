@@ -12,9 +12,9 @@
 #include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
+#include "backend/operation.hpp"
 #include "deferred_allocator.hpp"
 #include "utils.hpp"
-#include "operation.hpp"
 
 namespace upstride {
 

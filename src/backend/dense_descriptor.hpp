@@ -29,6 +29,7 @@ public:
 
     inline DataFormat getDataFormat() const { return dataFormat; }
 
+    inline std::string toString() const { return ""; }
 };
 
 

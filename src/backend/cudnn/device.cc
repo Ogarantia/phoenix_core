@@ -59,6 +59,13 @@ CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cuda
 }
 
 
+void* CUDA::malloc(size_t size) {
+    void* memory;
+    allocator.call(this, &CUDA::internalMalloc, size, memory);
+    return memory;
+}
+
+
 void CUDA::free(void* memory) {
     allocator.call(this, &CUDA::internalFree, memory);
 }
