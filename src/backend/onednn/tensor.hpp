@@ -45,14 +45,14 @@ struct TensorManipulations<device::CPU> {
 
     template <typename T>
     static inline void decomposeQuaternionInputs(
-        const TensorSplit<device::CPU, const T, 4>& inLeft, AllocatedTensor<device::CPU, T>* outLeft[8],
-        const TensorSplit<device::CPU, const T, 4>& inRight, AllocatedTensor<device::CPU, T>* outRight[8]) {
+        const TensorSplit<device::CPU, const T, 4>& inLeft, TemporaryTensor<device::CPU, T>* outLeft,
+        const TensorSplit<device::CPU, const T, 4>& inRight, TemporaryTensor<device::CPU, T>* outRight) {
         // compute left operand decomposition
         {
             const int length = inLeft.shape().numel();
             const T* inPtr[] = {inLeft[0].getDataPtr(), inLeft[1].getDataPtr(), inLeft[2].getDataPtr(), inLeft[3].getDataPtr()};
-            T* outPtr[] = {outLeft[0]->getDataPtr(), outLeft[1]->getDataPtr(), outLeft[2]->getDataPtr(), outLeft[3]->getDataPtr(),
-                           outLeft[4]->getDataPtr(), outLeft[5]->getDataPtr(), outLeft[6]->getDataPtr(), outLeft[7]->getDataPtr()};
+            T* outPtr[] = {outLeft[0].getDataPtr(), outLeft[1].getDataPtr(), outLeft[2].getDataPtr(), outLeft[3].getDataPtr(),
+                           outLeft[4].getDataPtr(), outLeft[5].getDataPtr(), outLeft[6].getDataPtr(), outLeft[7].getDataPtr()};
             for (int i = 0; i < length; ++i) {
                 outPtr[0][i] = inPtr[3][i] + inPtr[1][i];
                 outPtr[1][i] = inPtr[0][i] - inPtr[2][i];
@@ -69,8 +69,8 @@ struct TensorManipulations<device::CPU> {
         {
             const int length = inRight.shape().numel();
             const T* inPtr[] = {inRight[0].getDataPtr(), inRight[1].getDataPtr(), inRight[2].getDataPtr(), inRight[3].getDataPtr()};
-            T* outPtr[] = {outRight[0]->getDataPtr(), outRight[1]->getDataPtr(), outRight[2]->getDataPtr(), outRight[3]->getDataPtr(),
-                           outRight[4]->getDataPtr(), outRight[5]->getDataPtr(), outRight[6]->getDataPtr(), outRight[7]->getDataPtr()};
+            T* outPtr[] = {outRight[0].getDataPtr(), outRight[1].getDataPtr(), outRight[2].getDataPtr(), outRight[3].getDataPtr(),
+                           outRight[4].getDataPtr(), outRight[5].getDataPtr(), outRight[6].getDataPtr(), outRight[7].getDataPtr()};
             for (int i = 0; i < length; ++i) {
                 outPtr[0][i] = inPtr[1][i] + inPtr[2][i];
                 outPtr[1][i] = inPtr[0][i] + inPtr[3][i];
@@ -85,11 +85,11 @@ struct TensorManipulations<device::CPU> {
     }
 
     template <typename T>
-    static inline void decomposeQuaternionOutputGrad(const TensorSplit<device::CPU, const T, 4>& inGrad, AllocatedTensor<device::CPU, T>* outGrad[8]) {
+    static inline void decomposeQuaternionOutputGrad(const TensorSplit<device::CPU, const T, 4>& inGrad, TemporaryTensor<device::CPU, T>* outGrad) {
         const int length = inGrad.shape().numel();
         const T* inPtr[] = {inGrad[0].getDataPtr(), inGrad[1].getDataPtr(), inGrad[2].getDataPtr(), inGrad[3].getDataPtr()};
-        T* outPtr[] = {outGrad[0]->getDataPtr(), outGrad[1]->getDataPtr(), outGrad[2]->getDataPtr(), outGrad[3]->getDataPtr(),
-                       outGrad[4]->getDataPtr(), outGrad[5]->getDataPtr(), outGrad[6]->getDataPtr(), outGrad[7]->getDataPtr()};
+        T* outPtr[] = {outGrad[0].getDataPtr(), outGrad[1].getDataPtr(), outGrad[2].getDataPtr(), outGrad[3].getDataPtr(),
+                       outGrad[4].getDataPtr(), outGrad[5].getDataPtr(), outGrad[6].getDataPtr(), outGrad[7].getDataPtr()};
         for (int i = 0; i < length; ++i) {
             const T t1 = inPtr[0][i] + inPtr[1][i];
             const T t3 = inPtr[0][i] - inPtr[1][i];
@@ -107,10 +107,10 @@ struct TensorManipulations<device::CPU> {
     }
 
     template <typename T>
-    static inline void recomposeQuaternionOutput(AllocatedTensor<device::CPU, T>* inLanes[8], TensorSplit<device::CPU, T, 4>& outQuats) {
+    static inline void recomposeQuaternionOutput(TemporaryTensor<device::CPU, T>* inLanes, TensorSplit<device::CPU, T, 4>& outQuats) {
         const int length = outQuats.shape().numel();
-        const T* inPtr[] = {inLanes[0]->getDataPtr(), inLanes[1]->getDataPtr(), inLanes[2]->getDataPtr(), inLanes[3]->getDataPtr(),
-                            inLanes[4]->getDataPtr(), inLanes[5]->getDataPtr(), inLanes[6]->getDataPtr(), inLanes[7]->getDataPtr()};
+        const T* inPtr[] = {inLanes[0].getDataPtr(), inLanes[1].getDataPtr(), inLanes[2].getDataPtr(), inLanes[3].getDataPtr(),
+                            inLanes[4].getDataPtr(), inLanes[5].getDataPtr(), inLanes[6].getDataPtr(), inLanes[7].getDataPtr()};
         T* outPtr[] = {outQuats[0].getDataPtr(), outQuats[1].getDataPtr(), outQuats[2].getDataPtr(), outQuats[3].getDataPtr()};
         for (int i = 0; i < length; ++i) {
             const T a2 = inPtr[0][i] + inPtr[1][i] + inPtr[2][i];
@@ -123,13 +123,13 @@ struct TensorManipulations<device::CPU> {
     }
 
     template <typename T>
-    static inline void recomposeQuaternionInputsGrad(AllocatedTensor<device::CPU, T>* inLeftGradLanes[8], TensorSplit<device::CPU, T, 4>& outLeftGradQuats,
-                                                     AllocatedTensor<device::CPU, T>* inRightGradLanes[8], TensorSplit<device::CPU, T, 4>& outRightGradQuats) {
+    static inline void recomposeQuaternionInputsGrad(TemporaryTensor<device::CPU, T>* inLeftGradLanes, TensorSplit<device::CPU, T, 4>& outLeftGradQuats,
+                                                     TemporaryTensor<device::CPU, T>* inRightGradLanes, TensorSplit<device::CPU, T, 4>& outRightGradQuats) {
         // compute left operand gradient
         {
             const int length = outLeftGradQuats.shape().numel();
-            const T* inPtr[] = {inLeftGradLanes[0]->getDataPtr(), inLeftGradLanes[1]->getDataPtr(), inLeftGradLanes[2]->getDataPtr(), inLeftGradLanes[3]->getDataPtr(),
-                                inLeftGradLanes[4]->getDataPtr(), inLeftGradLanes[5]->getDataPtr(), inLeftGradLanes[6]->getDataPtr(), inLeftGradLanes[7]->getDataPtr()};
+            const T* inPtr[] = {inLeftGradLanes[0].getDataPtr(), inLeftGradLanes[1].getDataPtr(), inLeftGradLanes[2].getDataPtr(), inLeftGradLanes[3].getDataPtr(),
+                                inLeftGradLanes[4].getDataPtr(), inLeftGradLanes[5].getDataPtr(), inLeftGradLanes[6].getDataPtr(), inLeftGradLanes[7].getDataPtr()};
             T* outPtr[] = {outLeftGradQuats[0].getDataPtr(), outLeftGradQuats[1].getDataPtr(), outLeftGradQuats[2].getDataPtr(), outLeftGradQuats[3].getDataPtr()};
             for (int i = 0; i < length; ++i) {
                 outPtr[0][i] = inPtr[1][i] + inPtr[2][i] + inPtr[5][i] + inPtr[6][i];
@@ -142,8 +142,8 @@ struct TensorManipulations<device::CPU> {
         // compute right operand gradient
         {
             const int length = outRightGradQuats.shape().numel();
-            const T* inPtr[] = {inRightGradLanes[0]->getDataPtr(), inRightGradLanes[1]->getDataPtr(), inRightGradLanes[2]->getDataPtr(), inRightGradLanes[3]->getDataPtr(),
-                                inRightGradLanes[4]->getDataPtr(), inRightGradLanes[5]->getDataPtr(), inRightGradLanes[6]->getDataPtr(), inRightGradLanes[7]->getDataPtr()};
+            const T* inPtr[] = {inRightGradLanes[0].getDataPtr(), inRightGradLanes[1].getDataPtr(), inRightGradLanes[2].getDataPtr(), inRightGradLanes[3].getDataPtr(),
+                                inRightGradLanes[4].getDataPtr(), inRightGradLanes[5].getDataPtr(), inRightGradLanes[6].getDataPtr(), inRightGradLanes[7].getDataPtr()};
             T* outPtr[] = {outRightGradQuats[0].getDataPtr(), outRightGradQuats[1].getDataPtr(), outRightGradQuats[2].getDataPtr(), outRightGradQuats[3].getDataPtr()};
             for (int i = 0; i < length; ++i) {
                 outPtr[0][i] = inPtr[1][i] + inPtr[2][i] + inPtr[5][i] + inPtr[7][i];

@@ -16,6 +16,7 @@
 #include "backend/tensor.hpp"
 #include "backend/operation.hpp"
 #include "deferred_allocator.hpp"
+#include "backend/temporary_tensor.hpp"
 #include "utils.hpp"
 
 namespace upstride {
@@ -121,20 +122,29 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             const auto& input(inputTensor);
             TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
 
-            // allocate a temporary buffer
-            AllocatedTensor<Device, T>& buffer(this->buffer.get(device, output.shape()));
+            // get a temporary buffer
+            TemporaryTensor<Device, T> buffer(device, memory, output.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit(device);
+
+            // prepare buffer
+            buffer.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
-                [this, &memory, &input, &kernel, &output](int left, int right, int dim) {
+                [this, &input, &kernel, &output](int left, int right, int dim) {
                     if (left == 0)
-                        convOp(memory, input, kernel[right], nullptr, output[dim]);
+                        convOp(input, kernel[right], nullptr, output[dim]);
                     // no else branch: input is zero if left > 0, bias is zero as well
                 },
 
-                [this, &memory, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
+                [this, &input, &kernel, &output, &buffer](int left, int right, int dim, bool positive) {
                     if (left == 0) {
-                        convOp(memory, input, kernel[right], nullptr, buffer);
+                        convOp(input, kernel[right], nullptr, buffer);
                         if (positive)
                             output[dim] += buffer;
                         else
@@ -154,23 +164,61 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             TensorSplit<Device, const T, 4>* bias = biasTensor ? new TensorSplit<Device, const T, 4>(*biasTensor) : nullptr;
 
             // get temporary buffers
-            AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *outputLanes[8];
+            std::array<TemporaryTensor<Device, T>, 8> inputLanes{ {
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> kernelLanes{ {
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> outputLanes{ {
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() }
+            } };
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit(device);
+
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
-                kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
-                outputLanes[i] = &this->outputLanes[i].get(device, output.shape());
+                inputLanes[i].prepare();
+                kernelLanes[i].prepare();
+                outputLanes[i].prepare();
             }
 
             // decompose - compute - recompose
-            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
+            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes.data(), kernel, kernelLanes.data());
             for (int i = 0; i < 4; ++i)
-                convOp(memory, *inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
+                convOp(inputLanes[i], kernelLanes[i], nullptr, outputLanes[i]);
             for (int i = 4; i < 8; ++i)
                 // According to the factorization formulation, last four lanes are plainly added to the quaternion components (see recomposeQuaternionOutput()).
                 // Adding bias there then!
-                convOp(memory, *inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
+                convOp(inputLanes[i], kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, outputLanes[i]);
 
-            TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
+            TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes.data(), output);
 
             // free bias
             delete bias;
@@ -190,16 +238,23 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             TensorSplit<Device, const T, CliffordProductSpec::DIMS>* bias = biasTensor ? new TensorSplit<Device, const T, CliffordProductSpec::DIMS>(*biasTensor) : nullptr;
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& buffer(this->buffer.get(device, output.shape()));
+            TemporaryTensor<Device, T> buffer(device, memory, output.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit(device);
+            buffer.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
                 [this, &memory, &input, &kernel, bias, &output](int left, int right, int dim) {
-                    convOp(memory, input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
+                    convOp(input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
                 },
 
                 [this, &memory, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
-                    convOp(memory, input[left], kernel[right], nullptr, buffer);
+                    convOp(input[left], kernel[right], nullptr, buffer);
                     if (positive)
                         output[dim] += buffer;
                     else
@@ -321,13 +376,20 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             }
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(device, kernelGrad.shape()));
+            TemporaryTensor<Device, T> bufferKernel(device, memory, kernelGrad.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit(device);
+            bufferKernel.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
                 [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGradTensor](int left, int right, int dim) {
                     if (left == 0)
-                        convOp(memory, input, kernel[right], grad[dim], kernelGrad[right], inputGradTensor);
+                        convOp(input, kernel[right], grad[dim], kernelGrad[right], inputGradTensor);
                     else {
                         // input is real: if left != 0, it is zero
                         kernelGrad[right].zero();
@@ -336,7 +398,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
 
                 [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGradTensor, &bufferKernel](int left, int right, int dim, bool positive) {
                     if (left == 0) {
-                        convOp(memory, input, kernel[right], grad[dim], bufferKernel, inputGradTensor);
+                        convOp(input, kernel[right], grad[dim], bufferKernel, inputGradTensor);
                         if (positive)
                             kernelGrad[right] += bufferKernel;
                         else
@@ -356,23 +418,89 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorSplit<Device, T, 4> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
             // get temporary buffers
-            AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *gradLanes[8], *kernelGradLanes[8], *inputGradLanes[8];
+            std::array<TemporaryTensor<Device, T>, 8> inputLanes{ {
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> kernelLanes{ {
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> gradLanes{ {
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> kernelGradLanes{ {
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> inputGradLanes{ {
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() }
+            } };
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit(device);
+
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
-                kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
-                gradLanes[i] = &this->gradLanes[i].get(device, grad.shape());
-                kernelGradLanes[i] = &this->kernelGradLanes[i].get(device, kernelGrad.shape());
-                inputGradLanes[i] = &this->inputGradLanes[i].get(device, inputGrad.shape());
+                inputLanes[i].prepare();
+                kernelLanes[i].prepare();
+                gradLanes[i].prepare();
+                kernelGradLanes[i].prepare();
+                inputGradLanes[i].prepare();
             }
 
             // decompose - compute - recompose
-            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
-            TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes);
+            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes.data(), kernel, kernelLanes.data());
+            TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes.data());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit(device);
 
             for (int i = 0; i < 8; ++i)
-                convOp(memory, *inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
+                convOp(inputLanes[i], kernelLanes[i], gradLanes[i], kernelGradLanes[i], inputGradLanes[i]);
 
-            TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
+            TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes.data(), inputGrad, kernelGradLanes.data(), kernelGrad);
         }
 
         // generic implementation
@@ -387,17 +515,25 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorSplit<Device, T, CliffordProductSpec::DIMS> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(device, kernelGrad.shape()));
-            AllocatedTensor<Device, T>& bufferInput(this->bufferInput.get(device, inputGrad.shape()));
+            TemporaryTensor<Device, T> bufferKernel(device, memory, kernelGrad.shape());
+            TemporaryTensor<Device, T> bufferInput(device, memory, inputGrad.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit(device);
+            bufferKernel.prepare();
+            bufferInput.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
                 [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
-                    convOp(memory, input[left], kernel[right], grad[dim], kernelGrad[right], inputGrad[left]);
+                    convOp(input[left], kernel[right], grad[dim], kernelGrad[right], inputGrad[left]);
                 },
 
                 [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
-                    convOp(memory, input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
+                    convOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
                     if (positive) {
                         kernelGrad[right] += bufferKernel;
                         if (requireInputGrad)

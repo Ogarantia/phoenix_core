@@ -4,9 +4,13 @@
 using namespace upstride;
 
 void* Pointer::data() {
-    if (!request.isValid())
+#ifdef UPSTRIDE_DEBUG
+    if (!request)
+        throw std::runtime_error("Trying to use a pointer without associated memory request");
+    if (!request->isValid())
         throw std::runtime_error("Submit the memory request to a device before using pointers");
-    return request.address + shift;
+#endif
+    return request->address + shift;
 }
 
 

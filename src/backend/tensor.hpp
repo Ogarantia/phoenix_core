@@ -277,12 +277,12 @@ class Tensor;  //!< forward declaration
 template <typename Device, typename T, const int PARTS>
 class TensorSplit;  //!< forward declaration
 
-/**
- * @brief Forward declaration of a Tensor implementation that allocates and frees the memory itself.
- * The implementation is device-dependend and is provided by every backend.
- */
+template <typename Device, typename T>
+class TemporaryTensor;
+
 template <typename Device, typename T>
 class AllocatedTensor;
+
 
 /**
  * @brief Declares a set of tensor manipulation routines.
@@ -320,8 +320,8 @@ struct TensorManipulations {
      * @param outRight  right operand decomposition
      */
     template <typename T>
-    static inline void decomposeQuaternionInputs(const TensorSplit<Device, const T, 4>& inLeft, AllocatedTensor<Device, T>* outLeft[8],
-                                                 const TensorSplit<Device, const T, 4>& inRight, AllocatedTensor<Device, T>* outRight[8]);
+    static inline void decomposeQuaternionInputs(const TensorSplit<Device, const T, 4>& inLeft, TemporaryTensor<Device, T>* outLeft,
+                                                 const TensorSplit<Device, const T, 4>& inRight, TemporaryTensor<Device, T>* outRight);
 
     /**
      * @brief Maps output gradient of a multiplicative binary operation onto 8 scalar lanes the backward pass can be performed onto.
@@ -330,7 +330,7 @@ struct TensorManipulations {
      * @param outGrad   operation gradient decomposition
      */
     template <typename T>
-    static inline void decomposeQuaternionOutputGrad(const TensorSplit<Device, const T, 4>& inGrad, AllocatedTensor<Device, T>* outGrad[8]);
+    static inline void decomposeQuaternionOutputGrad(const TensorSplit<Device, const T, 4>& inGrad, TemporaryTensor<Device, T>* outGrad);
 
     /**
      * @brief Maps 8 scalar lanes of a decomposed quaternion multiplicative binary operation result to a regular quaternion tensor.
@@ -339,7 +339,7 @@ struct TensorManipulations {
      * @param outQuats          recomposed quaternion output
      */
     template <typename T>
-    static inline void recomposeQuaternionOutput(AllocatedTensor<Device, T>* inLanes[8], TensorSplit<Device, T, 4>& outQuats);
+    static inline void recomposeQuaternionOutput(TemporaryTensor<Device, T>* inLanes, TensorSplit<Device, T, 4>& outQuats);
 
     /**
      * @brief Maps 8 scalar lanes of a decomposed quaternion multiplicative binary operation gradient to quaternion tensors.
@@ -350,8 +350,8 @@ struct TensorManipulations {
      * @param outRightGradQuats recomposed left operand gradient
      */
     template <typename T>
-    static inline void recomposeQuaternionInputsGrad(AllocatedTensor<Device, T>* inLeftGradLanes[8], TensorSplit<Device, T, 4>& outLeftGradQuats,
-                                                     AllocatedTensor<Device, T>* inRightGradLanes[8], TensorSplit<Device, T, 4>& outRightGradQuats);
+    static inline void recomposeQuaternionInputsGrad(TemporaryTensor<Device, T>* inLeftGradLanes, TensorSplit<Device, T, 4>& outLeftGradQuats,
+                                                     TemporaryTensor<Device, T>* inRightGradLanes, TensorSplit<Device, T, 4>& outRightGradQuats);
 
 };  // namespace tensor_arithmetics
 

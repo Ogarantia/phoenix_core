@@ -36,24 +36,24 @@ struct TensorManipulations<device::CUDA> {
     }
 
     template <typename T>
-    static inline void decomposeQuaternionInputs(const TensorSplit<device::CUDA, const T, 4>& inLeft, AllocatedTensor<device::CUDA, T>* outLeft[8],
-                                                 const TensorSplit<device::CUDA, const T, 4>& inRight, AllocatedTensor<device::CUDA, T>* outRight[8]) {
+    static inline void decomposeQuaternionInputs(const TensorSplit<device::CUDA, const T, 4>& inLeft, TemporaryTensor<device::CUDA, T>* outLeft,
+                                                 const TensorSplit<device::CUDA, const T, 4>& inRight, TemporaryTensor<device::CUDA, T>* outRight) {
         cudnn::decomposeQuaternionInputs(inLeft, outLeft, inRight, outRight);
     }
 
     template <typename T>
-    static inline void decomposeQuaternionOutputGrad(const TensorSplit<device::CUDA, const T, 4>& inGrad, AllocatedTensor<device::CUDA, T>* outGrad[8]) {
+    static inline void decomposeQuaternionOutputGrad(const TensorSplit<device::CUDA, const T, 4>& inGrad, TemporaryTensor<device::CUDA, T>* outGrad) {
         cudnn::decomposeQuaternionOutputGrad(inGrad, outGrad);
     }
 
     template <typename T>
-    static inline void recomposeQuaternionOutput(AllocatedTensor<device::CUDA, T>* inLanes[8], TensorSplit<device::CUDA, T, 4>& outQuats) {
+    static inline void recomposeQuaternionOutput(TemporaryTensor<device::CUDA, T>* inLanes, TensorSplit<device::CUDA, T, 4>& outQuats) {
         cudnn::recomposeQuaternionOutput(inLanes, outQuats);
     }
 
     template <typename T>
-    static inline void recomposeQuaternionInputsGrad(AllocatedTensor<device::CUDA, T>* inLeftGradLanes[8], TensorSplit<device::CUDA, T, 4>& outLeftGradQuats,
-                                                     AllocatedTensor<device::CUDA, T>* inRightGradLanes[8], TensorSplit<device::CUDA, T, 4>& outRightGradQuats) {
+    static inline void recomposeQuaternionInputsGrad(TemporaryTensor<device::CUDA, T>* inLeftGradLanes, TensorSplit<device::CUDA, T, 4>& outLeftGradQuats,
+                                                     TemporaryTensor<device::CUDA, T>* inRightGradLanes, TensorSplit<device::CUDA, T, 4>& outRightGradQuats) {
         cudnn::recomposeQuaternionInputsGrad(inLeftGradLanes, outLeftGradQuats, inRightGradLanes, outRightGradQuats);
     }
 };

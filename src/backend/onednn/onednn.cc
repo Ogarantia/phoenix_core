@@ -11,7 +11,7 @@ void onednn::Context::execute(dnnl::primitive& prim, std::unordered_map<int, dnn
 }
 
 void* device::CPU::malloc(size_t size) {
-    return malloc(size);
+    return ::malloc(size);
 }
 
 void device::CPU::free(void* memory) {

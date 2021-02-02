@@ -19,13 +19,16 @@ class Pointer {
 
 private:
     size_t shift;
-    MemoryRequest& request;
+    MemoryRequest* request;
 
-    inline Pointer(MemoryRequest& request, size_t shift): request(request), shift(shift) {}
+    inline Pointer(MemoryRequest& request, size_t shift): request(&request), shift(shift) {}
 
 public:
     Pointer(const Pointer&) = default;
     Pointer(Pointer&&) = default;
+    Pointer& operator=(const upstride::Pointer&) = default;
+
+    inline Pointer(): request(nullptr), shift(0) {}
 
     void* data();
     operator void*() { return data(); }
@@ -34,23 +37,25 @@ public:
     inline T* cast() { return static_cast<T*>(data()); }
 
     inline Pointer operator+(size_t shift) const {
-        return Pointer(request, this->shift + shift);
+        return Pointer(*request, this->shift + shift);
     }
 
     inline Pointer operator-(size_t shift) const {
         if (shift > this->shift)
             throw std::runtime_error("Invalid pointer shift");
-        return Pointer(request, this->shift - shift);
+        return Pointer(*request, this->shift - shift);
     }
 };
 
 
+/**
+ * @brief Requests memory to the device.
+ */
 class MemoryRequest {
     friend class Pointer;
-    friend class Device;
 
 private:
-    Operation& operation;
+    Operation& operation;   //!< operation the request is bound to
     uint8_t* address;
     size_t size;
 
@@ -60,12 +65,18 @@ public:
         operation.updateMemoryNeeds(size);
     }
 
+    /**
+     * @brief Issues a new pointer.
+     * Does not perform any allocation but stores the necessary information submitted to the device later.
+     * @param size          Size in bytes of a memory to allocate
+     * @return a Pointer instance allowing to access the memory once the request is submitted.
+     */
     inline Pointer alloc(size_t size) {
         Pointer result(*this, this->size);
-        this->size += size;
+        static const size_t LOG2_ALIGNMENT = 4;
+        this->size += ((size + (1 << LOG2_ALIGNMENT) - 1) >> LOG2_ALIGNMENT) << LOG2_ALIGNMENT;
         return result;
     }
-
 
     /**
      * @brief Checks if the request is valid, i.e., if all pointers it has issued point to valid usable memory addresses.

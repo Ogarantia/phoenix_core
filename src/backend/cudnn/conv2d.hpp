@@ -58,13 +58,14 @@ class ScalarConv2DBase {
     IntPair repaddingOffset;    //!< offset in the output tensor due to the additional padding applied to handle the asymmetric padding
     bool useBuffer;             //!< if true, an intermediate buffer is used to store repadded input tensor
     size_t scratchpadSize;      //!< memory size of cuDNN workspace buffer
+    Pointer scratchpad;
 
     cudnnConvolutionDescriptor_t convDesc;               //!< cuDNN convolution operator descriptor
     cudnnTensorDescriptor_t inputDesc, outputDesc;
     cudnnFilterDescriptor_t filterDesc;
 
     ScalarConv2DBase(upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) :
-        context(static_cast<cudnn::Context&>(context)), dataFormat(dataFormat), stride(stride), dilation(dilation) {
+        context(static_cast<cudnn::Context&>(context)), dataFormat(dataFormat), stride(stride), dilation(dilation), scratchpadSize(0) {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
@@ -118,6 +119,11 @@ class ScalarConv2DBase {
         if (padAfter.x > actualPad.x || padAfter.y > actualPad.y)
             throw std::runtime_error("Cannot handle asymmetric padding");
         return actualPad;
+    }
+
+   public:
+    inline void prepare(MemoryRequest& memory) {
+        scratchpad = memory.alloc(scratchpadSize);
     }
 };
 
@@ -232,14 +238,12 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
 
     /**
      * @brief Executes the convolution operation
-     * @param memory            Memory request to allocate intermediate buffers
      * @param inputTensor       Input tensor
      * @param filterTensor      Filter tensor
      * @param biasTensor        Pointer to bias tensor; may be null
      * @param outputTensor      Output tensor
      */
-    void operator()(MemoryRequest& memory,
-                    const Tensor<device::CUDA, const T>& inputTensor,
+    void operator()(const Tensor<device::CUDA, const T>& inputTensor,
                     const Tensor<device::CUDA, const T>& filterTensor,
                     const Tensor<device::CUDA, const T>* biasTensor,
                     Tensor<device::CUDA, T>& outputTensor) {
@@ -247,12 +251,6 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
         AllocatedTensor<device::CUDA, T>* buffer = nullptr;
         if (useBuffer)
             buffer = &bufferAllocator.get(outputTensor.getDevice(), repaddedOutputShape);
-
-        // get scratchpad
-        auto scratchpad = memory.alloc(scratchpadSize);
-
-        // submit the memory request
-        memory.submit(outputTensor.getDevice());
 
         // perform the convolution
         const float alphaF = 1.0f, betaF = 0.0f;
@@ -416,7 +414,6 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
 
     /**
      * @brief Executes the operation
-     * @param memory            Memory request to allocate intermediate buffers
      * @param inputTensor       forward input tensor
      * @param kernelTensor      forward input kernel tensor
      * @param gradTensor        gradient of the forward output tensor (dy)
@@ -426,8 +423,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void operator()(MemoryRequest& memory,
-                    const Tensor<device::CUDA, const T>& inputTensor,
+    void operator()(const Tensor<device::CUDA, const T>& inputTensor,
                     const Tensor<device::CUDA, const T>& kernelTensor,
                     const Tensor<device::CUDA, const T>& gradTensor,
                     Tensor<device::CUDA, T>& kernelGradTensor,
@@ -445,12 +441,6 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
         // perform the gradient computation
         const float alphaF = 1.0f, betaF = 0.0f;
         const double alphaD = 1.0, betaD = 0.0;
-
-        // get scratchpad
-        auto scratchpad = memory.alloc(scratchpadSize);
-
-        // submit the memory request
-        memory.submit(kernelGradTensor.getDevice());
 
         // set the math type according to the chosen algorithm
         cudnn::Context::raiseIfError(cudnnSetConvolutionMathType(convDesc, kernelMathType));

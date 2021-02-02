@@ -14,6 +14,7 @@
 #include "backend/api.h"
 #include "backend/operation.hpp"
 #include "deferred_allocator.hpp"
+#include "backend/temporary_tensor.hpp"
 #include "utils.hpp"
 
 namespace upstride {
@@ -49,7 +50,7 @@ namespace upstride {
                         const Tensor<Device, const T> &kernelTensor,
                         const Tensor<Device, const T> *biasTensor,
                         Tensor<Device, T> &outputTensor) {
-            // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
+            // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it.
             if (inputTensor.getShape().empty())
                 return;
 
@@ -70,6 +71,8 @@ namespace upstride {
                                 const Tensor<Device, const T> &kernelTensor,
                                 const Tensor<Device, const T> *biasTensor,
                                 Tensor<Device, T> &outputTensor) {
+            MemoryRequest memory(*this);
+
             // factorized quaternion fallback
             if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
                 // split tensors along blades
@@ -80,24 +83,58 @@ namespace upstride {
                 TensorSplit<Device, const T, 4> *bias = biasTensor ? new TensorSplit<Device, const T, 4>(*biasTensor) : nullptr;
 
                 // get temporary buffers
-                AllocatedTensor<Device, T> *inputLanes[8], *kernelLanes[8], *outputLanes[8];
-                for (int i = 0; i < 8; ++i)
-                {
-                    inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
-                    kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
-                    outputLanes[i] = &this->outputLanes[i].get(device, output.shape());
+                std::array<TemporaryTensor<Device, T>, 8> inputLanes{ {
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() }
+                } };
+
+                std::array<TemporaryTensor<Device, T>, 8> kernelLanes{ {
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() }
+                } };
+
+                std::array<TemporaryTensor<Device, T>, 8> outputLanes{ {
+                    { device, memory, output.shape() },
+                    { device, memory, output.shape() },
+                    { device, memory, output.shape() },
+                    { device, memory, output.shape() },
+                    { device, memory, output.shape() },
+                    { device, memory, output.shape() },
+                    { device, memory, output.shape() },
+                    { device, memory, output.shape() }
+                } };
+
+                // submit memory request
+                memory.submit(device);
+
+                for (int i = 0; i < 8; ++i) {
+                    inputLanes[i].prepare();
+                    kernelLanes[i].prepare();
+                    outputLanes[i].prepare();
                 }
 
                 // decompose - compute - recompose
-                TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
+                TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes.data(), kernel, kernelLanes.data());
                 for (int i = 0; i < 4; ++i)
-                    denseOp(*inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
+                    denseOp(inputLanes[i], kernelLanes[i], nullptr, outputLanes[i]);
                 for (int i = 4; i < 8; ++i)
                     // According to the factorization formulation, last four lanes are plainly added to the quaternion components (see recomposeQuaternionOutput()).
                     // Adding bias there then!
-                    denseOp(*inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
+                    denseOp(inputLanes[i], kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, outputLanes[i]);
 
-                TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
+                TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes.data(), output);
                 // free bias
                 delete bias;
             }
@@ -116,7 +153,13 @@ namespace upstride {
                 TensorSplit<Device, const T, CliffordProductSpec::DIMS> *bias = biasTensor ? new TensorSplit<Device, const T, CliffordProductSpec::DIMS>(*biasTensor) : nullptr;
 
                 // allocate a temporary buffer
-                AllocatedTensor<Device, T> &buffer(this->buffer.get(device, output.shape()));
+                TemporaryTensor<Device, T> buffer(device, memory, output.shape());
+
+                // submit memory request
+                memory.submit(device);
+
+                // prepare buffer
+                buffer.prepare();
 
                 // compute the Clifford product
                 BinaryOperation<CliffordProductSpec>::product(
@@ -180,7 +223,7 @@ namespace upstride {
                         const Tensor<Device, const T>& gradTensor,
                         Tensor<Device, T>& kernelGradTensor,
                         Tensor<Device, T>& inputGradTensor) {
-            // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it. 
+            // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it.
             if (inputTensor.getShape().empty())
                 return;
 
@@ -201,6 +244,8 @@ namespace upstride {
                                 const Tensor<Device, const T>& gradTensor,
                                 Tensor<Device, T>& kernelGradTensor,
                                 Tensor<Device, T>& inputGradTensor) {
+            MemoryRequest memory(*this);
+
             // factorized quaternion fallback
             if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
                 // split tensors along blades
@@ -211,23 +256,80 @@ namespace upstride {
                 TensorSplit<Device, T, 4> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
                 // get temporary buffers
-                AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *gradLanes[8], *kernelGradLanes[8], *inputGradLanes[8];
+                std::array<TemporaryTensor<Device, T>, 8> inputLanes{ {
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() },
+                    { device, memory, input.shape() }
+                } };
+
+                std::array<TemporaryTensor<Device, T>, 8> kernelLanes{ {
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() },
+                    { device, memory, kernel.shape() }
+                } };
+
+                std::array<TemporaryTensor<Device, T>, 8> gradLanes{ {
+                    { device, memory, grad.shape() },
+                    { device, memory, grad.shape() },
+                    { device, memory, grad.shape() },
+                    { device, memory, grad.shape() },
+                    { device, memory, grad.shape() },
+                    { device, memory, grad.shape() },
+                    { device, memory, grad.shape() },
+                    { device, memory, grad.shape() }
+                } };
+
+                std::array<TemporaryTensor<Device, T>, 8> kernelGradLanes{ {
+                    { device, memory, kernelGrad.shape() },
+                    { device, memory, kernelGrad.shape() },
+                    { device, memory, kernelGrad.shape() },
+                    { device, memory, kernelGrad.shape() },
+                    { device, memory, kernelGrad.shape() },
+                    { device, memory, kernelGrad.shape() },
+                    { device, memory, kernelGrad.shape() },
+                    { device, memory, kernelGrad.shape() }
+                } };
+
+                std::array<TemporaryTensor<Device, T>, 8> inputGradLanes{ {
+                    { device, memory, inputGrad.shape() },
+                    { device, memory, inputGrad.shape() },
+                    { device, memory, inputGrad.shape() },
+                    { device, memory, inputGrad.shape() },
+                    { device, memory, inputGrad.shape() },
+                    { device, memory, inputGrad.shape() },
+                    { device, memory, inputGrad.shape() },
+                    { device, memory, inputGrad.shape() }
+                } };
+
+                // submit memory request
+                memory.submit(device);
+
                 for (int i = 0; i < 8; ++i) {
-                    inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
-                    kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
-                    gradLanes[i] = &this->gradLanes[i].get(device, grad.shape());
-                    kernelGradLanes[i] = &this->kernelGradLanes[i].get(device, kernelGrad.shape());
-                    inputGradLanes[i] = &this->inputGradLanes[i].get(device, inputGrad.shape());
+                    inputLanes[i].prepare();
+                    kernelLanes[i].prepare();
+                    gradLanes[i].prepare();
+                    kernelGradLanes[i].prepare();
+                    inputGradLanes[i].prepare();
                 }
 
                 // decompose - compute - recompose
-                TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
-                TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes);
+                TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes.data(), kernel, kernelLanes.data());
+                TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes.data());
 
                 for (int i = 0; i < 8; ++i)
-                    denseOp(*inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
+                    denseOp(inputLanes[i], kernelLanes[i], gradLanes[i], kernelGradLanes[i], inputGradLanes[i]);
 
-                TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
+                TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes.data(), inputGrad, kernelGradLanes.data(), kernelGrad);
             }
 
             // generic implementation
@@ -241,9 +343,17 @@ namespace upstride {
                     grad(gradTensor);
                 TensorSplit<Device, T, CliffordProductSpec::DIMS> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
-                // allocate a temporary buffer
-                AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(device, kernelGrad.shape()));
-                AllocatedTensor<Device, T>& bufferInput(this->bufferInput.get(device, inputGrad.shape()));
+                // allocate a temporary buffers
+                TemporaryTensor<Device, T> bufferKernel(device, memory, kernelGrad.shape());
+                TemporaryTensor<Device, T> bufferInput(device, memory, inputGrad.shape());
+
+                // submit the memory request
+                memory.submit(device);
+
+                // prepare buffers
+                bufferKernel.prepare();
+                bufferInput.prepare();
+
                 // compute the Clifford product
                 BinaryOperation<CliffordProductSpec>::productBackprop(
                     [this, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
