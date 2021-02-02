@@ -40,8 +40,8 @@ bool cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::operator==(const Co
 }
 
 
-void cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::printOut(const upstride::Context& context) const {
-    UPSTRIDE_SAYS(context, "  %d/%d types, %d*%d*%d*%d x %d*%d*%d*%d, %d*%d strides, %d*%d pad, %d*%d dilation",
+void cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::printOut() const {
+    UPSTRIDE_SAYS("  %d/%d types, %d*%d*%d*%d x %d*%d*%d*%d, %d*%d strides, %d*%d pad, %d*%d dilation",
                   computeType, tensorType,
                   inputShape[0], inputShape[1], inputShape[2], inputShape[3],
                   kernelShape[0], kernelShape[1], kernelShape[2], kernelShape[3],
@@ -49,8 +49,7 @@ void cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::printOut(const upst
 }
 
 
-cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(const upstride::Context& context,
-                                                                            const cudnnHandle_t handle,
+cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(const cudnnHandle_t handle,
                                                                             const cudnnConvolutionDescriptor_t& convDesc,
                                                                             const cudnnTensorDescriptor_t& input,
                                                                             const cudnnFilterDescriptor_t& kernel,
@@ -66,7 +65,7 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
     // check if a cached result is available
     for (const auto& entry : forwardAlgorithms)
         if (entry.first == desc) {
-            UPSTRIDE_SAYS(context, "Reusing a forward conv2D algorithm (%u entries in cache)", forwardAlgorithms.size());
+            UPSTRIDE_SAYS("Reusing a forward conv2D algorithm (%u entries in cache)", forwardAlgorithms.size());
             scratchpadSize = entry.second.characteristics.scratchpadSize;
             executionTime = entry.second.characteristics.time;
             mathType = entry.second.characteristics.mathType;
@@ -74,8 +73,8 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
         }
 
     // perform the measurement
-    UPSTRIDE_SAYS(context, "Selecting a forward conv2D algorithm");
-    desc.printOut(context);
+    UPSTRIDE_SAYS("Selecting a forward conv2D algorithm");
+    desc.printOut();
     static const int MAX_ALGO_COUNT = 16;
     cudnnConvolutionFwdAlgoPerf_t algo[MAX_ALGO_COUNT];
     int algoCount;
@@ -91,7 +90,7 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
     // print results (in verbose mode only)
     for (int i = 0; i < algoCount; ++i)
         if (algo[i].status == CUDNN_STATUS_SUCCESS)
-            UPSTRIDE_SAYS(context, "   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
+            UPSTRIDE_SAYS("   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
 
     // pick the best (fastest) option and store it in the cache
     scratchpadSize = algo[0].memory;
@@ -103,8 +102,7 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
 }
 
 
-cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFilterAlgo(const upstride::Context& context,
-                                                                                         const cudnnHandle_t handle,
+cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFilterAlgo(const cudnnHandle_t handle,
                                                                                          const cudnnConvolutionDescriptor_t& convDesc,
                                                                                          const cudnnTensorDescriptor_t& input,
                                                                                          const cudnnTensorDescriptor_t& grad,
@@ -120,7 +118,7 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
     // check if a cached result is available
     for (const auto& entry : backwardFilterAlgorithms)
         if (entry.first == desc) {
-            UPSTRIDE_SAYS(context, "Reusing a backward filter conv2D algorithm (%u entries in cache)", backwardFilterAlgorithms.size());
+            UPSTRIDE_SAYS("Reusing a backward filter conv2D algorithm (%u entries in cache)", backwardFilterAlgorithms.size());
             scratchpadSize = entry.second.characteristics.scratchpadSize;
             executionTime = entry.second.characteristics.time;
             mathType = entry.second.characteristics.mathType;
@@ -128,8 +126,8 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
         }
 
     // perform the measurement
-    UPSTRIDE_SAYS(context, "Selecting a backward filter conv2D algorithm");
-    desc.printOut(context);
+    UPSTRIDE_SAYS("Selecting a backward filter conv2D algorithm");
+    desc.printOut();
     static const int MAX_ALGO_COUNT = 16;
     cudnnConvolutionBwdFilterAlgoPerf_t algo[MAX_ALGO_COUNT];
     int algoCount;
@@ -145,7 +143,7 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
     // print results (in verbose mode only)
     for (int i = 0; i < algoCount; ++i)
         if (algo[i].status == CUDNN_STATUS_SUCCESS)
-            UPSTRIDE_SAYS(context, "   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
+            UPSTRIDE_SAYS("   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
 
     // pick the best (fastest) option and store it in the cache
     scratchpadSize = algo[0].memory;
@@ -157,8 +155,7 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
 }
 
 
-cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardDataAlgo(const upstride::Context& context,
-                                                                                     const cudnnHandle_t handle,
+cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardDataAlgo(const cudnnHandle_t handle,
                                                                                      const cudnnConvolutionDescriptor_t& convDesc,
                                                                                      const cudnnTensorDescriptor_t& input,
                                                                                      const cudnnTensorDescriptor_t& grad,
@@ -174,7 +171,7 @@ cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardData
     // check if a cached result is available
     for (const auto& entry : backwardDataAlgorithms)
         if (entry.first == desc) {
-            UPSTRIDE_SAYS(context, "Reusing a backward data conv2D algorithm (%u entries in cache)", backwardDataAlgorithms.size());
+            UPSTRIDE_SAYS("Reusing a backward data conv2D algorithm (%u entries in cache)", backwardDataAlgorithms.size());
             scratchpadSize = entry.second.characteristics.scratchpadSize;
             executionTime = entry.second.characteristics.time;
             mathType = entry.second.characteristics.mathType;
@@ -182,8 +179,8 @@ cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardData
         }
 
     // perform the measurement
-    UPSTRIDE_SAYS(context, "Selecting a backward data conv2D algorithm");
-    desc.printOut(context);
+    UPSTRIDE_SAYS("Selecting a backward data conv2D algorithm");
+    desc.printOut();
     static const int MAX_ALGO_COUNT = 16;
     cudnnConvolutionBwdDataAlgoPerf_t algo[MAX_ALGO_COUNT];
     int algoCount;
@@ -199,7 +196,7 @@ cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardData
     // print results (in verbose mode only)
     for (int i = 0; i < algoCount; ++i)
         if (algo[i].status == CUDNN_STATUS_SUCCESS)
-            UPSTRIDE_SAYS(context, "   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
+            UPSTRIDE_SAYS("   %d type %d: %0.3f ms", algo[i].algo, algo[i].mathType, algo[i].time);
 
     // pick the best (fastest) option and store it in the cache
     scratchpadSize = algo[0].memory;

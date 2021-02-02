@@ -200,7 +200,7 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
             setConvDescriptor<float>(convDesc, groups);
             // enable tensor multiplication units (like Tensor Cores)
             cudnn::Context::raiseIfError(cudnnSetConvolutionMathType(convDesc, CUDNN_TENSOR_OP_MATH));
-            algorithm = device.selectForwardAlgo(context, convDesc, inputDesc, filterDesc, outputDesc, executionTime, scratchpadSize, mathType);
+            algorithm = device.selectForwardAlgo(convDesc, inputDesc, filterDesc, outputDesc, executionTime, scratchpadSize, mathType);
 
             if (context.isFp16ConvForwardAllowed()) {
                 // fp16 computing is allowed, try it as well
@@ -208,10 +208,10 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
                 size_t fp16ScratchpadSize;
                 cudnnMathType_t fp16MathType;
                 setConvDescriptor<half>(convDesc, groups);
-                cudnnConvolutionFwdAlgo_t fp16Algorithm = device.selectForwardAlgo(context, convDesc, inputDesc, filterDesc, outputDesc, fp16ExecTime, fp16ScratchpadSize, fp16MathType);
+                cudnnConvolutionFwdAlgo_t fp16Algorithm = device.selectForwardAlgo(convDesc, inputDesc, filterDesc, outputDesc, fp16ExecTime, fp16ScratchpadSize, fp16MathType);
                 if (fp16ExecTime < executionTime) {
                     // fp16 compute is actually faster than fp32, use it
-                    UPSTRIDE_SAYS(context, "fp16 is faster than fp32 for forward pass");
+                    UPSTRIDE_SAYS("fp16 is faster than fp32 for forward pass");
                     scratchpadSize = fp16ScratchpadSize;
                     algorithm = fp16Algorithm;
                     mathType = fp16MathType;
@@ -223,7 +223,7 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
         // algorithm selection for other datatypes
         else {
             setConvDescriptor<T>(convDesc, groups);
-            algorithm = device.selectForwardAlgo(context, convDesc, inputDesc, filterDesc, outputDesc, executionTime, scratchpadSize, mathType);
+            algorithm = device.selectForwardAlgo(convDesc, inputDesc, filterDesc, outputDesc, executionTime, scratchpadSize, mathType);
         }
 
         // set the math type according to the chosen algorithm
@@ -363,9 +363,9 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
             setConvDescriptor<float>(convDesc, groups);
             // enable tensor multiplication units (like Tensor Cores)
             cudnn::Context::raiseIfError(cudnnSetConvolutionMathType(convDesc, CUDNN_TENSOR_OP_MATH));
-            kernelGradientAlgo = device.selectBackwardFilterAlgo(context, convDesc, inputDesc, gradDesc, filterDesc, kernelGradExecTime, kernelScratchpadSize, kernelMathType);
+            kernelGradientAlgo = device.selectBackwardFilterAlgo(convDesc, inputDesc, gradDesc, filterDesc, kernelGradExecTime, kernelScratchpadSize, kernelMathType);
             if (requireInputGrad)
-                inputGradientAlgo = device.selectBackwardDataAlgo(context, convDesc, inputDesc, gradDesc, filterDesc, inputGradExecTime, inputScratchpadSize, inputMathType);
+                inputGradientAlgo = device.selectBackwardDataAlgo(convDesc, inputDesc, gradDesc, filterDesc, inputGradExecTime, inputScratchpadSize, inputMathType);
 
             if (context.isFp16ConvBackwardAllowed()) {
                 // fp16 computing is allowed, try it as well
@@ -375,15 +375,15 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
                 cudnnConvolutionBwdFilterAlgo_t fp16KernelGradAlgo;
                 cudnnConvolutionBwdDataAlgo_t fp16InputGradAlgo;
                 setConvDescriptor<half>(convDesc, groups);
-                fp16KernelGradAlgo = device.selectBackwardFilterAlgo(context, convDesc, inputDesc, gradDesc, filterDesc, fp16KernelGradExecTime, fp16KernelScratchpadSize, fp16KernelMathType);
+                fp16KernelGradAlgo = device.selectBackwardFilterAlgo(convDesc, inputDesc, gradDesc, filterDesc, fp16KernelGradExecTime, fp16KernelScratchpadSize, fp16KernelMathType);
                 if (requireInputGrad) {
-                    fp16InputGradAlgo = device.selectBackwardDataAlgo(context, convDesc, inputDesc, gradDesc, filterDesc, fp16InputGradExecTime, fp16InputScratchpadSize, fp16InputMathType);
+                    fp16InputGradAlgo = device.selectBackwardDataAlgo(convDesc, inputDesc, gradDesc, filterDesc, fp16InputGradExecTime, fp16InputScratchpadSize, fp16InputMathType);
                 }
 
                 // compare fp16 and fp32 compute time
                 if (fp16KernelGradExecTime + fp16InputGradExecTime < kernelGradExecTime + inputGradExecTime) {
                     // fp16 compute is actually faster than fp32, use it
-                    UPSTRIDE_SAYS(context, "fp16 is faster than fp32 for backward pass");
+                    UPSTRIDE_SAYS("fp16 is faster than fp32 for backward pass");
                     kernelScratchpadSize = fp16KernelScratchpadSize;
                     kernelGradientAlgo = fp16KernelGradAlgo;
                     kernelMathType = fp16KernelMathType;
@@ -401,9 +401,9 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
         else {
             setConvDescriptor<T>(convDesc, groups);
             float executionTime;
-            kernelGradientAlgo = device.selectBackwardFilterAlgo(context, convDesc, inputDesc, gradDesc, filterDesc, executionTime, kernelScratchpadSize, kernelMathType);
+            kernelGradientAlgo = device.selectBackwardFilterAlgo(convDesc, inputDesc, gradDesc, filterDesc, executionTime, kernelScratchpadSize, kernelMathType);
             if (requireInputGrad)
-                inputGradientAlgo = device.selectBackwardDataAlgo(context, convDesc, inputDesc, gradDesc, filterDesc, executionTime, inputScratchpadSize, inputMathType);
+                inputGradientAlgo = device.selectBackwardDataAlgo(convDesc, inputDesc, gradDesc, filterDesc, executionTime, inputScratchpadSize, inputMathType);
         }
 
         // allocate scratchpad

@@ -125,7 +125,7 @@ bool ForwardFunctor<T>::tryCacheOptimalKernel(
 ) {
     bool kernelsProfiledLocally {false};
     if (!this->cached) {
-        UPSTRIDE_SAYS(this->context, "Caching forward functor kernel locally");
+        UPSTRIDE_SAYS("Caching forward functor kernel locally");
 
         auto findResult = this->findOptimalKernel(device, ConvType::forward, this->convDesc, getForwardConfigs(), tensors);
         forwardOptimalKernel = findResult.first;
@@ -224,7 +224,7 @@ bool BackwardFunctor<T>::tryCacheOptimalKernels(
 
         // input gradient kernel caching
         {
-            UPSTRIDE_SAYS(this->context, "Caching backward functor input gradient kernel locally");
+            UPSTRIDE_SAYS("Caching backward functor input gradient kernel locally");
 
             auto findResult = this->findOptimalKernel(device, ConvType::inputGrad, this->convDesc, getInputGradConfigs(), tensorsInputGrad);
             inputGradOptimalKernel = findResult.first;
@@ -237,7 +237,7 @@ bool BackwardFunctor<T>::tryCacheOptimalKernels(
 
         // weights gradient kernel caching
         {
-            UPSTRIDE_SAYS(this->context, "Caching backward functor weights gradient kernel locally");
+            UPSTRIDE_SAYS("Caching backward functor weights gradient kernel locally");
 
             auto findResult = this->findOptimalKernel(device, ConvType::weightsGrad, this->convDesc, getWeightsGradConfigs(), tensorsWeightsGrad);
             weightsGradOptimalKernel = findResult.first;

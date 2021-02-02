@@ -16,7 +16,7 @@ upstride::device::CUDA& Context::registerDevice(const cudaStream_t& stream) {
 }
 
 void Context::cleanUp() {
-    UPSTRIDE_SAYS(*this, "Clean up cuDNN context");
+    UPSTRIDE_SAYS("Cleaning up cuDNN context");
     std::lock_guard<std::mutex> lock(mutex);
     devices.clear();
 }

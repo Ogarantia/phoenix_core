@@ -35,8 +35,8 @@ class OpCollection;
 
 
 /**
- * @brief Collection containing a list of all operations.
- * Used to perform the garbage collection.
+ * @brief Collection containing a list of operations of all kinds.
+ * Used to perform operation kind-agnostic stuff like shared memory management and garbage collection.
  */
 class GlobalOpCollection {
     template <class Descriptor>
@@ -114,12 +114,11 @@ class GlobalOpCollection {
 /**
  * @brief Collection of operations of a specific kind.
  * Retrieves an operation instance according to its description (creates a new one if not found).
- * @tparam Descriptor    Complete description of the operation
+ * @tparam Descriptor    Operation descriptor class presenting a complete description of the operation
  */
 template <class Descriptor>
 class OpCollection : public OpCollectionInterface {
     private:
-        Context& context;
         GlobalOpCollection& allOps;                 //!< global operation collection
         std::map<Descriptor, Operation*> map;       //!< descriptor => operation mapping used for fast search by descriptor
 
@@ -142,21 +141,20 @@ class OpCollection : public OpCollectionInterface {
         }
 
     public:
-        OpCollection(Context& context, GlobalOpCollection& allOps):
-            context(context), allOps(allOps)
-        {
+        OpCollection(GlobalOpCollection& allOps): allOps(allOps) {
             // attach this collection to the global ops collection to have the GC working
             allOps.bindCollection(*this);
         }
 
         /**
          * @brief Returns an operation instance according to a given descriptor.
+         * @tparam Device           Device class
          * @tparam OpClass          The required operation type
          * @param descriptor        The operation descriptor
          * @return Operation&       The operation instance
          */
-        template<class OpClass>
-        inline OpClass& get(const Descriptor& descriptor) {
+        template<class Device, class OpClass>
+        inline OpClass& get(Device& device, const Descriptor& descriptor) {
             // check if a corresponding operation instance is already available
             auto it = map.find(descriptor);
             if (it != map.end()) {
@@ -174,7 +172,7 @@ class OpCollection : public OpCollectionInterface {
             allOps.gc(GarbageCollectingPolicy::KEEP_TOP_50);
 
             // no operation instance available; create a new one
-            OpClass* newOp = new OpClass(context, descriptor);
+            OpClass* newOp = new OpClass(device, descriptor);
             map.emplace(descriptor, newOp);
             allOps.getList().push_front(newOp);
             return *newOp;

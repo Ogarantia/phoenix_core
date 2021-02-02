@@ -25,7 +25,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     using AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>::proceedWithAlgebra;
 
    private:
-    Context& context;                           //!< a global context the operation belongs to
+    Device& device;                             //!< the device instance the operation is attached to
     const Algebra algebra;
     ScalarConv2DFunctor<Device, T> convOp;      //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvForwardFunctor<Device, T> quatKernelOp;       //!< custom kernels operator for quaternionic pointwise convolution
@@ -37,21 +37,20 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
    public:
     /**
      * @brief Instantiates convolution operator.
-     * @param context       A context instance
+     * @param device        A device instance
      * @param descriptor    Operation descriptor
      */
-    UpstrideConv2DFunctor(Context& context, const Conv2DFwdDescriptor& descriptor):
-        context(context),
+    UpstrideConv2DFunctor(Device& device, const Conv2DFwdDescriptor& descriptor):
+        device(device),
         algebra(descriptor.getAlgebra()),
-        convOp(context, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isBiasUsed()),
-        quatKernelOp(context, algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
+        convOp(device.getContext(), descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isBiasUsed()),
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
         realValuedInput(descriptor.isRealValuedInput())
     {}
 
     /**
      * @brief Executes the convolution operation
      * This function may be called from multiple threads.
-     * @param device            A device the operation is computed on
      * @param inputTensor       Input tensor
      * @param kernelTensor      Kernel tensor
      * @param biasTensor        Pointer to bias tensor; may be null
@@ -60,8 +59,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void operator()(Device& device,
-                    const Tensor<Device, const T>& inputTensor,
+    void operator()(const Tensor<Device, const T>& inputTensor,
                     const Tensor<Device, const T>& kernelTensor,
                     const Tensor<Device, const T>* biasTensor,
                     Tensor<Device, T>& outputTensor,
@@ -95,12 +93,11 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                 groups);
         }
 
-        proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, biasTensor, outputTensor);
+        proceedWithAlgebra(algebra, inputTensor, kernelTensor, biasTensor, outputTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(Device& device,
-                            const Tensor<Device, const T>& inputTensor,
+    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
@@ -146,7 +143,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         }
 
         // factorized quaternion convolution fallback
-        else if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+        else if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
             TensorSplit<Device, T, 4> output(outputTensor);
@@ -218,7 +215,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     using AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>>::proceedWithAlgebra;
 
    private:
-    Context& context;                                           //!< a global context the operation belongs to
+    Device& device;                                             //!< the device instance the operation is attached to
     const Algebra algebra;
     ScalarConv2DGradFunctor<Device, T> convOp;                  //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvBackwardFunctor<Device, T> quatKernelOp;              //!< custom kernels operator for quaternionic pointwise convolution
@@ -231,14 +228,14 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
    public:
     /**
      * @brief Instantiates convolution operator.
-     * @param context           A context instance
+     * @param device            A device instance
      * @param descriptor        Operation descriptor
      */
-    UpstrideConv2DGradFunctor(Context& context, const Conv2DBwdDescriptor& descriptor):
-        context(context),
+    UpstrideConv2DGradFunctor(Device& device, const Conv2DBwdDescriptor& descriptor):
+        device(device),
         algebra(descriptor.getAlgebra()),
-        convOp(context, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isInputGradientRequired()),
-        quatKernelOp(context, algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
+        convOp(device.getContext(), descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isInputGradientRequired()),
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
         requireInputGrad(descriptor.isInputGradientRequired()),
         realValuedInput(descriptor.isRealValuedInput())
     {}
@@ -246,7 +243,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     /**
      * @brief Executes the operation
      * This function may be called from multiple threads.
-     * @param device            A device the operation is computed on
      * @param inputTensor       forward input tensor
      * @param kernelTensor      forward input kernel tensor
      * @param gradTensor        gradient of the forward output tensor (dy)
@@ -256,8 +252,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void operator()(Device& device,
-                    const Tensor<Device, const T>& inputTensor,
+    void operator()(const Tensor<Device, const T>& inputTensor,
                     const Tensor<Device, const T>& kernelTensor,
                     const Tensor<Device, const T>& gradTensor,
                     Tensor<Device, T>& kernelGradTensor,
@@ -292,12 +287,11 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                 groups);
         }
 
-        proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        proceedWithAlgebra(algebra, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(Device& device,
-                            const Tensor<Device, const T>& inputTensor,
+    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
@@ -349,7 +343,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
         }
 
         // factorized quaternion convolution fallback
-        else if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+        else if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4>
                 input(inputTensor),

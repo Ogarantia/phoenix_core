@@ -70,7 +70,6 @@ class CUDA : public Device {
 
     /**
      * @brief Selects the fastest forward 2D convolution algorithm applicable for a given convolution setting.
-     * @param context           A context instance
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
      * @param kernel            The convolution kernel (filter) tensor descriptor
@@ -80,21 +79,19 @@ class CUDA : public Device {
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    inline cudnnConvolutionFwdAlgo_t selectForwardAlgo(const Context& context,
-                                                       const cudnnConvolutionDescriptor_t& convDesc,
+    inline cudnnConvolutionFwdAlgo_t selectForwardAlgo(const cudnnConvolutionDescriptor_t& convDesc,
                                                        const cudnnTensorDescriptor_t& input,
                                                        const cudnnFilterDescriptor_t& kernel,
                                                        const cudnnTensorDescriptor_t& output,
                                                        float& executionTime,
                                                        size_t& scratchpadSize,
                                                        cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectForwardAlgo(context, cudnnHandle, convDesc, input, kernel, output, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectForwardAlgo(cudnnHandle, convDesc, input, kernel, output, executionTime, scratchpadSize, mathType);
     }
 
     /**
      * @brief Selects the fastest backward 2D convolution algorithm computing the filter gradient, applicable for
      * a given convolution setting.
-     * @param context           A context instance
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
      * @param grad              The loss function gradient tensor descriptor
@@ -104,21 +101,19 @@ class CUDA : public Device {
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    inline cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const Context& context,
-                                                                    const cudnnConvolutionDescriptor_t& convDesc,
+    inline cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const cudnnConvolutionDescriptor_t& convDesc,
                                                                     const cudnnTensorDescriptor_t& input,
                                                                     const cudnnTensorDescriptor_t& grad,
                                                                     const cudnnFilterDescriptor_t& kernel,
                                                                     float& executionTime,
                                                                     size_t& scratchpadSize,
                                                                     cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectBackwardFilterAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectBackwardFilterAlgo(cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
     }
 
     /**
      * @brief Selects the fastest backward 2D convolution algorithm computing the input (data) gradient, applicable for
      * a given convolution setting.
-     * @param context           A context instance
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
      * @param grad              The loss function gradient tensor descriptor
@@ -128,15 +123,14 @@ class CUDA : public Device {
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    inline cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const Context& context,
-                                                                const cudnnConvolutionDescriptor_t& convDesc,
+    inline cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const cudnnConvolutionDescriptor_t& convDesc,
                                                                 const cudnnTensorDescriptor_t& input,
                                                                 const cudnnTensorDescriptor_t& grad,
                                                                 const cudnnFilterDescriptor_t& kernel,
                                                                 float& executionTime,
                                                                 size_t& scratchpadSize,
                                                                 cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectBackwardDataAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectBackwardDataAlgo(cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
     }
 
     /**

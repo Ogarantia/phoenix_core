@@ -23,7 +23,7 @@ namespace upstride {
         using AlgebraSelectionMixin<UpstrideDenseFunctor<Device, T>>::proceedWithAlgebra;
 
     private:
-        Context& context;
+        Device& device;                                                             //!< the device instance the operation is attached to
         const Algebra algebra;
         std::mutex access;
         ScalarDenseFunctor<Device, T> denseOp;                                      //!< scalar dense operator to be used to implement other data types
@@ -31,10 +31,10 @@ namespace upstride {
         DeferredAllocator<Device, T> buffer;                                        //!< deferred allocator for an intermediate buffer for the default implementation
 
     public:
-        UpstrideDenseFunctor(Context& context, const DenseFwdDescriptor& descriptor):
-            context(context),
+        UpstrideDenseFunctor(Device& device, const DenseFwdDescriptor& descriptor):
+            device(device),
             algebra(descriptor.getAlgebra()),
-            denseOp(context, descriptor.getDataFormat(), descriptor.isBiasUsed())
+            denseOp(device.getContext(), descriptor.getDataFormat(), descriptor.isBiasUsed())
         {}
 
         /**
@@ -45,8 +45,7 @@ namespace upstride {
          * @param biasTensor        Pointer to bias tensor; may be null
          * @param outputTensor      Output tensor
          */
-        void operator()(Device& device,
-                        const Tensor<Device, const T> &inputTensor,
+        void operator()(const Tensor<Device, const T> &inputTensor,
                         const Tensor<Device, const T> &kernelTensor,
                         const Tensor<Device, const T> *biasTensor,
                         Tensor<Device, T> &outputTensor) {
@@ -63,17 +62,16 @@ namespace upstride {
                               biasTensor ? biasTensor->getShape().split(MULTIVECTOR_DIM[algebra]) : Shape(),
                               outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
-            proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, biasTensor, outputTensor);
+            proceedWithAlgebra(algebra, inputTensor, kernelTensor, biasTensor, outputTensor);
         }
 
         template <Algebra algebra>
-        void proceedWithAlgebra(Device& device,
-                                const Tensor<Device, const T> &inputTensor,
+        void proceedWithAlgebra(const Tensor<Device, const T> &inputTensor,
                                 const Tensor<Device, const T> &kernelTensor,
                                 const Tensor<Device, const T> *biasTensor,
                                 Tensor<Device, T> &outputTensor) {
             // factorized quaternion fallback
-            if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+            if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
                 TensorSplit<Device, T, 4> output(outputTensor);
@@ -145,10 +143,10 @@ namespace upstride {
         using AlgebraSelectionMixin<UpstrideDenseGradFunctor<Device, T>>::proceedWithAlgebra;
 
     private:
-        Context& context;
+        Device& device;                                                                                                   //!< the device instance the operation is attached to
         const Algebra algebra;
         std::mutex access;
-        ScalarDenseGradFunctor<Device, T> denseOp;  //!< scalar convolution operator to be used to implement other data types
+        ScalarDenseGradFunctor<Device, T> denseOp;                                                                        //!< scalar convolution operator to be used to implement other data types
         DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
         DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
         bool requireInputGrad;                      //!< if `true`, the input gradient is computed
@@ -156,15 +154,15 @@ namespace upstride {
     public:
         /**
          * @brief Instantiates Dense layer gradient operator
-         * @param context       A context instance
+         * @param device        A device instance
          * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
          * @param dataFormat    Expected tensors format
          * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
          */
-        UpstrideDenseGradFunctor(Context& context, const DenseBwdDescriptor& descriptor):
-            context(context),
+        UpstrideDenseGradFunctor(Device& device, const DenseBwdDescriptor& descriptor):
+            device(device),
             algebra(descriptor.getAlgebra()),
-            denseOp(context, descriptor.getDataFormat(), descriptor.isInputGradientRequired()),
+            denseOp(device.getContext(), descriptor.getDataFormat(), descriptor.isInputGradientRequired()),
             requireInputGrad(descriptor.isInputGradientRequired())
         {}
 
@@ -177,8 +175,7 @@ namespace upstride {
          * @param kernelGradTensor  output: kernel gradient
          * @param inputGradTensor   output: input gradient
          */
-        void operator()(Device& device,
-                        const Tensor<Device, const T>& inputTensor,
+        void operator()(const Tensor<Device, const T>& inputTensor,
                         const Tensor<Device, const T>& kernelTensor,
                         const Tensor<Device, const T>& gradTensor,
                         Tensor<Device, T>& kernelGradTensor,
@@ -195,18 +192,17 @@ namespace upstride {
                               kernelTensor.getShape().slice(-2),
                               gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
-            proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+            proceedWithAlgebra(algebra, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
         }
 
         template <Algebra algebra>
-        void proceedWithAlgebra(Device& device,
-                                const Tensor<Device, const T>& inputTensor,
+        void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
                                 const Tensor<Device, const T>& kernelTensor,
                                 const Tensor<Device, const T>& gradTensor,
                                 Tensor<Device, T>& kernelGradTensor,
                                 Tensor<Device, T>& inputGradTensor) {
             // factorized quaternion fallback
-            if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+            if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4>
                     input(inputTensor),

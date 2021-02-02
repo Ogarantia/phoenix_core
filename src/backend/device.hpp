@@ -8,6 +8,8 @@
 
 namespace upstride {
 class Device {
+private:
+    Context& context;
     GlobalOpCollection allOps;                          //!< all operations ready to go on the current device
     OpCollection<Conv2DFwdDescriptor> conv2dFwdOps;     //!< dense forward ops (subset of allOps)
     OpCollection<Conv2DBwdDescriptor> conv2dBwdOps;     //!< conv2d backward ops (subset of allOps)
@@ -16,30 +18,33 @@ class Device {
 
 public:
     Device(Context& context):
-        conv2dFwdOps(context, allOps),
-        conv2dBwdOps(context, allOps),
-        denseFwdOps(context, allOps),
-        denseBwdOps(context, allOps)
+        context(context),
+        conv2dFwdOps(allOps),
+        conv2dBwdOps(allOps),
+        denseFwdOps(allOps),
+        denseBwdOps(allOps)
     {}
 
-    template<class Conv2DOperationClass>
-    inline Conv2DOperationClass& getConv2DFwdOperation(const Conv2DFwdDescriptor& descriptor) {
-        return conv2dFwdOps.get<Conv2DOperationClass>(descriptor);
+    inline Context& getContext() { return context; }
+
+    template<class DeviceClass, class OperationClass>
+    inline OperationClass& getConv2DFwdOperation(const Conv2DFwdDescriptor& descriptor) {
+        return conv2dFwdOps.get<DeviceClass, OperationClass>(static_cast<DeviceClass&>(*this), descriptor);
     }
 
-    template<class Conv2DOperationClass>
-    inline Conv2DOperationClass& getConv2DBwdOperation(const Conv2DBwdDescriptor& descriptor) {
-        return conv2dBwdOps.get<Conv2DOperationClass>(descriptor);
+    template<class DeviceClass, class OperationClass>
+    inline OperationClass& getConv2DBwdOperation(const Conv2DBwdDescriptor& descriptor) {
+        return conv2dBwdOps.get<DeviceClass, OperationClass>(static_cast<DeviceClass&>(*this), descriptor);
     }
 
-    template<class DenseOperationClass>
-    inline DenseOperationClass& getDenseFwdOperation(const DenseFwdDescriptor& descriptor) {
-        return denseFwdOps.get<DenseOperationClass>(descriptor);
+    template<class DeviceClass, class OperationClass>
+    inline OperationClass& getDenseFwdOperation(const DenseFwdDescriptor& descriptor) {
+        return denseFwdOps.get<DeviceClass, OperationClass>(static_cast<DeviceClass&>(*this), descriptor);
     }
 
-    template<class DenseOperationClass>
-    inline DenseOperationClass& getDenseBwdOperation(const DenseBwdDescriptor& descriptor) {
-        return denseBwdOps.get<DenseOperationClass>(descriptor);
+    template<class DeviceClass, class OperationClass>
+    inline OperationClass& getDenseBwdOperation(const DenseBwdDescriptor& descriptor) {
+        return denseBwdOps.get<DeviceClass, OperationClass>(static_cast<DeviceClass&>(*this), descriptor);
     }
 };
 }

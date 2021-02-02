@@ -24,7 +24,7 @@
  * in the compiled binary.
  */
 #ifdef UPSTRIDE_DEBUG
-#define UPSTRIDE_SAYS(CTX, FMT, ...) (CTX).verbosePrintf("\033[1;33m" FMT "\033[0m\n", ##__VA_ARGS__)
+#define UPSTRIDE_SAYS(FMT, ...) upstride::Context::verbosePrintf("\033[1;33m" FMT "\033[0m\n", ##__VA_ARGS__)
 #else
 #define UPSTRIDE_SAYS(...)
 #endif
@@ -45,7 +45,6 @@ enum class ConvFp16ComputePolicy {
  */
 class Context {
    private:
-    const bool envVerbose;
     const bool envOptimizeMemoryUse;
     const ConvFp16ComputePolicy convFp16ComputePolicy;
     uint32_t kernelCounter; //!< kernel reference counter.
@@ -93,7 +92,7 @@ class Context {
         }
     }
 
-    void verbosePrintf(const char* format, ...) const;
+    static void verbosePrintf(const char* format, ...);
 };
 
 /**

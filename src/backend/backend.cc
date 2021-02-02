@@ -41,24 +41,24 @@ ConvFp16ComputePolicy getConvFp16ComputePolicy(const char* variable) {
 
 
 Context::Context():
-    envVerbose(getIntegerEnvVar("UPSTRIDE_VERBOSE") > 0),
     envOptimizeMemoryUse(getIntegerEnvVar("UPSTRIDE_MEMORY_OPTIMIZED") > 0),
     convFp16ComputePolicy(getConvFp16ComputePolicy("UPSTRIDE_CONV_FP16_POLICY")),
     kernelCounter(0)
 {
     // print out some useful stuff
-    UPSTRIDE_SAYS(*this, "UpStride engine is speaking! Because verbose mode is enabled. Context created.");
+    UPSTRIDE_SAYS("UpStride engine is speaking! Because verbose mode is enabled. Context created.");
     if (envOptimizeMemoryUse)
-        UPSTRIDE_SAYS(*this, "Memory-optimized mode: the engine may run slower but uses less memory.");
+        UPSTRIDE_SAYS("Memory-optimized mode: the engine may run slower but uses less memory.");
     if (convFp16ComputePolicy == ConvFp16ComputePolicy::FULL_16)
-        UPSTRIDE_SAYS(*this, "16-bit floating point conv compute policy: full 16-bit (fast, inaccurate).");
+        UPSTRIDE_SAYS("16-bit floating point conv compute policy: full 16-bit (fast, inaccurate).");
     else if (convFp16ComputePolicy == ConvFp16ComputePolicy::FORWARD_16_BACKWARD_32)
-        UPSTRIDE_SAYS(*this, "16-bit floating point conv compute policy: 16-bit forward, 32-bit backward.");
+        UPSTRIDE_SAYS("16-bit floating point conv compute policy: 16-bit forward, 32-bit backward.");
 }
 
 
-void Context::verbosePrintf(const char* format, ...) const {
+void Context::verbosePrintf(const char* format, ...) {
 #ifdef UPSTRIDE_DEBUG
+    static bool envVerbose = getIntegerEnvVar("UPSTRIDE_VERBOSE") > 0;
     if (envVerbose) {
         va_list args;
         va_start(args, format);
