@@ -17,7 +17,7 @@ typedef std::forward_list<Operation*> OperationsList;
  */
 enum class GarbageCollectingPolicy {
     FLUSH,          //!< recycles all the existing operation instances
-    KEEP_TOP_50
+    KEEP_TOP_100
 };
 
 
@@ -32,6 +32,8 @@ public:
 
 template <class Descriptor>
 class OpCollection;
+
+class Device;
 
 
 /**
@@ -59,47 +61,10 @@ class GlobalOpCollection {
 
         /**
          * @brief Runs garbage collection.
-         *
+         * @param device        A device instance
          * @param policy        Garbage collection policy defining which instances are recycled.
          */
-        inline void gc(GarbageCollectingPolicy policy) {
-            switch (policy) {
-                // remove everything
-                case GarbageCollectingPolicy::FLUSH:
-                    for (auto op: list)
-                        delete op;
-                    list.clear();
-                    for (auto collection : collections)
-                        collection->update();
-                    break;
-
-                // keeps top N=50 operations of the list (the most recently used ones)
-                case GarbageCollectingPolicy::KEEP_TOP_50: {
-                    // skip first N-1 elements
-                    auto it = list.cbegin();
-                    for (size_t i = 0; i < 49 && it != list.cend(); ++i)
-                        it++;
-
-                    // check if Nth and (N+1)th ones exist
-                    if (it != list.cend() && std::next(it) != list.cend()) {
-                        // destroy operations starting from the (N+1)th
-                        for (auto j = std::next(it); j != list.cend(); ++j)
-                            delete *j;
-
-                        // truncate the list after Nth element
-                        list.erase_after(it);
-
-                        // synchronize the contents list => map
-                        for (auto collection : collections)
-                            collection->update();
-                    }
-                    break;
-                }
-
-                default:
-                    throw std::invalid_argument("Invalid garbage collection policy");
-            }
-        }
+        void gc(Device& device, GarbageCollectingPolicy policy);
 
         /**
          * @brief Returns the list of all operations.
@@ -169,7 +134,7 @@ class OpCollection : public OpCollectionInterface {
             }
 
             // run garbage collection with a default policy (for debugging purposes)
-            allOps.gc(GarbageCollectingPolicy::KEEP_TOP_50);
+            allOps.gc(device, GarbageCollectingPolicy::KEEP_TOP_100);
 
             // no operation instance available; create a new one
             OpClass* newOp = new OpClass(device, descriptor);

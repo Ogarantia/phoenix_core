@@ -35,7 +35,9 @@ public:
         workspace(nullptr), workspaceSize(0)
     {}
 
-    virtual ~Device() {}
+    virtual ~Device() {
+        // the workspace is freed in subclasses
+    }
 
     inline Context& getContext() { return context; }
 

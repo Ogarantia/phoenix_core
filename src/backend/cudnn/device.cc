@@ -22,6 +22,7 @@ void CUDA::internalFree(void* memory) {
 
 
 CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cudaStream(stream) {
+    // create cuDNN handle
     auto status = cudnnCreate(&cudnnHandle);
     if (status != CUDNN_STATUS_SUCCESS)
         throw std::runtime_error(std::string("Cannot create cuDNN handle, ") + cudnnGetErrorString(status));
@@ -29,6 +30,7 @@ CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cuda
     if (status != CUDNN_STATUS_SUCCESS)
         throw std::runtime_error(cudnnGetErrorString(status));
 
+    // create cuBLAS handle
     if (cublasCreate(&cublasHandle) != CUBLAS_STATUS_SUCCESS)
         throw std::runtime_error("Cannot create cuBLAS handle.");
     if (cublasSetStream(cublasHandle, cudaStream) != CUBLAS_STATUS_SUCCESS)
