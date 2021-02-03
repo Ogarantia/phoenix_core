@@ -15,21 +15,20 @@
 namespace upstride {
 
 template <typename Device, typename T>
-void conv2DFwd(Context& context,
-               Device& device,
+void conv2DFwd(Device& device,
                const Tensor<Device, const T>& inputTensor,
                const Tensor<Device, const T>& filterTensor,
                const Tensor<Device, const T>* biasTensor,
                Tensor<Device, T>& outputTensor,
                const Conv2DFwdDescriptor& descriptor)
 {
+    std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getConv2DFwdOperation<Device, UpstrideConv2DFunctor<Device, T>>(descriptor);
     op(inputTensor, filterTensor, biasTensor, outputTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
 }
 
 template <typename Device, typename T>
-void conv2DBwd(Context& context,
-               Device& device,
+void conv2DBwd(Device& device,
                const Tensor<Device, const T>& inputTensor,
                const Tensor<Device, const T>& filterTensor,
                const Tensor<Device, const T>& gradTensor,
@@ -37,26 +36,26 @@ void conv2DBwd(Context& context,
                Tensor<Device, T>& inputGradTensor,
                const Conv2DBwdDescriptor& descriptor)
 {
+    std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getConv2DBwdOperation<Device, UpstrideConv2DGradFunctor<Device, T>>(descriptor);
     op(inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
 }
 
 template <typename Device, typename T>
-void denseFwd(Context& context,
-              Device& device,
+void denseFwd(Device& device,
               const Tensor<Device, const T>& inputTensor,
               const Tensor<Device, const T>& filterTensor,
               const Tensor<Device, const T>* biasTensor,
               Tensor<Device, T>& outputTensor,
               const DenseFwdDescriptor& descriptor)
 {
+    std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getDenseFwdOperation<Device, UpstrideDenseFunctor<Device, T>>(descriptor);
     op(inputTensor, filterTensor, biasTensor, outputTensor);
 }
 
 template <typename Device, typename T>
-void denseBwd(Context& context,
-              Device& device,
+void denseBwd(Device& device,
               const Tensor<Device, const T>& inputTensor,
               const Tensor<Device, const T>& filterTensor,
               const Tensor<Device, const T>& gradTensor,
@@ -64,6 +63,7 @@ void denseBwd(Context& context,
               Tensor<Device, T>& inputGradTensor,
               const DenseBwdDescriptor& descriptor)
 {
+    std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getDenseBwdOperation<Device, UpstrideDenseGradFunctor<Device, T>>(descriptor);
     op(inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor);
 }

@@ -25,7 +25,6 @@ namespace upstride {
     private:
         Device& device;                                                             //!< the device instance the operation is attached to
         const Algebra algebra;
-        std::mutex access;
         ScalarDenseFunctor<Device, T> denseOp;                                      //!< scalar dense operator to be used to implement other data types
 
     public:
@@ -50,9 +49,6 @@ namespace upstride {
             // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it.
             if (inputTensor.getShape().empty())
                 return;
-
-            // lock access to denseOp
-            std::lock_guard<std::mutex> lock(access);
 
             denseOp.configure(device,
                               inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
@@ -185,7 +181,6 @@ namespace upstride {
     private:
         Device& device;                                                                                                   //!< the device instance the operation is attached to
         const Algebra algebra;
-        std::mutex access;
         ScalarDenseGradFunctor<Device, T> denseOp;                                                                        //!< scalar convolution operator to be used to implement other data types
         bool requireInputGrad;                      //!< if `true`, the input gradient is computed
 
@@ -221,9 +216,6 @@ namespace upstride {
             // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it.
             if (inputTensor.getShape().empty())
                 return;
-
-            // lock access to denseOp
-            std::lock_guard<std::mutex> lock(access);
 
             denseOp.configure(device,
                               inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),

@@ -42,8 +42,7 @@ ConvFp16ComputePolicy getConvFp16ComputePolicy(const char* variable) {
 
 Context::Context():
     envOptimizeMemoryUse(getIntegerEnvVar("UPSTRIDE_MEMORY_OPTIMIZED") > 0),
-    convFp16ComputePolicy(getConvFp16ComputePolicy("UPSTRIDE_CONV_FP16_POLICY")),
-    kernelCounter(0)
+    convFp16ComputePolicy(getConvFp16ComputePolicy("UPSTRIDE_CONV_FP16_POLICY"))
 {
     // print out some useful stuff
     UPSTRIDE_SAYS("UpStride engine is speaking! Because verbose mode is enabled. Context created.");

@@ -1,5 +1,5 @@
 #pragma once
-
+#include <mutex>
 #include "backend.hpp"
 #include "conv2d_descriptor.hpp"
 #include "dense_descriptor.hpp"
@@ -17,6 +17,7 @@ private:
     OpCollection<Conv2DBwdDescriptor> conv2dBwdOps;     //!< conv2d backward ops (subset of allOps)
     OpCollection<DenseFwdDescriptor> denseFwdOps;       //!< dense forward ops (subset of allOps)
     OpCollection<DenseBwdDescriptor> denseBwdOps;       //!< dense backward ops (subset of allOps)
+    std::mutex accessControl;
 
     void* workspace;                                    //!< memory buffer shared across all operations to store temporary data
     size_t workspaceSize;                               //!< size of the shared memory buffer
@@ -37,6 +38,8 @@ public:
     virtual ~Device() {}
 
     inline Context& getContext() { return context; }
+
+    inline std::mutex& getAccessControl() { return accessControl; }
 
     template<class DeviceClass, class OperationClass>
     inline OperationClass& getConv2DFwdOperation(const Conv2DFwdDescriptor& descriptor) {

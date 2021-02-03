@@ -287,8 +287,7 @@ TEST_CASE("Test:Conv2d") {
                                               Algebra::COMPLEX,         //algebra
                                               DataFormat::NCHW,         //dataformat
                                               false);                   //use bias
-        upstride::conv2DFwd<device::CPU, float>(context,
-                                                ::device,
+        upstride::conv2DFwd<device::CPU, float>(::device,
                                                 input,
                                                 kernel,
                                                 nullptr,
@@ -325,7 +324,7 @@ TEST_CASE("Test:Conv2d") {
         }
 
         Conv2DFwdDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false);
-        conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, output, descriptor);
+        conv2DFwd<device::CPU, float>(::device, input, kernel, nullptr, output, descriptor);
 
         bool test = true;
         float* outputPtr = output.getDataPtr();
@@ -386,7 +385,7 @@ TEST_CASE("Test:Conv2d") {
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::QUATERNION], 2, 2, 2}));
         Conv2DFwdDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::QUATERNION, DataFormat::NCHW, false, true);
-        conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, testOutput, descriptor);
+        conv2DFwd<device::CPU, float>(::device, input, kernel, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));
@@ -440,7 +439,7 @@ TEST_CASE("Test:Conv2d") {
         // compute test output
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2, 1, 1}));
         Conv2DFwdDescriptor descriptor(input.getShape(), kernel.getShape(), 1, 1, Padding::VALID, {}, 1, Algebra::GA_300, DataFormat::NCHW, false);
-        conv2DFwd<device::CPU, float>(context, ::device, input, kernel, nullptr, testOutput, descriptor);
+        conv2DFwd<device::CPU, float>(::device, input, kernel, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));
@@ -488,7 +487,7 @@ TEST_CASE("Test:Dense") {
 
         // compute test output
         const DenseFwdDescriptor descriptor(input.getShape(), filter.getShape(), Algebra::COMPLEX, DataFormat::NC, false);
-        upstride::denseFwd<upstride::device::CPU, float>(context, ::device, input, filter, nullptr, testOutput, descriptor);
+        upstride::denseFwd<upstride::device::CPU, float>(::device, input, filter, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));
@@ -533,7 +532,7 @@ TEST_CASE("Test:Dense") {
 
         // compute test output
         const DenseFwdDescriptor descriptor(input.getShape(), filter.getShape(), Algebra::COMPLEX, DataFormat::NC, false);
-        upstride::denseFwd<upstride::device::CPU, float>(context, ::device, input, filter, nullptr, testOutput, descriptor);
+        upstride::denseFwd<upstride::device::CPU, float>(::device, input, filter, nullptr, testOutput, descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));

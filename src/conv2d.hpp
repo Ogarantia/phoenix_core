@@ -30,7 +30,6 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     ScalarConv2DFunctor<Device, T> convOp;      //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvForwardFunctor<Device, T> quatKernelOp;       //!< custom kernels operator for quaternionic pointwise convolution
     const bool realValuedInput;                 //!< if `true`, the input tensor is real-valued (contains the real part only)
-    std::mutex access;
 
    public:
     /**
@@ -67,9 +66,6 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         // Sometimes TF sends us an empty tensor, cudnn does not digest this well
         if (inputTensor.getShape().empty())
             return;
-
-        // lock access to convOp
-        std::lock_guard<std::mutex> lock(access);
 
         convOp.configure(
             realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
@@ -274,7 +270,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     cuda::QuatKernelPointwiseConvBackwardFunctor<Device, T> quatKernelOp;              //!< custom kernels operator for quaternionic pointwise convolution
     const bool requireInputGrad;                                //!< if `true`, the gradient with respect to the input tensor is computed as well
     const bool realValuedInput;                                 //!< if `true`, the input tensor is real-valued (contains the real part only)
-    std::mutex access;
 
    public:
     /**
@@ -315,9 +310,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
         if (inputTensor.getShape().empty()) {
             return;
         }
-
-        // lock access to convOp
-        std::lock_guard<std::mutex> lock(access);
 
         convOp.configure(
             realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
