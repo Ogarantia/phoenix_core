@@ -55,12 +55,14 @@ class MemoryRequest {
     friend class Pointer;
 
 private:
+    Device& device;
     Operation& operation;   //!< operation the request is bound to
     uint8_t* address;
     size_t size;
 
 public:
-    inline MemoryRequest(Operation& operation): operation(operation), address(nullptr), size(0) {}
+    MemoryRequest(Device& device, Operation& operation);
+
     inline ~MemoryRequest() {
         operation.updateMemoryNeeds(size);
     }
@@ -71,12 +73,7 @@ public:
      * @param size          Size in bytes of a memory to allocate
      * @return a Pointer instance allowing to access the memory once the request is submitted.
      */
-    inline Pointer alloc(size_t size) {
-        Pointer result(*this, this->size);
-        static const size_t LOG2_ALIGNMENT = 4;
-        this->size += ((size + (1 << LOG2_ALIGNMENT) - 1) >> LOG2_ALIGNMENT) << LOG2_ALIGNMENT;
-        return result;
-    }
+    Pointer alloc(size_t size);
 
     /**
      * @brief Checks if the request is valid, i.e., if all pointers it has issued point to valid usable memory addresses.
@@ -93,7 +90,7 @@ public:
      * All the pointers issued from the current request are "materialized", i.e., they receive valid addresses and can be used as regular pointers.
      * @param device    The device the memory is requested on
      */
-    void submit(Device& device);
+    void submit();
 };
 
 }

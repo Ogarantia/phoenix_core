@@ -14,7 +14,19 @@ void* Pointer::data() {
 }
 
 
-void MemoryRequest::submit(Device& device) {
+MemoryRequest::MemoryRequest(Device& device, Operation& operation):
+    device(device), operation(operation), address(nullptr), size(0)
+{}
+
+
+Pointer MemoryRequest::alloc(size_t size) {
+    Pointer result(*this, this->size);
+    const size_t alignment = device.getAlignmentConstraint();
+    this->size += ((size + alignment - 1) / alignment) * alignment;
+    return result;
+}
+
+void MemoryRequest::submit() {
     // request the memory to the device and set the address to the beginning of the workspace
     address = static_cast<uint8_t*>(device.requestWorkspaceMemory(size));
 }

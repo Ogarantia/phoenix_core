@@ -71,7 +71,7 @@ namespace upstride {
                                 const Tensor<Device, const T> &kernelTensor,
                                 const Tensor<Device, const T> *biasTensor,
                                 Tensor<Device, T> &outputTensor) {
-            MemoryRequest memory(*this);
+            MemoryRequest memory(device, *this);
 
             // factorized quaternion fallback
             if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
@@ -117,7 +117,7 @@ namespace upstride {
                 } };
 
                 // submit memory request
-                memory.submit(device);
+                memory.submit();
 
                 for (int i = 0; i < 8; ++i) {
                     inputLanes[i].prepare();
@@ -156,7 +156,7 @@ namespace upstride {
                 TemporaryTensor<Device, T> buffer(device, memory, output.shape());
 
                 // submit memory request
-                memory.submit(device);
+                memory.submit();
 
                 // prepare buffer
                 buffer.prepare();
@@ -244,7 +244,7 @@ namespace upstride {
                                 const Tensor<Device, const T>& gradTensor,
                                 Tensor<Device, T>& kernelGradTensor,
                                 Tensor<Device, T>& inputGradTensor) {
-            MemoryRequest memory(*this);
+            MemoryRequest memory(device, *this);
 
             // factorized quaternion fallback
             if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
@@ -312,7 +312,7 @@ namespace upstride {
                 } };
 
                 // submit memory request
-                memory.submit(device);
+                memory.submit();
 
                 for (int i = 0; i < 8; ++i) {
                     inputLanes[i].prepare();
@@ -348,7 +348,7 @@ namespace upstride {
                 TemporaryTensor<Device, T> bufferInput(device, memory, inputGrad.shape());
 
                 // submit the memory request
-                memory.submit(device);
+                memory.submit();
 
                 // prepare buffers
                 bufferKernel.prepare();

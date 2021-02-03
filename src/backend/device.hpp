@@ -73,5 +73,9 @@ public:
         free(workspace);
         workspaceSize = 0;
     }
+
+    virtual size_t getAlignmentConstraint() const {
+        return 1;
+    }
 };
 }

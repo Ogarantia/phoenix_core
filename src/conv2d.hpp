@@ -102,7 +102,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
-        MemoryRequest memory(*this);
+        MemoryRequest memory(device, *this);
 
         // run custom convolution kernels for quaternions if possible
         if (quatKernelOp.canRun()) {
@@ -129,7 +129,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             convOp.prepare(memory);
 
             // submit memory request
-            memory.submit(device);
+            memory.submit();
 
             // prepare buffer
             buffer.prepare();
@@ -201,7 +201,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             convOp.prepare(memory);
 
             // submit memory request
-            memory.submit(device);
+            memory.submit();
 
             for (int i = 0; i < 8; ++i) {
                 inputLanes[i].prepare();
@@ -244,7 +244,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             convOp.prepare(memory);
 
             // submit memory request
-            memory.submit(device);
+            memory.submit();
             buffer.prepare();
 
             // compute the Clifford product
@@ -353,7 +353,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
-        MemoryRequest memory(*this);
+        MemoryRequest memory(device, *this);
 
         // run custom convolution kernels for quaternions if possible
         if (quatKernelOp.canRun()) {
@@ -382,7 +382,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             convOp.prepare(memory);
 
             // submit memory request
-            memory.submit(device);
+            memory.submit();
             bufferKernel.prepare();
 
             // compute the Clifford product
@@ -477,7 +477,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             convOp.prepare(memory);
 
             // submit memory request
-            memory.submit(device);
+            memory.submit();
 
             for (int i = 0; i < 8; ++i) {
                 inputLanes[i].prepare();
@@ -495,7 +495,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             convOp.prepare(memory);
 
             // submit memory request
-            memory.submit(device);
+            memory.submit();
 
             for (int i = 0; i < 8; ++i)
                 convOp(inputLanes[i], kernelLanes[i], gradLanes[i], kernelGradLanes[i], inputGradLanes[i]);
@@ -522,7 +522,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             convOp.prepare(memory);
 
             // submit memory request
-            memory.submit(device);
+            memory.submit();
             bufferKernel.prepare();
             bufferInput.prepare();
 

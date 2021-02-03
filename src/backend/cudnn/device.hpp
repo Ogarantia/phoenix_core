@@ -18,7 +18,8 @@ class CUDA : public Device {
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
     cublasHandle_t cublasHandle;
-    int registersPerThreadBlock;                        //!< Maximum number of thread blocks
+    int registersPerThreadBlock;                        //!< maximum number of registers per thread block
+    size_t alignmentConstraint;                         //!< number of bytes used to aligned pointers for this specific device
 
     CUDA(const CUDA&) = delete;  // disable copying
 
@@ -50,6 +51,10 @@ class CUDA : public Device {
         freeWorkspaceMemory();
         cudnnDestroy(cudnnHandle);
         cublasDestroy(cublasHandle);
+    }
+
+    inline size_t getAlignmentConstraint() const override {
+        return alignmentConstraint;
     }
 
     /**

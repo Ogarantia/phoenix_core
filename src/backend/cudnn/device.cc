@@ -5,20 +5,6 @@
 namespace upstride {
 namespace device {
 
-// GPU querying
-
-/**
- * @brief Get the number of registers available per thread block on the specified device
- *
- * @param dev                               the device to be queried for the available registers
- */
-int getDeviceRegistersPerThreadBlock(int dev) {
-    cudaDeviceProp deviceProp;
-    cudaGetDeviceProperties(&deviceProp, dev);
-    cudnn::Context::raiseIfError("getDeviceRegistersPerThreadBlock cudaGetDeviceProperties failed");
-    return deviceProp.regsPerBlock;
-}
-
 
 void CUDA::attachDevice(int device) {
     cudaSetDevice(device);
@@ -54,8 +40,12 @@ CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cuda
         throw std::runtime_error("cudaGetDevice failed");
     allocator.call(this, &CUDA::attachDevice, currentDevice);
 
-    // Query number of registers per thread block
-    registersPerThreadBlock = getDeviceRegistersPerThreadBlock(currentDevice);
+    // Query GPU properties
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, currentDevice);
+    cudnn::Context::raiseIfError("cudaGetDeviceProperties failed");
+    registersPerThreadBlock = deviceProp.regsPerBlock;
+    alignmentConstraint = deviceProp.textureAlignment;
 }
 
 
