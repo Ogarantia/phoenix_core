@@ -15,7 +15,6 @@
 #include "backend/conv2d_descriptor.hpp"
 #include "backend/tensor.hpp"
 #include "backend/operation.hpp"
-#include "deferred_allocator.hpp"
 #include "backend/temporary_tensor.hpp"
 #include "utils.hpp"
 
@@ -30,8 +29,6 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     const Algebra algebra;
     ScalarConv2DFunctor<Device, T> convOp;      //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvForwardFunctor<Device, T> quatKernelOp;       //!< custom kernels operator for quaternionic pointwise convolution
-    DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], outputLanes[8];  //!< deferred allocators for the factorized quaternion implementation
-    DeferredAllocator<Device, T> buffer;                                         //!< deferred allocator for an intermediate buffer for the default implementation
     const bool realValuedInput;                 //!< if `true`, the input tensor is real-valued (contains the real part only)
     std::mutex access;
 
@@ -44,7 +41,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     UpstrideConv2DFunctor(Device& device, const Conv2DFwdDescriptor& descriptor):
         device(device),
         algebra(descriptor.getAlgebra()),
-        convOp(device.getContext(), descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isBiasUsed()),
+        convOp(device, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isBiasUsed()),
         quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
         realValuedInput(descriptor.isRealValuedInput())
     {}
@@ -75,7 +72,6 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         std::lock_guard<std::mutex> lock(access);
 
         convOp.configure(
-            device,
             realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             biasTensor ? Shape{biasTensor->getShape().numel() / MULTIVECTOR_DIM[algebra]} : Shape(),
@@ -276,8 +272,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     const Algebra algebra;
     ScalarConv2DGradFunctor<Device, T> convOp;                  //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvBackwardFunctor<Device, T> quatKernelOp;              //!< custom kernels operator for quaternionic pointwise convolution
-    DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
-    DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
     const bool requireInputGrad;                                //!< if `true`, the gradient with respect to the input tensor is computed as well
     const bool realValuedInput;                                 //!< if `true`, the input tensor is real-valued (contains the real part only)
     std::mutex access;
@@ -291,7 +285,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     UpstrideConv2DGradFunctor(Device& device, const Conv2DBwdDescriptor& descriptor):
         device(device),
         algebra(descriptor.getAlgebra()),
-        convOp(device.getContext(), descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isInputGradientRequired()),
+        convOp(device, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isInputGradientRequired()),
         quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
         requireInputGrad(descriptor.isInputGradientRequired()),
         realValuedInput(descriptor.isRealValuedInput())
@@ -326,7 +320,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
         std::lock_guard<std::mutex> lock(access);
 
         convOp.configure(
-            device,
             realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]),

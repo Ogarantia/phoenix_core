@@ -8,8 +8,6 @@
 
 #pragma once
 #include <cublas_v2.h>
-
-#include "../../deferred_allocator.hpp"
 #include "../backend.hpp"
 #include "context.hpp"
 #include "kernels.hpp"

@@ -13,7 +13,6 @@
 #include "algebras.hpp"
 #include "backend/api.h"
 #include "backend/operation.hpp"
-#include "deferred_allocator.hpp"
 #include "backend/temporary_tensor.hpp"
 #include "utils.hpp"
 
@@ -28,8 +27,6 @@ namespace upstride {
         const Algebra algebra;
         std::mutex access;
         ScalarDenseFunctor<Device, T> denseOp;                                      //!< scalar dense operator to be used to implement other data types
-        DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], outputLanes[8]; //!< deferred allocators for the factorized quaternion implementation
-        DeferredAllocator<Device, T> buffer;                                        //!< deferred allocator for an intermediate buffer for the default implementation
 
     public:
         UpstrideDenseFunctor(Device& device, const DenseFwdDescriptor& descriptor):
@@ -190,8 +187,6 @@ namespace upstride {
         const Algebra algebra;
         std::mutex access;
         ScalarDenseGradFunctor<Device, T> denseOp;                                                                        //!< scalar convolution operator to be used to implement other data types
-        DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
-        DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
         bool requireInputGrad;                      //!< if `true`, the input gradient is computed
 
     public:

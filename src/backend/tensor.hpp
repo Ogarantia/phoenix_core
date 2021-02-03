@@ -378,12 +378,6 @@ class Tensor {
     Tensor(Device& device, const Shape& sh, T* t) : device(device), shape(sh.getSize(), sh.getShapePtr()), tensor(t) {}
 
     /**
-     * @brief Construct an empty Tensor object.
-     * It has zero dimensions and contains no content (its data pointer is null).
-     */
-    Tensor() : tensor(nullptr) {}
-
-    /**
      * @brief Get the pointer to the tensor content in memory
      * @return T* Pointer to tensor
      */
