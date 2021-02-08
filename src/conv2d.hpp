@@ -476,12 +476,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes.data(), kernel, kernelLanes.data());
             TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes.data());
 
-            // prepare the scalar operation
-            convOp.prepare(memory);
-
-            // submit memory request
-            memory.submit();
-
             for (int i = 0; i < 8; ++i)
                 convOp(inputLanes[i], kernelLanes[i], gradLanes[i], kernelGradLanes[i], inputGradLanes[i]);
 
