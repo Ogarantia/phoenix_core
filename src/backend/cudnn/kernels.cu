@@ -48,7 +48,7 @@ __global__ void HIDENAME(cropNCHW)(const T* in, T* out, int dx, int dy, int inWi
 
 /**
  * @brief CUDA kernel inserting an input NCHW tensor into an output NCHW tensor
- * The input tensor is smaller or equal in size than the output tensor.
+ * The input tensor is smaller or equal in size to the output tensor.
  * @param in            pointer to input values
  * @param out           pointer to output values
  * @param dx            horizontal shift
@@ -57,15 +57,22 @@ __global__ void HIDENAME(cropNCHW)(const T* in, T* out, int dx, int dy, int inWi
  * @param inHeight      input tensor height
  * @param outWidth      output tensor width
  * @param outHeight     output tensor height
- * @param depth         the depth of both input and output tensors (N times C times the element size)
+ * @param depth         the depth of both input and output tensors (N times C)
  */
 template <typename T>
 __global__ void HIDENAME(insertNCHW)(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
     int z = blockIdx.z * blockDim.z + threadIdx.z;
-    if (x < inWidth && y < inHeight && z < depth)
-        out[(z * outHeight + y + dy) * outWidth + x + dx] = in[(z * inHeight + y) * inWidth + x];
+    if (z >= depth)
+        return;
+    int ox = blockIdx.x * blockDim.x + threadIdx.x;
+    int oy = blockIdx.y * blockDim.y + threadIdx.y;
+    int o = (z * outHeight + oy) * outWidth + ox;
+    int ix = ox - dx;
+    int iy = oy - dy;
+    if (0 <= ix && ix < inWidth && 0 <= iy && iy < inHeight)
+        out[o] = in[(z * inHeight + iy) * inWidth + ix];
+    else if (ox < outWidth && oy < outHeight)
+        out[o] = 0;
 }
 
 template <typename T>

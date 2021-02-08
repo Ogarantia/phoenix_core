@@ -440,7 +440,6 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
         // pad if needed
         if (useBuffer) {
             buffer.prepare();
-            cudaMemset(buffer.getDataPtr(), 0, buffer.getShape().numel() * sizeof(T));
             cudnn::insert(gradTensor, buffer, dataFormat, repaddingOffset);
         }
 
