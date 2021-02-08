@@ -63,6 +63,14 @@ public:
         return denseBwdOps.get<DeviceClass, OperationClass>(static_cast<DeviceClass&>(*this), descriptor);
     }
 
+    /**
+     * @brief Ensures a minimum size of the workspace memory buffer on the device.
+     * This buffer is used to store temporary data while an operation is executed. It is intended to be accessed using MemoryRequest
+     * If the device already offers the requested or larger amount of memory, this function has no effect (apart returning the pointer).
+     * Otherwise, it reallocates a larger workspace buffer.
+     * @param size      The requested buffer size in bytes
+     * @return pointer to the workspace buffer.
+     */
     inline void* requestWorkspaceMemory(size_t size) {
         if (size > workspaceSize) {
             UPSTRIDE_SAYS("Memory request causes a reallocation: available %lu MB, requested %lu MB",
@@ -74,13 +82,28 @@ public:
         return workspace;
     }
 
+    /**
+     * @brief Frees the workspace memory buffer.
+     */
     inline void freeWorkspaceMemory() {
         free(workspace);
+        workspace = nullptr;
         workspaceSize = 0;
     }
 
+    /**
+     * @brief Returns the size in bytes of the workspace memory buffer allocated on the device.
+     */
+    inline size_t getWorkspaceSize() const {
+        return workspaceSize;
+    }
+
+    /**
+     * @brief Returns the device pointer alignment constraint in bytes.
+     */
     virtual size_t getAlignmentConstraint() const {
         return 1;
     }
+
 };
 }

@@ -20,6 +20,7 @@ private:
 public:
     Operation(): memoryNeeds(0) {}
     virtual ~Operation() {}
+    inline size_t getMemoryNeeds() const { return memoryNeeds; }
 };
 
 }
