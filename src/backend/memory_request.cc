@@ -26,7 +26,13 @@ Pointer MemoryRequest::alloc(size_t size) {
     return result;
 }
 
+
 void MemoryRequest::submit() {
+#ifdef UPSTRIDE_DEBUG
+    // check if already submitted
+    if (address)
+        throw std::runtime_error("Trying to submit a memory request twice");
+#endif
     // request the memory to the device and set the address to the beginning of the workspace
     address = static_cast<uint8_t*>(device.requestWorkspaceMemory(size));
 }
