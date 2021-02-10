@@ -21,7 +21,7 @@ void CUDA::internalFree(void* memory) {
 }
 
 
-CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cudaStream(stream) {
+CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cudaStream(stream), bypassCudnnHandleDestruction(true) {
     // create cuDNN handle
     auto status = cudnnCreate(&cudnnHandle);
     if (status != CUDNN_STATUS_SUCCESS)

@@ -66,6 +66,11 @@ class Context {
     }
 
     static void verbosePrintf(const char* format, ...);
+
+    /**
+     * @brief Releases all the resources managed within the current context.
+     */
+    virtual void cleanUp() {}
 };
 
 /**

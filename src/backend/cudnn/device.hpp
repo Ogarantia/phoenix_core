@@ -20,6 +20,7 @@ class CUDA : public Device {
     cublasHandle_t cublasHandle;
     int registersPerThreadBlock;                        //!< maximum number of registers per thread block
     size_t alignmentConstraint;                         //!< number of bytes used to aligned pointers for this specific device
+    bool bypassCudnnHandleDestruction;                  //!< if `true`, cuDNN handle is not destroyed to avoid a segfault
 
     CUDA(const CUDA&) = delete;  // disable copying
 
@@ -49,7 +50,11 @@ class CUDA : public Device {
 
     inline ~CUDA() {
         freeWorkspaceMemory();
-        cudnnDestroy(cudnnHandle);
+        // TF2.4 may call pluggins destructors after the destruction of its own ressources.
+        // A such behavior triggers a segmentation fault in cudnnDestroy function.
+        // Thus, when all ressources are destroyed, the cuDNN handle destruction is bypassed; cudnnDestroy must be done before.
+        if (!bypassCudnnHandleDestruction)
+            cudnnDestroy(cudnnHandle);
         cublasDestroy(cublasHandle);
     }
 
@@ -202,6 +207,10 @@ class CUDA : public Device {
      * @param memory    Address of the buffer to free
      */
     void free(void* memory) override;
+
+    inline void enableCudnnHandleDestruction() {
+        bypassCudnnHandleDestruction = false;
+    }
 };
 }  // namespace device
 }  // namespace upstride

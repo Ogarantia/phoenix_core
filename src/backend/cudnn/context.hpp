@@ -139,6 +139,8 @@ class Context : public upstride::Context {
      * @return the device instance.
      */
     device::CUDA& registerDevice(const cudaStream_t& stream);
+
+    void cleanUp() override;
 };
 
 

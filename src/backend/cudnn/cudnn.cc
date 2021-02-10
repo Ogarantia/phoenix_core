@@ -14,3 +14,11 @@ upstride::device::CUDA& Context::registerDevice(const cudaStream_t& stream) {
         return entry->second;
     }
 }
+
+
+void Context::cleanUp() {
+    std::lock_guard<std::mutex> lock(mutex);
+    for (auto& device : devices)
+        device.second.enableCudnnHandleDestruction();
+    devices.clear();
+}
