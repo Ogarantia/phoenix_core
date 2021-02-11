@@ -96,8 +96,19 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                             Tensor<Device, T>& outputTensor) {
         MemoryRequest memory(device, *this);
 
+        if (algebra == REAL) {
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+
+            // compute
+            convOp(inputTensor, kernelTensor, biasTensor, outputTensor);
+        }
+
         // run custom convolution kernels for quaternions if possible
-        if (quatKernelOp.canRun()) {
+        else if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, biasTensor, outputTensor);
         }
 
@@ -340,8 +351,19 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                             Tensor<Device, T>& inputGradTensor) {
         MemoryRequest memory(device, *this);
 
+        if (algebra == REAL) {
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+
+            // compute
+            convOp(inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        }
+
         // run custom convolution kernels for quaternions if possible
-        if (quatKernelOp.canRun()) {
+        else if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
         }
 

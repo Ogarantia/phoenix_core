@@ -66,8 +66,12 @@ namespace upstride {
                                 Tensor<Device, T> &outputTensor) {
             MemoryRequest memory(device, *this);
 
+            if (algebra == REAL) {
+                denseOp(inputTensor, kernelTensor, biasTensor, outputTensor);
+            }
+
             // factorized quaternion fallback
-            if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
+            else if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
                 TensorSplit<Device, T, 4> output(outputTensor);
@@ -233,8 +237,12 @@ namespace upstride {
                                 Tensor<Device, T>& inputGradTensor) {
             MemoryRequest memory(device, *this);
 
+            if (algebra == REAL) {
+                denseOp(inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+            }
+
             // factorized quaternion fallback
-            if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
+            else if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
                 // split tensors along blades
                 const TensorSplit<Device, const T, 4>
                     input(inputTensor),
