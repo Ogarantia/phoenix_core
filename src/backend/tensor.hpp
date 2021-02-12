@@ -211,8 +211,8 @@ class Shape {
     /**
      * @return the number of elements in the tensor.
      */
-    unsigned numel() const {
-        int numel = shape[0];
+    int64_t numel() const {
+        int64_t numel = shape[0];
         for (int i = 1; i < size; i++)
             numel *= shape[i];
         return numel;

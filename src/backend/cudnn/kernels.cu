@@ -8,7 +8,7 @@
 
 using namespace upstride;
 
-static const int NUM_THREADS = 1024;  //!< default number of CUDA threads per block
+static const unsigned int NUM_THREADS = 1024;  //!< default number of CUDA threads per block
 
 template <typename T>
 __global__ void HIDENAME(accumulateAdd)(T* acc, const T* term, int length) {
@@ -38,10 +38,14 @@ __global__ void HIDENAME(accumulateSub)(T* acc, const T* term, int length) {
  * @param depth         the depth of both input and output tensors (N times C times the element size)
  */
 template <typename T>
-__global__ void HIDENAME(cropNCHW)(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int z = blockIdx.z * blockDim.z + threadIdx.z;
+__global__ void HIDENAME(cropNCHW)(const T* in, T* out,
+                                   unsigned int dx, unsigned dy,
+                                   unsigned int inWidth, unsigned int inHeight,
+                                   unsigned int outWidth, unsigned int outHeight,
+                                   unsigned int depth) {
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
     if (x < outWidth && y < outHeight && z < depth)
         out[(z * outHeight + y) * outWidth + x] = in[(z * inHeight + y + dy) * inWidth + x + dx];
 }
@@ -60,28 +64,32 @@ __global__ void HIDENAME(cropNCHW)(const T* in, T* out, int dx, int dy, int inWi
  * @param depth         the depth of both input and output tensors (N times C)
  */
 template <typename T>
-__global__ void HIDENAME(insertNCHW)(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
-    int z = blockIdx.z * blockDim.z + threadIdx.z;
+__global__ void HIDENAME(insertNCHW)(const T* in, T* out,
+                                     unsigned int dx, unsigned int dy,
+                                     unsigned int inWidth, unsigned int inHeight,
+                                     unsigned int outWidth, unsigned int outHeight,
+                                     unsigned int depth) {
+    unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
     if (z >= depth)
         return;
-    int ox = blockIdx.x * blockDim.x + threadIdx.x;
-    int oy = blockIdx.y * blockDim.y + threadIdx.y;
-    int o = (z * outHeight + oy) * outWidth + ox;
-    int ix = ox - dx;
-    int iy = oy - dy;
-    if (0 <= ix && ix < inWidth && 0 <= iy && iy < inHeight)
+    unsigned int ox = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int oy = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int o = (z * outHeight + oy) * outWidth + ox;
+    unsigned int ix = ox - dx;
+    unsigned int iy = oy - dy;
+    if (dx <= ox && dy <= oy && ix < inWidth && iy < inHeight)
         out[o] = in[(z * inHeight + iy) * inWidth + ix];
     else if (ox < outWidth && oy < outHeight)
         out[o] = 0;
 }
 
 template <typename T>
-__global__ void HIDENAME(addBiasNCHW)(T* tensor, const T* bias, int width, int height, int depth, int batchSize) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int z = blockIdx.z * blockDim.z + threadIdx.z;
+__global__ void HIDENAME(addBiasNCHW)(T* tensor, const T* bias, unsigned int width, unsigned int height, unsigned int depth, unsigned int batchSize) {
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
     if (x < width && y < height && z < depth)
-        for (int n = 0; n < batchSize; ++n)
+        for (unsigned int n = 0; n < batchSize; ++n)
             tensor[((n * depth + z) * height + y) * width + x] += bias[z];
 }
 
@@ -102,10 +110,10 @@ __global__ void HIDENAME(addBiasNC)(T* tensor, const T* bias, int length, int ba
  * @param blocks        number of thread blocks (ouptut)
  * @param numThreads    maximum number of threads per block
  */
-inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim3& threads, dim3& blocks, const int numThreads = NUM_THREADS) {
-    const int depth = shape.depth(dataFormat) * shape[0];
-    const int z = std::min(cudnn::Context::MAX_BLOCK_DEPTH, depth);
-    const int xy = (int)std::sqrt(numThreads / z);
+inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim3& threads, dim3& blocks, const unsigned int numThreads = NUM_THREADS) {
+    const unsigned int depth = shape.depth(dataFormat) * shape[0];
+    const unsigned int z = std::min(cudnn::Context::MAX_BLOCK_DEPTH, depth);
+    const unsigned int xy = (unsigned int)std::sqrt(numThreads / z);
     threads = dim3(xy, xy, z);
     blocks = dim3(
         ceili(shape.width(dataFormat), threads.x),
