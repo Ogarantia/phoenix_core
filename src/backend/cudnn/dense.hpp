@@ -50,8 +50,9 @@ namespace upstride {
             const device::CUDA& device, cublasOperation_t transa, cublasOperation_t transb, int m, int n, int k, const half* A, int lda, const half* B,
             int ldb, half* C, int ldc)
         {
-            const half zero(0.0f), one(1.0f);
-            cudnn::Context::raiseIfError(cublasHgemm(device.getCublasHandle(), transa, transb, m, n, k, &one, A, lda, B, ldb, &zero, C, ldc));
+            // Mimicking TensorFlow here: using 32 bits accumulation for better precision
+            const float zero(0.0f), one(1.0f);
+            cudnn::Context::raiseIfError(cublasSgemmEx(device.getCublasHandle(), transa, transb, m, n, k, &one, A, CUDA_R_16F, lda, B, CUDA_R_16F, ldb, &zero, C, CUDA_R_16F, ldc));
         }
 #endif
     }
