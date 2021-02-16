@@ -37,12 +37,14 @@ namespace upstride {
         /**
          * @brief Executes the dense operation
          * This function may be called from multiple threads.
+         * @param allocator         Temporary memory allocation interface
          * @param inputTensor       Input tensor
          * @param kernelTensor      Kernel tensor
          * @param biasTensor        Pointer to bias tensor; may be null
          * @param outputTensor      Output tensor
          */
-        void operator()(const Tensor<Device, const T> &inputTensor,
+        void operator()(Allocator& allocator,
+                        const Tensor<Device, const T> &inputTensor,
                         const Tensor<Device, const T> &kernelTensor,
                         const Tensor<Device, const T> *biasTensor,
                         Tensor<Device, T> &outputTensor) {
@@ -56,15 +58,16 @@ namespace upstride {
                               biasTensor ? biasTensor->getShape().split(MULTIVECTOR_DIM[algebra]) : Shape(),
                               outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
-            proceedWithAlgebra(algebra, inputTensor, kernelTensor, biasTensor, outputTensor);
+            proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, biasTensor, outputTensor);
         }
 
         template <Algebra algebra>
-        void proceedWithAlgebra(const Tensor<Device, const T> &inputTensor,
+        void proceedWithAlgebra(Allocator& allocator,
+                                const Tensor<Device, const T> &inputTensor,
                                 const Tensor<Device, const T> &kernelTensor,
                                 const Tensor<Device, const T> *biasTensor,
                                 Tensor<Device, T> &outputTensor) {
-            MemoryRequest memory(device, *this);
+            MemoryRequest memory(allocator, *this);
 
             if (algebra == REAL) {
                 denseOp(inputTensor, kernelTensor, biasTensor, outputTensor);
@@ -206,13 +209,15 @@ namespace upstride {
         /**
          * @brief Executes the operation
          * This function may be called from multiple threads.
+         * @param allocator         Temporary memory allocation interface
          * @param inputTensor       forward input tensor
          * @param kernelTensor      forward input kernel tensor
          * @param gradTensor        gradient of the forward output tensor (dy)
          * @param kernelGradTensor  output: kernel gradient
          * @param inputGradTensor   output: input gradient
          */
-        void operator()(const Tensor<Device, const T>& inputTensor,
+        void operator()(Allocator& allocator,
+                        const Tensor<Device, const T>& inputTensor,
                         const Tensor<Device, const T>& kernelTensor,
                         const Tensor<Device, const T>& gradTensor,
                         Tensor<Device, T>& kernelGradTensor,
@@ -226,16 +231,17 @@ namespace upstride {
                               kernelTensor.getShape().slice(-2),
                               gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
-            proceedWithAlgebra(algebra, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+            proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
         }
 
         template <Algebra algebra>
-        void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
+        void proceedWithAlgebra(Allocator& allocator,
+                                const Tensor<Device, const T>& inputTensor,
                                 const Tensor<Device, const T>& kernelTensor,
                                 const Tensor<Device, const T>& gradTensor,
                                 Tensor<Device, T>& kernelGradTensor,
                                 Tensor<Device, T>& inputGradTensor) {
-            MemoryRequest memory(device, *this);
+            MemoryRequest memory(allocator, *this);
 
             if (algebra == REAL) {
                 denseOp(inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);

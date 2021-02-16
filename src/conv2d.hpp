@@ -48,6 +48,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     /**
      * @brief Executes the convolution operation
      * This function may be called from multiple threads.
+     * @param allocator         Temporary memory allocation interface
      * @param inputTensor       Input tensor
      * @param kernelTensor      Kernel tensor
      * @param biasTensor        Pointer to bias tensor; may be null
@@ -56,7 +57,8 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void operator()(const Tensor<Device, const T>& inputTensor,
+    void operator()(Allocator& allocator,
+                    const Tensor<Device, const T>& inputTensor,
                     const Tensor<Device, const T>& kernelTensor,
                     const Tensor<Device, const T>* biasTensor,
                     Tensor<Device, T>& outputTensor,
@@ -86,15 +88,16 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                 groups);
         }
 
-        proceedWithAlgebra(algebra, inputTensor, kernelTensor, biasTensor, outputTensor);
+        proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, biasTensor, outputTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
+    void proceedWithAlgebra(Allocator& allocator,
+                            const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
-        MemoryRequest memory(device, *this);
+        MemoryRequest memory(allocator, *this);
 
         if (algebra == REAL) {
             // prepare the scalar operation
@@ -300,6 +303,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     /**
      * @brief Executes the operation
      * This function may be called from multiple threads.
+     * @param allocator         Temporary memory allocation interface
      * @param inputTensor       forward input tensor
      * @param kernelTensor      forward input kernel tensor
      * @param gradTensor        gradient of the forward output tensor (dy)
@@ -309,7 +313,8 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void operator()(const Tensor<Device, const T>& inputTensor,
+    void operator()(Allocator& allocator,
+                    const Tensor<Device, const T>& inputTensor,
                     const Tensor<Device, const T>& kernelTensor,
                     const Tensor<Device, const T>& gradTensor,
                     Tensor<Device, T>& kernelGradTensor,
@@ -340,16 +345,17 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                 groups);
         }
 
-        proceedWithAlgebra(algebra, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(const Tensor<Device, const T>& inputTensor,
+    void proceedWithAlgebra(Allocator& allocator,
+                            const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
-        MemoryRequest memory(device, *this);
+        MemoryRequest memory(allocator, *this);
 
         if (algebra == REAL) {
             // prepare the scalar operation

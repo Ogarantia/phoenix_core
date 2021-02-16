@@ -8,7 +8,8 @@
 #include "memory_request.hpp"
 
 namespace upstride {
-class Device {
+
+class Device : public Allocator {
     Device(const Device&) = delete;  // disable copying
 private:
     Context& context;
@@ -98,10 +99,11 @@ public:
         return workspaceSize;
     }
 
-    /**
-     * @brief Returns the device pointer alignment constraint in bytes.
-     */
-    virtual size_t getAlignmentConstraint() const {
+    virtual void* mallocTemp(size_t size) override {
+        return requestWorkspaceMemory(size);
+    }
+
+    virtual size_t getAlignmentConstraint() const override {
         return 1;
     }
 
