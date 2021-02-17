@@ -531,7 +531,7 @@ TEST_CASE("Test:Dense") {
         AllocatedTensor<device::CPU, float> testOutput(::device, Shape({MULTIVECTOR_DIM[Algebra::GA_300], 2}));
 
         // compute test output
-        const DenseFwdDescriptor descriptor(input.getShape(), filter.getShape(), Algebra::COMPLEX, DataFormat::IO, false);
+        const DenseFwdDescriptor descriptor(input.getShape(), filter.getShape(), Algebra::GA_300, DataFormat::IO, false);
         upstride::denseFwd<upstride::device::CPU, float>(::device, ::device, input, filter, nullptr, testOutput, descriptor);
 
         // compare
