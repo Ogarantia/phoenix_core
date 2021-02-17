@@ -80,17 +80,17 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
      * @brief Instantiates convolution operator
      * @param context               A context instance
      * @param algebra               Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-     * @param dataFormat            Expected tensors format
+     * @param tensorDataFormat       Expected tensors format
      * @param stride                Convolution stride
      * @param dilation              Convolution dilation
      * @param useBias               If `true`, the bias addition is performed
      * @param realValuedInput       If `true`, the convolution input tensor is real-valued (contains the real part only)
      */
-    UpstrideConv2DFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias, bool realValuedInput = false):
+    UpstrideConv2DFunctor(Context& context, Algebra algebra, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool useBias, bool realValuedInput = false):
         context(context),
         algebra(algebra),
-        convOp(context, dataFormat, stride, dilation, useBias),
-        quatKernelOp(context, algebra, dataFormat, stride, dilation),
+        convOp(context, tensorDataFormat, stride, dilation, useBias),
+        quatKernelOp(context, algebra, tensorDataFormat, stride, dilation),
         realValuedInput(realValuedInput)
     {}
 
@@ -279,17 +279,17 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
      * @brief Instantiates convolution operator
      * @param context               A context instance
      * @param algebra               Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-     * @param dataFormat            Expected tensors format
+     * @param tensorDataFormat       Expected tensors format
      * @param stride                Convolution stride
      * @param dilation              Convolution dilation
      * @param requireInputGrad      If `true`, the gradient with respect to the input tensor is computed as well
      * @param realValuedInput       If `true`, the convolution input tensor is real-valued (contains the real part only)
      */
-    UpstrideConv2DGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad, bool realValuedInput = false):
+    UpstrideConv2DGradFunctor(Context& context, Algebra algebra, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad, bool realValuedInput = false):
         context(context),
         algebra(algebra),
-        convOp(context, dataFormat, stride, dilation, requireInputGrad),
-        quatKernelOp(context, algebra, dataFormat, stride, dilation),
+        convOp(context, tensorDataFormat, stride, dilation, requireInputGrad),
+        quatKernelOp(context, algebra, tensorDataFormat, stride, dilation),
         requireInputGrad(requireInputGrad),
         realValuedInput(realValuedInput)
     {}

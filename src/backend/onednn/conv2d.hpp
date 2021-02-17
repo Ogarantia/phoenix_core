@@ -123,16 +123,16 @@ class ScalarConv2DFunctor<device::CPU, T> {
     /**
      * @brief Instantiates a Conv2D operation.
      * Sets main convolution parameters independent from the input, filter and output sizes.
-     * @param context       A context instance
-     * @param dataFormat    Expected tensors format
-     * @param stride        Convolution stride
-     * @param dilation      Convolution dilation
-     * @param useBias       If `true`, the bias addition is enabled.
+     * @param context            A context instance
+     * @param tensorDataFormat   Expected tensors format
+     * @param stride             Convolution stride
+     * @param dilation           Convolution dilation
+     * @param useBias            If `true`, the bias addition is enabled.
      */
-    ScalarConv2DFunctor(upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) :
+    ScalarConv2DFunctor(upstride::Context& context, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) :
         context(static_cast<onednn::Context&>(context)),
         device(nullptr),
-        formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+        formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
         useBias(useBias) {}
@@ -320,10 +320,10 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
 
    public:
     ScalarConv2DGradFunctor(
-        upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) :
+        upstride::Context& context, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) :
         context(static_cast<onednn::Context&>(context)),
         device(nullptr),
-        formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+        formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
         requireInputGrad(requireInputGrad) {}

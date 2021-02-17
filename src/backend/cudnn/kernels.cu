@@ -142,12 +142,12 @@ void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output,
 
 template<typename T>
 void addBias(Tensor<device::CUDA, T>& tensor, const Tensor<device::CUDA, const T>& bias, DataFormat dataFormat) {
-    if (dataFormat != DataFormat::NCHW && dataFormat != DataFormat::NC)
+    if (dataFormat != DataFormat::NCHW && dataFormat != DataFormat::IO)
         throw std::runtime_error("Unsupported data format");
     const Shape& shape = tensor.getShape();
     if (dataFormat == DataFormat::NCHW && shape.getSize() != 4)
         throw std::runtime_error("Expecting a four-dimensional tensor");
-    if (dataFormat == DataFormat::NC && shape.getSize() != 2)
+    if (dataFormat == DataFormat::IO && shape.getSize() != 2)
         throw std::runtime_error("Expecting a two-dimensional tensor");
     if (shape.depth(dataFormat) != bias.getShape().numel())
         throw std::runtime_error("Tensor and bias sizes mismatch");
@@ -159,7 +159,7 @@ void addBias(Tensor<device::CUDA, T>& tensor, const Tensor<device::CUDA, const T
             tensor.getDataPtr(), bias.getDataPtr(),
             shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]);
     }
-    else if (dataFormat == DataFormat::NC) {
+    else if (dataFormat == DataFormat::IO) {
         const int length = shape.depth(dataFormat);
         HIDENAME(addBiasNC)<<<ceili(shape[1], NUM_THREADS), NUM_THREADS, 0, tensor.getDevice().stream()>>>(
             tensor.getDataPtr(), bias.getDataPtr(), shape[1], shape[0]);

@@ -31,14 +31,14 @@ namespace upstride {
     public:
         /**
          * @brief Instantiate Dense layer operation
-         * @param               A context instance
-         * @param algebra       Algebra used to compute the dense. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-         * @param dataFormat    Expected tensors format
+         * @param                     A context instance
+         * @param algebra             Algebra used to compute the dense. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
+         * @param kernelDataFormat    Expected tensors format
          */
-        UpstrideDenseFunctor(Context& context, Algebra algebra, DataFormat dataFormat, bool useBias):
+        UpstrideDenseFunctor(Context& context, Algebra algebra, DataFormat kernelDataFormat, bool useBias):
             context(context),
             algebra(algebra),
-            denseOp(context, dataFormat, useBias)
+            denseOp(context, kernelDataFormat, useBias)
         {}
 
         /**
@@ -160,15 +160,15 @@ namespace upstride {
     public:
         /**
          * @brief Instantiates Dense layer gradient operator
-         * @param context       A context instance
-         * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-         * @param dataFormat    Expected tensors format
-         * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
+         * @param context             A context instance
+         * @param algebra             Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
+         * @param kernelDataFormat    Expected tensors format
+         * @param requireInputGrad    If `true`, the gradient with respect to the input tensor is computed as well
          */
-        UpstrideDenseGradFunctor(Context& context, Algebra algebra, DataFormat dataFormat, bool requireInputGrad):
+        UpstrideDenseGradFunctor(Context& context, Algebra algebra, DataFormat kernelDataFormat, bool requireInputGrad):
             context(context),
             algebra(algebra),
-            denseOp(context, dataFormat, requireInputGrad),
+            denseOp(context, kernelDataFormat, requireInputGrad),
             requireInputGrad(requireInputGrad)
         {}
 

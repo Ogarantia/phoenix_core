@@ -481,7 +481,7 @@ TEST_CASE("Test:Dense") {
         upstride::UpstrideDenseFunctor<upstride::device::CPU, float> op(
             context,
             Algebra::COMPLEX,
-            DataFormat::NC,
+            DataFormat::IO,
             false
         );
 
@@ -531,7 +531,7 @@ TEST_CASE("Test:Dense") {
         upstride::UpstrideDenseFunctor<upstride::device::CPU, float> op(
             context,
             Algebra::GA_300,
-            DataFormat::NC,
+            DataFormat::IO,
             false
         );
 

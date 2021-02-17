@@ -46,7 +46,7 @@ class ScalarConv2DBase {
    protected:
     cudnn::Context& context;
 
-    const DataFormat dataFormat;
+    const DataFormat tensorDataFormat;
     const IntPair stride, dilation;
 
     Shape inputShape, filterShape, outputShape;
@@ -62,8 +62,8 @@ class ScalarConv2DBase {
     cudnnTensorDescriptor_t inputDesc, outputDesc;
     cudnnFilterDescriptor_t filterDesc;
 
-    ScalarConv2DBase(upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation) :
-        context(static_cast<cudnn::Context&>(context)), dataFormat(dataFormat), stride(stride), dilation(dilation) {
+    ScalarConv2DBase(upstride::Context& context, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation) :
+        context(static_cast<cudnn::Context&>(context)), tensorDataFormat(tensorDataFormat), stride(stride), dilation(dilation) {
         cudnn::Context::raiseIfError(cudnnCreateConvolutionDescriptor(&convDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&inputDesc));
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&outputDesc));
@@ -136,14 +136,14 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
     /**
      * @brief Instantiates a Conv2D operation.
      * Sets main convolution parameters independent from the input, filter and output sizes.
-     * @param context       A context instance
-     * @param dataFormat    Expected tensors format
-     * @param stride        Convolution stride
-     * @param dilation      Convolution dilation
-     * @param useBias       If `true`, the bias addition is enabled.
+     * @param context            A context instance
+     * @param tensorDataFormat   Expected tensors format
+     * @param stride             Convolution stride
+     * @param dilation           Convolution dilation
+     * @param useBias            If `true`, the bias addition is enabled.
      */
-    ScalarConv2DFunctor(upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) :
-        ScalarConv2DBase(context, dataFormat, stride, dilation)
+    ScalarConv2DFunctor(upstride::Context& context, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) :
+        ScalarConv2DBase(context, tensorDataFormat, stride, dilation)
     {}
 
     /**
@@ -176,14 +176,14 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
             useBuffer = false;
         } else {
             actualPad = symmetrizePadding(repaddingOffset);
-            repaddedOutputShape.height(dataFormat) += repaddingOffset.x;
-            repaddedOutputShape.width(dataFormat) += repaddingOffset.y;
+            repaddedOutputShape.height(tensorDataFormat) += repaddingOffset.x;
+            repaddedOutputShape.width(tensorDataFormat) += repaddingOffset.y;
             useBuffer = true;
         }
 
         // setup tensors
-        cudnn::setTensorDescriptor<T>(outputDesc, repaddedOutputShape, dataFormat);
-        cudnn::setTensorDescriptor<T>(inputDesc, inputShape, dataFormat);
+        cudnn::setTensorDescriptor<T>(outputDesc, repaddedOutputShape, tensorDataFormat);
+        cudnn::setTensorDescriptor<T>(inputDesc, inputShape, tensorDataFormat);
 
         cudnn::Context::raiseIfError(cudnnSetFilter4dDescriptor(
             filterDesc,
@@ -266,11 +266,11 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
 
         // crop, if needed
         if (useBuffer)
-            cudnn::crop(*buffer, outputTensor, dataFormat, repaddingOffset);
+            cudnn::crop(*buffer, outputTensor, tensorDataFormat, repaddingOffset);
 
         // add bias
         if (biasTensor)
-            cudnn::addBias(outputTensor, *biasTensor, dataFormat);
+            cudnn::addBias(outputTensor, *biasTensor, tensorDataFormat);
 
     }
 };  // namespace upstride
@@ -295,8 +295,8 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
 
    public:
     ScalarConv2DGradFunctor(
-        upstride::Context& context, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) :
-        ScalarConv2DBase(context, dataFormat, stride, dilation), requireInputGrad(requireInputGrad) {
+        upstride::Context& context, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) :
+        ScalarConv2DBase(context, tensorDataFormat, stride, dilation), requireInputGrad(requireInputGrad) {
         cudnn::Context::raiseIfError(cudnnCreateTensorDescriptor(&gradDesc));
     }
 
@@ -340,14 +340,14 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
             useBuffer = false;
         } else {
             actualPad = symmetrizePadding(repaddingOffset);
-            repaddedGradShape.height(dataFormat) += repaddingOffset.x;
-            repaddedGradShape.width(dataFormat) += repaddingOffset.y;
+            repaddedGradShape.height(tensorDataFormat) += repaddingOffset.x;
+            repaddedGradShape.width(tensorDataFormat) += repaddingOffset.y;
             useBuffer = true;
         }
 
         // setup tensors
-        cudnn::setTensorDescriptor<T>(inputDesc, inputShape, dataFormat);
-        cudnn::setTensorDescriptor<T>(gradDesc, repaddedGradShape, dataFormat);
+        cudnn::setTensorDescriptor<T>(inputDesc, inputShape, tensorDataFormat);
+        cudnn::setTensorDescriptor<T>(gradDesc, repaddedGradShape, tensorDataFormat);
 
         cudnn::Context::raiseIfError(cudnnSetFilter4dDescriptor(
             filterDesc,
@@ -435,7 +435,7 @@ class ScalarConv2DGradFunctor<device::CUDA, T> : public ScalarConv2DBase {
             buffer = &bufferAllocator.get(kernelGradTensor.getDevice(), repaddedGradShape, dirty);
             if (dirty)
                 buffer->zero();
-            cudnn::insert(gradTensor, *buffer, dataFormat, repaddingOffset);
+            cudnn::insert(gradTensor, *buffer, tensorDataFormat, repaddingOffset);
         }
 
         // perform the gradient computation

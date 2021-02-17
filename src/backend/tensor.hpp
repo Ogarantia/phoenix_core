@@ -19,8 +19,8 @@ namespace upstride {
 enum class DataFormat {
     NCHW,  // channel-first
     NHWC,  // channel-last
-    NC,    // plain 2D tensor
-    CN     // permuted 2D tensor
+    IO,    // plain 2D tensor
+    OI     // permuted 2D tensor
 };
 
 inline int getWidthDimensionNumber(const DataFormat& dataFormat) {
