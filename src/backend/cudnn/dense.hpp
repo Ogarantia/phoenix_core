@@ -66,18 +66,18 @@ namespace upstride {
     class ScalarDenseFunctor<device::CUDA, T> {
     private:
         cudnn::Context& context;
-        const DataFormat dataFormat;
+        const DataFormat kernelDataFormat;
         Shape inputShape, filterShape, outputShape;
 
     public:
         /**
          * @brief Sets main dense parameters independent from the input, filter and output sizes
-         * @param context       A context instance
-         * @param dataFormat    Expected tensors format
-         * @param useBias       If `true`, the bias addition is enabled.
+         * @param context             A context instance
+         * @param kernelDataFormat    Expected tensors format
+         * @param useBias             If `true`, the bias addition is enabled.
          */
-        ScalarDenseFunctor(upstride::Context& context, DataFormat dataFormat, bool useBias) : context(static_cast<cudnn::Context&>(context)),
-                                                                                              dataFormat(dataFormat) { }
+        ScalarDenseFunctor(upstride::Context& context, DataFormat kernelDataFormat, bool useBias) : context(static_cast<cudnn::Context&>(context)),
+                                                                                              kernelDataFormat(kernelDataFormat) { }
 
         /**
          * @brief Performs backend-related operation configuration
@@ -108,13 +108,25 @@ namespace upstride {
             // cublas*gemm uses column-major order. More explanation in the links below:
             // https://stackoverflow.com/questions/56043539/cublassgemm-row-major-multiplication
             // https://en.wikipedia.org/wiki/Row-_and_column-major_order
-            cublas::gemm(
-                inputTensor.getDevice(), CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, filterTensor.getDataPtr(), n, inputTensor.getDataPtr(), k,
-                outputTensor.getDataPtr(), n);
-
+            // If weight is received transposed
+            if (this->kernelDataFormat == upstride::DataFormat::OI) {
+                cublas::gemm(
+                    inputTensor.getDevice(), CUBLAS_OP_T, CUBLAS_OP_N, n, m, k,
+                    filterTensor.getDataPtr(), k,
+                    inputTensor.getDataPtr(), k,
+                    outputTensor.getDataPtr(), n);
+            } else {
+                cublas::gemm(
+                    inputTensor.getDevice(), CUBLAS_OP_N, CUBLAS_OP_N, n, m, k,
+                    filterTensor.getDataPtr(), n,
+                    inputTensor.getDataPtr(), k,
+                    outputTensor.getDataPtr(), n);
+            }
             // add bias
             if (biasTensor) {
-                cudnn::addBias(outputTensor, *biasTensor, dataFormat);
+                // Bias tensor must be DataFormat::IO (plain tensor), other format are not managed.
+                // Moreover, outputTensor is DataFormat::IO (plain tensor) anyway.
+                cudnn::addBias(outputTensor, *biasTensor, upstride::DataFormat::IO);
             }
         }
     };
@@ -128,20 +140,20 @@ namespace upstride {
     class ScalarDenseGradFunctor<device::CUDA, T> {
     private:
         cudnn::Context& context;
-        const DataFormat dataFormat;
+        const DataFormat kernelDataFormat;
         const bool requireInputGrad;  //!< Used to determine if inputGrad needs to be computed or not
         Shape inputShape, kernelShape, gradShape;
 
     public:
         /**
          * @brief Sets main dense parameters independent from the input, filter and output sizes
-         * @param context           A context instance
-         * @param dataFormat        Expected tensors format
-         * @param requireInputGrad  If `true`, the computation of the gradient w.r.t the input is enabled.
+         * @param context                 A context instance
+         * @param kernelDataFormat        Expected tensors format
+         * @param requireInputGrad        If `true`, the computation of the gradient w.r.t the input is enabled.
          */
-        ScalarDenseGradFunctor(upstride::Context& context, DataFormat dataFormat, bool requireInputGrad) :
+        ScalarDenseGradFunctor(upstride::Context& context, DataFormat kernelDataFormat, bool requireInputGrad) :
                                                                                     context(static_cast<cudnn::Context&>(context)),
-                                                                                    dataFormat(dataFormat),
+                                                                                    kernelDataFormat(kernelDataFormat),
                                                                                     requireInputGrad(requireInputGrad) { }
 
         /**
@@ -173,17 +185,32 @@ namespace upstride {
             int m = inputTensor.getShape()[0];
             int n = gradTensor.getShape()[1];
             int k = inputTensor.getShape()[1];
+
             cublas::gemm(
-                inputTensor.getDevice(), CUBLAS_OP_N, CUBLAS_OP_T, n, k, m, gradTensor.getDataPtr(), n, inputTensor.getDataPtr(), k,
+                inputTensor.getDevice(), CUBLAS_OP_N, CUBLAS_OP_T, n, k, m,
+                gradTensor.getDataPtr(), n,
+                inputTensor.getDataPtr(), k,
                 kernelGradTensor.getDataPtr(), n);
 
             if (requireInputGrad) {
                 m = gradTensor.getShape()[0];
                 n = kernelTensor.getShape()[0];
                 k = gradTensor.getShape()[1];
-                cublas::gemm(
-                    gradTensor.getDevice(), CUBLAS_OP_T, CUBLAS_OP_N, n, m, k, kernelTensor.getDataPtr(), k, gradTensor.getDataPtr(), k,
-                    inputGradTensor.getDataPtr(), n);
+
+                // If weight is received transposed
+                if (this->kernelDataFormat == upstride::DataFormat::OI) {
+                    cublas::gemm(
+                        gradTensor.getDevice(), CUBLAS_OP_N, CUBLAS_OP_N, n, m, k,
+                        kernelTensor.getDataPtr(), n,
+                        gradTensor.getDataPtr(), k,
+                        inputGradTensor.getDataPtr(), n);
+                } else {
+                    cublas::gemm(
+                        gradTensor.getDevice(), CUBLAS_OP_T, CUBLAS_OP_N, n, m, k,
+                        kernelTensor.getDataPtr(), k,
+                        gradTensor.getDataPtr(), k,
+                        inputGradTensor.getDataPtr(), n);
+                }
             }
         }
     };

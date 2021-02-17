@@ -85,8 +85,8 @@ enum class Padding {
 enum class DataFormat {
     NCHW,  // channel-first
     NHWC,  // channel-last
-    NC,    // plain 2D tensor
-    CN     // permuted 2D tensor
+    IO,    // input features-outermost 2D tensor
+    OI     // output features-outermost 2D tensor
 };
 
 /**
@@ -125,10 +125,10 @@ inline const char* dataFormatToString(const DataFormat format) {
             return "NCHW";
         case DataFormat::NHWC:
             return "NHWC";
-        case DataFormat::NC:
-            return "NC";
-        case DataFormat::CN:
-            return "CN";
+        case DataFormat::IO:
+            return "IO";
+        case DataFormat::OI:
+            return "OI";
     }
     return "";
 }

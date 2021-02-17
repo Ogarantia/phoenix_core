@@ -47,7 +47,7 @@ namespace upstride
             if (useBias)
                 biasMemDesc = dnnl::memory::desc({1, biasShape.numel()}, onednn::getDataType<T>(), BIAS_DENSE_MEMORY_LAYOUT);
 
-            outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
+            outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), PLAIN_2D_TENSOR_MEMORY_LAYOUT);
 
             // set up dense operation-related descriptors
             if (useBias)
@@ -98,14 +98,14 @@ namespace upstride
     public:
         /**
          * @brief Sets main dense parameters independent from the input, filter and output sizes
-         * @param context       A context instance
-         * @param dataFormat    Expected tensors format
-         * @param useBias       If `true`, the bias addition is enabled.
+         * @param context             A context instance
+         * @param kernelDataFormat    Expected tensors format
+         * @param useBias             If `true`, the bias addition is enabled.
          */
-        ScalarDenseFunctor(upstride::Context &context, DataFormat dataFormat, bool useBias) :
+        ScalarDenseFunctor(upstride::Context &context, DataFormat kernelDataFormat, bool useBias) :
             context(static_cast<onednn::Context &>(context)),
             device(nullptr),
-            formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+            formatTag(onednn::dataFormatToFormatTag(kernelDataFormat)),
             useBias(useBias) {}
 
         /**
@@ -231,14 +231,14 @@ namespace upstride
     public:
         /**
          * @brief Instantiates dense layer gradient operation
-         * @param context           A context instance
-         * @param dataFormat        Expected tensors format
-         * @param requireInputGrad  If `true`, the computation of the gradient w.r.t the input is enabled.
+         * @param context                 A context instance
+         * @param kernelDataFormat        Expected tensors format
+         * @param requireInputGrad        If `true`, the computation of the gradient w.r.t the input is enabled.
          */
-        ScalarDenseGradFunctor(upstride::Context& context, DataFormat dataFormat, bool requireInputGrad):
+        ScalarDenseGradFunctor(upstride::Context& context, DataFormat kernelDataFormat, bool requireInputGrad):
                                context(static_cast<onednn::Context&>(context)),
                                device(nullptr),
-                               formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+                               formatTag(onednn::dataFormatToFormatTag(kernelDataFormat)),
                                requireInputGrad(requireInputGrad) { }
 
         /**

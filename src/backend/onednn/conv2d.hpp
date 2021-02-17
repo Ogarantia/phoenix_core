@@ -124,15 +124,15 @@ class ScalarConv2DFunctor<device::CPU, T> {
     /**
      * @brief Instantiates a Conv2D operation.
      * Sets main convolution parameters independent from the input, filter and output sizes.
-     * @param device        A device the operation will be executed on
-     * @param dataFormat    Expected tensors format
-     * @param stride        Convolution stride
-     * @param dilation      Convolution dilation
-     * @param useBias       If `true`, the bias addition is enabled.
+     * @param device            A device the operation will be executed on
+     * @param tensorDataFormat  Expected tensors format
+     * @param stride            Convolution stride
+     * @param dilation          Convolution dilation
+     * @param useBias           If `true`, the bias addition is enabled.
      */
-    ScalarConv2DFunctor(device::CPU& device, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) :
+    ScalarConv2DFunctor(device::CPU& device, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) :
         device(device),
-        formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+        formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
         useBias(useBias) {}
@@ -321,9 +321,9 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
 
    public:
     ScalarConv2DGradFunctor(
-        device::CPU& device, DataFormat dataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) :
+        device::CPU& device, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) :
         device(device),
-        formatTag(onednn::dataFormatToFormatTag(dataFormat)),
+        formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
         requireInputGrad(requireInputGrad) {}
