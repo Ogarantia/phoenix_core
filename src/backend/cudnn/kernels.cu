@@ -69,21 +69,19 @@ __global__ void HIDENAME(insertNCHW)(const T* in, T* out, int dx, int dy, int in
 }
 
 template <typename T>
-__global__ void HIDENAME(addBiasNCHW)(T* tensor, const T* bias, int width, int height, int depth, int batchSize) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int z = blockIdx.z * blockDim.z + threadIdx.z;
-    if (x < width && y < height && z < depth)
-        for (int n = 0; n < batchSize; ++n)
-            tensor[((n * depth + z) * height + y) * width + x] += bias[z];
+__global__ void HIDENAME(addBiasNCHW)(T* tensor, const T* bias, int tensorSize, int imageSize, int depth) {
+    int pos = blockDim.x * blockIdx.x + threadIdx.x;
+    int channel = (pos / imageSize) % depth;
+    if (pos < tensorSize)
+        tensor[pos] += bias[channel];
 }
 
 template <typename T>
-__global__ void HIDENAME(addBiasNC)(T* tensor, const T* bias, int length, int batchSize) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    if (x < length)
-        for (int n = 0; n < batchSize; ++n)
-            tensor[n * length + x] += bias[x];
+__global__ void HIDENAME(addBiasNC)(T* tensor, const T* bias, int tensorSize, int depth) {
+    int pos = blockDim.x * blockIdx.x + threadIdx.x;
+    int channel = pos % depth;
+    if (pos < tensorSize)
+        tensor[pos] += bias[channel];
 }
 
 
@@ -152,17 +150,25 @@ void addBias(Tensor<device::CUDA, T>& tensor, const Tensor<device::CUDA, const T
     if (shape.depth(dataFormat) != bias.getShape().numel())
         throw std::runtime_error("Tensor and bias sizes mismatch");
 
+    unsigned int depth = shape.depth(dataFormat);
+    unsigned int tensorSize = shape.numel();
+
+    dim3 threads{NUM_THREADS, 1, 1};
+    dim3 blocks = dim3(ceili(tensorSize, threads.x), 1, 1);
+
     if (dataFormat == DataFormat::NCHW) {
-        dim3 threads, blocks;
-        makeGridConfig(shape, dataFormat, threads, blocks);
+        unsigned int height = shape.height(dataFormat);
+        unsigned int width = shape.width(dataFormat);
+        unsigned int imageSize = height * width;
+
         HIDENAME(addBiasNCHW)<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
-            tensor.getDataPtr(), bias.getDataPtr(),
-            shape.width(dataFormat), shape.height(dataFormat), shape.depth(dataFormat), shape[0]);
+            tensor.getDataPtr(), bias.getDataPtr(), tensorSize, imageSize, depth
+        );
     }
     else if (dataFormat == DataFormat::IO) {
-        const int length = shape.depth(dataFormat);
-        HIDENAME(addBiasNC)<<<ceili(shape[1], NUM_THREADS), NUM_THREADS, 0, tensor.getDevice().stream()>>>(
-            tensor.getDataPtr(), bias.getDataPtr(), shape[1], shape[0]);
+        HIDENAME(addBiasNC)<<<blocks, threads, 0, tensor.getDevice().stream()>>>(
+            tensor.getDataPtr(), bias.getDataPtr(), tensorSize, depth
+        );
     }
     else
         throw std::runtime_error("addBias is currently not implemented for the given dataFormat.");
