@@ -52,9 +52,8 @@ private:
 
         /**
          * @brief Prints the convolution configuration in verbose mode.
-         * @param context   A context instance
          */
-        void printOut(const upstride::Context& context) const;
+        void printOut() const;
     };
 
     typedef struct {
@@ -99,7 +98,6 @@ public:
      * @brief Selects the fastest forward algorithm applicable for a given convolution parameters set.
      * When queried for the first time for a specific parameters set, performs a speed measurement of applicable
      * algorithms by means of cuDNN, which may take a while. Further queries use cached results.
-     * @param context           A context instance
      * @param handle            A cuDNN handle
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
@@ -110,8 +108,7 @@ public:
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    cudnnConvolutionFwdAlgo_t selectForwardAlgo(const upstride::Context& context,
-                                                const cudnnHandle_t handle,
+    cudnnConvolutionFwdAlgo_t selectForwardAlgo(const cudnnHandle_t handle,
                                                 const cudnnConvolutionDescriptor_t& convDesc,
                                                 const cudnnTensorDescriptor_t& input,
                                                 const cudnnFilterDescriptor_t& kernel,
@@ -125,7 +122,6 @@ public:
      * parameters set.
      * When queried for the first time for a specific parameters set, performs a speed measurement of applicable
      * algorithms by means of cuDNN, which may take a while. Further queries use cached results.
-     * @param context           A context instance
      * @param handle            A cuDNN handle
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
@@ -136,8 +132,7 @@ public:
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const upstride::Context& context,
-                                                             const cudnnHandle_t handle,
+    cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const cudnnHandle_t handle,
                                                              const cudnnConvolutionDescriptor_t& convDesc,
                                                              const cudnnTensorDescriptor_t& input,
                                                              const cudnnTensorDescriptor_t& grad,
@@ -151,7 +146,6 @@ public:
      * given convolution parameters set.
      * When queried for the first time for a specific parameters set, performs a speed measurement of applicable
      * algorithms by means of cuDNN, which may take a while. Further queries use cached results.
-     * @param context           A context instance
      * @param handle            A cuDNN handle
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
@@ -162,8 +156,7 @@ public:
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const upstride::Context& context,
-                                                         const cudnnHandle_t handle,
+    cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const cudnnHandle_t handle,
                                                          const cudnnConvolutionDescriptor_t& convDesc,
                                                          const cudnnTensorDescriptor_t& input,
                                                          const cudnnTensorDescriptor_t& grad,

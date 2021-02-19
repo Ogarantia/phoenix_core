@@ -128,7 +128,7 @@ PerfResult ConvKernelProfiler<KernelPtr, T>::profileOptimalKernel(
 
     // print profiling results as debug info
     for (const auto& result : perfResults) {
-        UPSTRIDE_SAYS(context, "  %0.3f ms : %s",
+        UPSTRIDE_SAYS("  %0.3f ms : %s",
             result.perf.runningTimeAverage,
             result.conf.toString().c_str()
         );
@@ -156,14 +156,14 @@ std::pair<PerfResult, bool> ConvKernelProfiler<KernelPtr, T>::findOptimalKernel(
     // check if a suitable record is already in the global cache
     bool cachedGlobally = device.checkCacheForOptimalKernel(convType, convDesc, optimalResult);
     if (!cachedGlobally) {
-        UPSTRIDE_SAYS(context, "Described convolution not yet registered in cache");
+        UPSTRIDE_SAYS("Described convolution not yet registered in cache");
         // profile kernels locally
         optimalResult = profileOptimalKernel(convDesc, configsToRun, tensors);
 
         // add the profiling result to the global cache
         device.cacheOptimalKernel(convType, convDesc, optimalResult);
     } else {
-        UPSTRIDE_SAYS(context, "Reusing kernel from global cache");
+        UPSTRIDE_SAYS("Reusing kernel from global cache");
     }
 
     return {optimalResult, cachedGlobally};

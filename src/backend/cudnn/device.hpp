@@ -1,15 +1,16 @@
 #pragma once
 #include <cuda.h>
 #include <cudnn.h>
-#include "../backend.hpp"
+#include <cublas_v2.h>
 #include "conv2d_algo_select.hpp"
-#include "../../isolated_thread.hpp"
 #include "kernels_utils.hpp"
-#include "cublas_v2.h"
+#include "../backend.hpp"
+#include "../device.hpp"
+#include "../../isolated_thread.hpp"
 
 namespace upstride {
 namespace device {
-class CUDA {
+class CUDA : public Device {
    private:
     cudnn::Conv2DAlgorithmSelector conv2dAlgorithms;    //!< runtime conv2d algorithms selector
     cuda::ConvKernelsCache convKernelsCache;            //!< cache for runtime selection of custom CUDA kernels for quaternionic convolutions
@@ -17,7 +18,9 @@ class CUDA {
     cudaStream_t cudaStream;
     cudnnHandle_t cudnnHandle;
     cublasHandle_t cublasHandle;
-    int registersPerThreadBlock;                        //!< Maximum number of thread blocks
+    int registersPerThreadBlock;                        //!< maximum number of registers per thread block
+    size_t alignmentConstraint;                         //!< number of bytes used to aligned pointers for this specific device
+    bool bypassCudnnHandleDestruction;                  //!< if `true`, cuDNN handle is not destroyed to avoid a segfault
 
     CUDA(const CUDA&) = delete;  // disable copying
 
@@ -43,11 +46,20 @@ class CUDA {
     void internalFree(void* memory);
 
    public:
-    CUDA(const cudaStream_t& stream);
+    CUDA(Context& context, const cudaStream_t& stream);
 
     inline ~CUDA() {
-        cudnnDestroy(cudnnHandle);
+        freeWorkspaceMemory();
+        // TF2.4 may call pluggins destructors after the destruction of its own ressources.
+        // A such behavior triggers a segmentation fault in cudnnDestroy function.
+        // Thus, when all ressources are destroyed, the cuDNN handle destruction is bypassed; cudnnDestroy must be done before.
+        if (!bypassCudnnHandleDestruction)
+            cudnnDestroy(cudnnHandle);
         cublasDestroy(cublasHandle);
+    }
+
+    inline size_t getAlignmentConstraint() const override {
+        return alignmentConstraint;
     }
 
     /**
@@ -69,7 +81,6 @@ class CUDA {
 
     /**
      * @brief Selects the fastest forward 2D convolution algorithm applicable for a given convolution setting.
-     * @param context           A context instance
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
      * @param kernel            The convolution kernel (filter) tensor descriptor
@@ -79,21 +90,19 @@ class CUDA {
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    inline cudnnConvolutionFwdAlgo_t selectForwardAlgo(const Context& context,
-                                                       const cudnnConvolutionDescriptor_t& convDesc,
+    inline cudnnConvolutionFwdAlgo_t selectForwardAlgo(const cudnnConvolutionDescriptor_t& convDesc,
                                                        const cudnnTensorDescriptor_t& input,
                                                        const cudnnFilterDescriptor_t& kernel,
                                                        const cudnnTensorDescriptor_t& output,
                                                        float& executionTime,
                                                        size_t& scratchpadSize,
                                                        cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectForwardAlgo(context, cudnnHandle, convDesc, input, kernel, output, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectForwardAlgo(cudnnHandle, convDesc, input, kernel, output, executionTime, scratchpadSize, mathType);
     }
 
     /**
      * @brief Selects the fastest backward 2D convolution algorithm computing the filter gradient, applicable for
      * a given convolution setting.
-     * @param context           A context instance
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
      * @param grad              The loss function gradient tensor descriptor
@@ -103,21 +112,19 @@ class CUDA {
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    inline cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const Context& context,
-                                                                    const cudnnConvolutionDescriptor_t& convDesc,
+    inline cudnnConvolutionBwdFilterAlgo_t selectBackwardFilterAlgo(const cudnnConvolutionDescriptor_t& convDesc,
                                                                     const cudnnTensorDescriptor_t& input,
                                                                     const cudnnTensorDescriptor_t& grad,
                                                                     const cudnnFilterDescriptor_t& kernel,
                                                                     float& executionTime,
                                                                     size_t& scratchpadSize,
                                                                     cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectBackwardFilterAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectBackwardFilterAlgo(cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
     }
 
     /**
      * @brief Selects the fastest backward 2D convolution algorithm computing the input (data) gradient, applicable for
      * a given convolution setting.
-     * @param context           A context instance
      * @param convDesc          The 2D convolution operation descriptor
      * @param input             The convolution input tensor descriptor
      * @param grad              The loss function gradient tensor descriptor
@@ -127,15 +134,14 @@ class CUDA {
      * @param mathType          Returns math type for the algorithm, either regular math or Tensor Cores
      * @return the fastest algorithm for the given 2D convolution parameter set.
      */
-    inline cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const Context& context,
-                                                                const cudnnConvolutionDescriptor_t& convDesc,
+    inline cudnnConvolutionBwdDataAlgo_t selectBackwardDataAlgo(const cudnnConvolutionDescriptor_t& convDesc,
                                                                 const cudnnTensorDescriptor_t& input,
                                                                 const cudnnTensorDescriptor_t& grad,
                                                                 const cudnnFilterDescriptor_t& kernel,
                                                                 float& executionTime,
                                                                 size_t& scratchpadSize,
                                                                 cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectBackwardDataAlgo(context, cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectBackwardDataAlgo(cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
     }
 
     /**
@@ -188,11 +194,11 @@ class CUDA {
      * @param size      Size in bytes.
      * @return the allocated memory address.
      */
+    void* malloc(size_t size) override;
+
     template<typename T>
     inline T* malloc(size_t size) {
-        void* memory;
-        allocator.call(this, &CUDA::internalMalloc, size, memory);
-        return static_cast<T*>(memory);
+        return static_cast<T*>(malloc(size));
     }
 
     /**
@@ -200,7 +206,11 @@ class CUDA {
      * This function is thread-safe. It can recycle a memory buffer allocated from a different thread.
      * @param memory    Address of the buffer to free
      */
-    void free(void* memory);
+    void free(void* memory) override;
+
+    inline void enableCudnnHandleDestruction() {
+        bypassCudnnHandleDestruction = false;
+    }
 };
 }  // namespace device
 }  // namespace upstride

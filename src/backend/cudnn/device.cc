@@ -5,20 +5,6 @@
 namespace upstride {
 namespace device {
 
-// GPU querying
-
-/**
- * @brief Get the number of registers available per thread block on the specified device
- *
- * @param dev                               the device to be queried for the available registers
- */
-int getDeviceRegistersPerThreadBlock(int dev) {
-    cudaDeviceProp deviceProp;
-    cudaGetDeviceProperties(&deviceProp, dev);
-    cudnn::Context::raiseIfError("getDeviceRegistersPerThreadBlock cudaGetDeviceProperties failed");
-    return deviceProp.regsPerBlock;
-}
-
 
 void CUDA::attachDevice(int device) {
     cudaSetDevice(device);
@@ -35,7 +21,8 @@ void CUDA::internalFree(void* memory) {
 }
 
 
-CUDA::CUDA(const cudaStream_t& stream) : cudaStream(stream) {
+CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cudaStream(stream), bypassCudnnHandleDestruction(true) {
+    // create cuDNN handle
     auto status = cudnnCreate(&cudnnHandle);
     if (status != CUDNN_STATUS_SUCCESS)
         throw std::runtime_error(std::string("Cannot create cuDNN handle, ") + cudnnGetErrorString(status));
@@ -43,6 +30,7 @@ CUDA::CUDA(const cudaStream_t& stream) : cudaStream(stream) {
     if (status != CUDNN_STATUS_SUCCESS)
         throw std::runtime_error(cudnnGetErrorString(status));
 
+    // create cuBLAS handle
     if (cublasCreate(&cublasHandle) != CUBLAS_STATUS_SUCCESS)
         throw std::runtime_error("Cannot create cuBLAS handle.");
     if (cublasSetStream(cublasHandle, cudaStream) != CUBLAS_STATUS_SUCCESS)
@@ -54,8 +42,19 @@ CUDA::CUDA(const cudaStream_t& stream) : cudaStream(stream) {
         throw std::runtime_error("cudaGetDevice failed");
     allocator.call(this, &CUDA::attachDevice, currentDevice);
 
-    // Query number of registers per thread block
-    registersPerThreadBlock = getDeviceRegistersPerThreadBlock(currentDevice);
+    // Query GPU properties
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, currentDevice);
+    cudnn::Context::raiseIfError("cudaGetDeviceProperties failed");
+    registersPerThreadBlock = deviceProp.regsPerBlock;
+    alignmentConstraint = deviceProp.textureAlignment;
+}
+
+
+void* CUDA::malloc(size_t size) {
+    void* memory;
+    allocator.call(this, &CUDA::internalMalloc, size, memory);
+    return memory;
 }
 
 

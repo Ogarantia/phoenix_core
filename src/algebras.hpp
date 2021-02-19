@@ -167,4 +167,24 @@ struct BinaryOperation {
     }
 };
 
+/**
+ * @brief Maps abstract user type numbers ("type 1", "type 2", "type 3") to Algebras
+ * Raises an exception if the input type number is out of a valid range.
+ * @param uptype    The user type number
+ * @return Algebra corresponding to the type number
+ */
+inline Algebra getAlgebraFromType(int uptype)  {
+    switch (uptype) {
+        case 0:
+            return Algebra::REAL;
+        case 1:
+            return Algebra::COMPLEX;
+        case 2:
+            return Algebra::QUATERNION;
+        case 3:
+            return Algebra::GA_300;
+    }
+    throw std::invalid_argument("Invalid datatype index: " + std::to_string(uptype));
+}
+
 }  // namespace upstride

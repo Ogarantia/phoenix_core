@@ -66,18 +66,18 @@ template <typename T>
 extern void accumulateSub(const device::CUDA& device, T* accumulator, const T* term, int length);
 
 template <typename T>
-extern void decomposeQuaternionInputs(const TensorSplit<device::CUDA, const T, 4>& inLeft, AllocatedTensor<device::CUDA, T>* outLeft[8],
-                                      const TensorSplit<device::CUDA, const T, 4>& inRight, AllocatedTensor<device::CUDA, T>* outRight[8]);
+extern void decomposeQuaternionInputs(const TensorSplit<device::CUDA, const T, 4>& inLeft, TemporaryTensor<device::CUDA, T>* outLeft,
+                                      const TensorSplit<device::CUDA, const T, 4>& inRight, TemporaryTensor<device::CUDA, T>* outRight);
 
 template <typename T>
-extern void decomposeQuaternionOutputGrad(const TensorSplit<device::CUDA, const T, 4>& inGrad, AllocatedTensor<device::CUDA, T>* outGrad[8]);
+extern void decomposeQuaternionOutputGrad(const TensorSplit<device::CUDA, const T, 4>& inGrad, TemporaryTensor<device::CUDA, T>* outGrad);
 
 template <typename T>
-extern void recomposeQuaternionOutput(AllocatedTensor<device::CUDA, T>* inLanes[8], TensorSplit<device::CUDA, T, 4>& outQuats);
+extern void recomposeQuaternionOutput(TemporaryTensor<device::CUDA, T>* inLanes, TensorSplit<device::CUDA, T, 4>& outQuats);
 
 template <typename T>
-extern void recomposeQuaternionInputsGrad(AllocatedTensor<device::CUDA, T>* inLeftGradLanes[8], TensorSplit<device::CUDA, T, 4>& outLeftGradQuats,
-                                          AllocatedTensor<device::CUDA, T>* inRightGradLanes[8], TensorSplit<device::CUDA, T, 4>& outRightGradQuats);
+extern void recomposeQuaternionInputsGrad(TemporaryTensor<device::CUDA, T>* inLeftGradLanes, TensorSplit<device::CUDA, T, 4>& outLeftGradQuats,
+                                          TemporaryTensor<device::CUDA, T>* inRightGradLanes, TensorSplit<device::CUDA, T, 4>& outRightGradQuats);
 
 }  // namespace cudnn
 

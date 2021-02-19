@@ -8,7 +8,7 @@
 
 using namespace upstride;
 
-static const int NUM_THREADS = 1024;  //!< default number of CUDA threads per block
+static const unsigned int NUM_THREADS = 1024;  //!< default number of CUDA threads per block
 
 template <typename T>
 __global__ void HIDENAME(accumulateAdd)(T* acc, const T* term, int length) {
@@ -38,17 +38,21 @@ __global__ void HIDENAME(accumulateSub)(T* acc, const T* term, int length) {
  * @param depth         the depth of both input and output tensors (N times C times the element size)
  */
 template <typename T>
-__global__ void HIDENAME(cropNCHW)(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int z = blockIdx.z * blockDim.z + threadIdx.z;
+__global__ void HIDENAME(cropNCHW)(const T* in, T* out,
+                                   unsigned int dx, unsigned dy,
+                                   unsigned int inWidth, unsigned int inHeight,
+                                   unsigned int outWidth, unsigned int outHeight,
+                                   unsigned int depth) {
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
     if (x < outWidth && y < outHeight && z < depth)
         out[(z * outHeight + y) * outWidth + x] = in[(z * inHeight + y + dy) * inWidth + x + dx];
 }
 
 /**
  * @brief CUDA kernel inserting an input NCHW tensor into an output NCHW tensor
- * The input tensor is smaller or equal in size than the output tensor.
+ * The input tensor is smaller or equal in size to the output tensor.
  * @param in            pointer to input values
  * @param out           pointer to output values
  * @param dx            horizontal shift
@@ -57,21 +61,32 @@ __global__ void HIDENAME(cropNCHW)(const T* in, T* out, int dx, int dy, int inWi
  * @param inHeight      input tensor height
  * @param outWidth      output tensor width
  * @param outHeight     output tensor height
- * @param depth         the depth of both input and output tensors (N times C times the element size)
+ * @param depth         the depth of both input and output tensors (N times C)
  */
 template <typename T>
-__global__ void HIDENAME(insertNCHW)(const T* in, T* out, int dx, int dy, int inWidth, int inHeight, int outWidth, int outHeight, int depth) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int z = blockIdx.z * blockDim.z + threadIdx.z;
-    if (x < inWidth && y < inHeight && z < depth)
-        out[(z * outHeight + y + dy) * outWidth + x + dx] = in[(z * inHeight + y) * inWidth + x];
+__global__ void HIDENAME(insertNCHW)(const T* in, T* out,
+                                     unsigned int dx, unsigned int dy,
+                                     unsigned int inWidth, unsigned int inHeight,
+                                     unsigned int outWidth, unsigned int outHeight,
+                                     unsigned int depth) {
+    unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
+    if (z >= depth)
+        return;
+    unsigned int ox = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int oy = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int o = (z * outHeight + oy) * outWidth + ox;
+    unsigned int ix = ox - dx;
+    unsigned int iy = oy - dy;
+    if (dx <= ox && dy <= oy && ix < inWidth && iy < inHeight)
+        out[o] = in[(z * inHeight + iy) * inWidth + ix];
+    else if (ox < outWidth && oy < outHeight)
+        out[o] = 0;
 }
 
 template <typename T>
-__global__ void HIDENAME(addBiasNCHW)(T* tensor, const T* bias, int tensorSize, int imageSize, int depth) {
-    int pos = blockDim.x * blockIdx.x + threadIdx.x;
-    int channel = (pos / imageSize) % depth;
+__global__ void HIDENAME(addBiasNCHW)(T* tensor, const T* bias, unsigned int tensorSize, unsigned int imageSize, unsigned int depth) {
+    unsigned int pos = blockDim.x * blockIdx.x + threadIdx.x;
+    unsigned int channel = (pos / imageSize) % depth;
     if (pos < tensorSize)
         tensor[pos] += bias[channel];
 }
@@ -93,10 +108,10 @@ __global__ void HIDENAME(addBiasNC)(T* tensor, const T* bias, int tensorSize, in
  * @param blocks        number of thread blocks (ouptut)
  * @param numThreads    maximum number of threads per block
  */
-inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim3& threads, dim3& blocks, const int numThreads = NUM_THREADS) {
-    const int depth = shape.depth(dataFormat) * shape[0];
-    const int z = std::min(cudnn::Context::MAX_BLOCK_DEPTH, depth);
-    const int xy = (int)std::sqrt(numThreads / z);
+inline static void makeGridConfig(const Shape& shape, DataFormat dataFormat, dim3& threads, dim3& blocks, const unsigned int numThreads = NUM_THREADS) {
+    const unsigned int depth = shape.depth(dataFormat) * shape[0];
+    const unsigned int z = std::min(cudnn::Context::MAX_BLOCK_DEPTH, depth);
+    const unsigned int xy = (unsigned int)std::sqrt(numThreads / z);
     threads = dim3(xy, xy, z);
     blocks = dim3(
         ceili(shape.width(dataFormat), threads.x),

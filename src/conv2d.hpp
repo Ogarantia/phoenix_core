@@ -12,92 +12,43 @@
 #include "algebra_select_mixin.hpp"
 #include "algebras.hpp"
 #include "backend/api.h"
-#include "deferred_allocator.hpp"
+#include "backend/conv2d_descriptor.hpp"
+#include "backend/tensor.hpp"
+#include "backend/operation.hpp"
+#include "backend/temporary_tensor.hpp"
 #include "utils.hpp"
-// #include "backend/backend.hpp"
 
 namespace upstride {
 
-/**
- * @brief Specifies memory layout for a convolution kernel
- *   OIHW for real algebra
- *   nOIHW for a non-real algebra containing n-dimensional multivectors.
- */
-class Conv2DKernelLayout {
-   public:
-    /**
-     * @brief Returns number of dimensions in the kernel tensor for a specific algebra
-     */
-    static inline int rank(Algebra algebra) {
-        return algebra == Algebra::REAL ? 4 : 5;
-    }
-
-    /**
-     * @brief Returns dimension number containing the number of output channels in the convolution kernel for a specific algebra.
-     */
-    static inline int numOutputChannelsDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 0 : 1;
-    }
-
-    /**
-     * @brief Returns dimension number containing the number of input channels in the convolution kernel for a specific algebra.
-     */
-    static inline int numInputChannelsDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 1 : 2;
-    }
-
-    /**
-     * @brief Returns dimension number containing the height of the convolution kernel for a specific algebra.
-     */
-    static inline int heightDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 2 : 3;
-    }
-
-    /**
-     * @brief Returns dimension number containing the width of the convolution kernel for a specific algebra.
-     */
-    static inline int widthDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 3 : 4;
-    }
-};
-
 template <typename Device, typename T>
-class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>> {
+class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>, public Operation {
     using AlgebraSelectionMixin<UpstrideConv2DFunctor<Device, T>>::proceedWithAlgebra;
 
    private:
-    Context& context;                           //!< a global context the operation belongs to
+    Device& device;                             //!< the device instance the operation is attached to
     const Algebra algebra;
     ScalarConv2DFunctor<Device, T> convOp;      //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvForwardFunctor<Device, T> quatKernelOp;       //!< custom kernels operator for quaternionic pointwise convolution
-    DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], outputLanes[8];  //!< deferred allocators for the factorized quaternion implementation
-    DeferredAllocator<Device, T> buffer;                                         //!< deferred allocator for an intermediate buffer for the default implementation
     const bool realValuedInput;                 //!< if `true`, the input tensor is real-valued (contains the real part only)
-    std::mutex access;
 
    public:
     /**
-     * @brief Instantiates convolution operator
-     * @param context               A context instance
-     * @param algebra               Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-     * @param tensorDataFormat       Expected tensors format
-     * @param stride                Convolution stride
-     * @param dilation              Convolution dilation
-     * @param useBias               If `true`, the bias addition is performed
-     * @param realValuedInput       If `true`, the convolution input tensor is real-valued (contains the real part only)
+     * @brief Instantiates convolution operator.
+     * @param device        A device instance
+     * @param descriptor    Operation descriptor
      */
-    UpstrideConv2DFunctor(Context& context, Algebra algebra, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool useBias, bool realValuedInput = false):
-        context(context),
-        algebra(algebra),
-        convOp(context, tensorDataFormat, stride, dilation, useBias),
-        quatKernelOp(context, algebra, tensorDataFormat, stride, dilation),
-        realValuedInput(realValuedInput)
+    UpstrideConv2DFunctor(Device& device, const Conv2DFwdDescriptor& descriptor):
+        device(device),
+        algebra(descriptor.getAlgebra()),
+        convOp(device, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isBiasUsed()),
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
+        realValuedInput(descriptor.isRealValuedInput())
     {}
 
     /**
      * @brief Executes the convolution operation
      * This function may be called from multiple threads.
-     * @param device            A device the operation is computed on
+     * @param allocator         Temporary memory allocation interface
      * @param inputTensor       Input tensor
      * @param kernelTensor      Kernel tensor
      * @param biasTensor        Pointer to bias tensor; may be null
@@ -106,7 +57,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
      * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
      */
-    void operator()(Device& device,
+    void operator()(Allocator& allocator,
                     const Tensor<Device, const T>& inputTensor,
                     const Tensor<Device, const T>& kernelTensor,
                     const Tensor<Device, const T>* biasTensor,
@@ -118,11 +69,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         if (inputTensor.getShape().empty())
             return;
 
-        // lock access to convOp
-        std::lock_guard<std::mutex> lock(access);
-
         convOp.configure(
-            device,
             realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             biasTensor ? Shape{biasTensor->getShape().numel() / MULTIVECTOR_DIM[algebra]} : Shape(),
@@ -141,17 +88,30 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                 groups);
         }
 
-        proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, biasTensor, outputTensor);
+        proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, biasTensor, outputTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(Device& device,
+    void proceedWithAlgebra(Allocator& allocator,
                             const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>* biasTensor,
                             Tensor<Device, T>& outputTensor) {
+        MemoryRequest memory(allocator, *this);
+
+        if (algebra == REAL) {
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+
+            // compute
+            convOp(inputTensor, kernelTensor, biasTensor, outputTensor);
+        }
+
         // run custom convolution kernels for quaternions if possible
-        if (quatKernelOp.canRun()) {
+        else if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, biasTensor, outputTensor);
         }
 
@@ -168,8 +128,17 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             const auto& input(inputTensor);
             TensorSplit<Device, T, CliffordProductSpec::DIMS> output(outputTensor);
 
-            // allocate a temporary buffer
-            AllocatedTensor<Device, T>& buffer(this->buffer.get(device, output.shape()));
+            // get a temporary buffer
+            TemporaryTensor<Device, T> buffer(device, memory, output.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+
+            // prepare buffer
+            buffer.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
@@ -179,7 +148,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
                     // no else branch: input is zero if left > 0, bias is zero as well
                 },
 
-                [this, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
+                [this, &input, &kernel, &output, &buffer](int left, int right, int dim, bool positive) {
                     if (left == 0) {
                         convOp(input, kernel[right], nullptr, buffer);
                         if (positive)
@@ -192,7 +161,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         }
 
         // factorized quaternion convolution fallback
-        else if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+        else if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4> input(inputTensor), kernel(kernelTensor, false);
             TensorSplit<Device, T, 4> output(outputTensor);
@@ -201,23 +170,61 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             TensorSplit<Device, const T, 4>* bias = biasTensor ? new TensorSplit<Device, const T, 4>(*biasTensor) : nullptr;
 
             // get temporary buffers
-            AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *outputLanes[8];
+            std::array<TemporaryTensor<Device, T>, 8> inputLanes{ {
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> kernelLanes{ {
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> outputLanes{ {
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() },
+                { device, memory, output.shape() }
+            } };
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
-                kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
-                outputLanes[i] = &this->outputLanes[i].get(device, output.shape());
+                inputLanes[i].prepare();
+                kernelLanes[i].prepare();
+                outputLanes[i].prepare();
             }
 
             // decompose - compute - recompose
-            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
+            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes.data(), kernel, kernelLanes.data());
             for (int i = 0; i < 4; ++i)
-                convOp(*inputLanes[i], *kernelLanes[i], nullptr, *outputLanes[i]);
+                convOp(inputLanes[i], kernelLanes[i], nullptr, outputLanes[i]);
             for (int i = 4; i < 8; ++i)
                 // According to the factorization formulation, last four lanes are plainly added to the quaternion components (see recomposeQuaternionOutput()).
                 // Adding bias there then!
-                convOp(*inputLanes[i], *kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, *outputLanes[i]);
+                convOp(inputLanes[i], kernelLanes[i], bias ? &(*bias)[i - 4] : nullptr, outputLanes[i]);
 
-            TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes, output);
+            TensorManipulations<Device>::recomposeQuaternionOutput(outputLanes.data(), output);
 
             // free bias
             delete bias;
@@ -237,15 +244,22 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             TensorSplit<Device, const T, CliffordProductSpec::DIMS>* bias = biasTensor ? new TensorSplit<Device, const T, CliffordProductSpec::DIMS>(*biasTensor) : nullptr;
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& buffer(this->buffer.get(device, output.shape()));
+            TemporaryTensor<Device, T> buffer(device, memory, output.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+            buffer.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::product(
-                [this, &input, &kernel, bias, &output](int left, int right, int dim) {
+                [this, &memory, &input, &kernel, bias, &output](int left, int right, int dim) {
                     convOp(input[left], kernel[right], bias ? &(*bias)[dim] : nullptr, output[dim]);
                 },
 
-                [this, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
+                [this, &memory, &input, &kernel, &output, &buffer](int left, int right, int dim,  bool positive) {
                     convOp(input[left], kernel[right], nullptr, buffer);
                     if (positive)
                         output[dim] += buffer;
@@ -260,44 +274,36 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
 };
 
 template <typename Device, typename T>
-class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>> {
+class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>>, public Operation {
     using AlgebraSelectionMixin<UpstrideConv2DGradFunctor<Device, T>>::proceedWithAlgebra;
 
    private:
-    Context& context;                                           //!< a global context the operation belongs to
+    Device& device;                                             //!< the device instance the operation is attached to
     const Algebra algebra;
     ScalarConv2DGradFunctor<Device, T> convOp;                  //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvBackwardFunctor<Device, T> quatKernelOp;              //!< custom kernels operator for quaternionic pointwise convolution
-    DeferredAllocator<Device, T> inputLanes[8], kernelLanes[8], gradLanes[8], kernelGradLanes[8], inputGradLanes[8];  //!< deferred allocators for the factorized quaternion implementation
-    DeferredAllocator<Device, T> bufferInput, bufferKernel;                                                           //!< deferred allocator for an intermediate buffer for the default implementation
     const bool requireInputGrad;                                //!< if `true`, the gradient with respect to the input tensor is computed as well
     const bool realValuedInput;                                 //!< if `true`, the input tensor is real-valued (contains the real part only)
-    std::mutex access;
 
    public:
     /**
-     * @brief Instantiates convolution operator
-     * @param context               A context instance
-     * @param algebra               Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-     * @param tensorDataFormat       Expected tensors format
-     * @param stride                Convolution stride
-     * @param dilation              Convolution dilation
-     * @param requireInputGrad      If `true`, the gradient with respect to the input tensor is computed as well
-     * @param realValuedInput       If `true`, the convolution input tensor is real-valued (contains the real part only)
+     * @brief Instantiates convolution operator.
+     * @param device            A device instance
+     * @param descriptor        Operation descriptor
      */
-    UpstrideConv2DGradFunctor(Context& context, Algebra algebra, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad, bool realValuedInput = false):
-        context(context),
-        algebra(algebra),
-        convOp(context, tensorDataFormat, stride, dilation, requireInputGrad),
-        quatKernelOp(context, algebra, tensorDataFormat, stride, dilation),
-        requireInputGrad(requireInputGrad),
-        realValuedInput(realValuedInput)
+    UpstrideConv2DGradFunctor(Device& device, const Conv2DBwdDescriptor& descriptor):
+        device(device),
+        algebra(descriptor.getAlgebra()),
+        convOp(device, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isInputGradientRequired()),
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
+        requireInputGrad(descriptor.isInputGradientRequired()),
+        realValuedInput(descriptor.isRealValuedInput())
     {}
 
     /**
      * @brief Executes the operation
      * This function may be called from multiple threads.
-     * @param device            A device the operation is computed on
+     * @param allocator         Temporary memory allocation interface
      * @param inputTensor       forward input tensor
      * @param kernelTensor      forward input kernel tensor
      * @param gradTensor        gradient of the forward output tensor (dy)
@@ -307,7 +313,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
      * @param padAfter          number of zero samples to add to the input tensor on bottom/right
      * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    void operator()(Device& device,
+    void operator()(Allocator& allocator,
                     const Tensor<Device, const T>& inputTensor,
                     const Tensor<Device, const T>& kernelTensor,
                     const Tensor<Device, const T>& gradTensor,
@@ -321,11 +327,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             return;
         }
 
-        // lock access to convOp
-        std::lock_guard<std::mutex> lock(access);
-
         convOp.configure(
-            device,
             realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
             kernelTensor.getShape().slice(-4),
             gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
@@ -343,18 +345,31 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                 groups);
         }
 
-        proceedWithAlgebra(algebra, device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
     }
 
     template <Algebra algebra>
-    void proceedWithAlgebra(Device& device,
+    void proceedWithAlgebra(Allocator& allocator,
                             const Tensor<Device, const T>& inputTensor,
                             const Tensor<Device, const T>& kernelTensor,
                             const Tensor<Device, const T>& gradTensor,
                             Tensor<Device, T>& kernelGradTensor,
                             Tensor<Device, T>& inputGradTensor) {
+        MemoryRequest memory(allocator, *this);
+
+        if (algebra == REAL) {
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+
+            // compute
+            convOp(inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+        }
+
         // run custom convolution kernels for quaternions if possible
-        if (quatKernelOp.canRun()) {
+        else if (quatKernelOp.canRun()) {
             quatKernelOp(device, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
         }
 
@@ -374,11 +389,18 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             }
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(device, kernelGrad.shape()));
+            TemporaryTensor<Device, T> bufferKernel(device, memory, kernelGrad.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+            bufferKernel.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGradTensor](int left, int right, int dim) {
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGradTensor](int left, int right, int dim) {
                     if (left == 0)
                         convOp(input, kernel[right], grad[dim], kernelGrad[right], inputGradTensor);
                     else {
@@ -387,7 +409,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
                     }
                 },
 
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGradTensor, &bufferKernel](int left, int right, int dim, bool positive) {
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGradTensor, &bufferKernel](int left, int right, int dim, bool positive) {
                     if (left == 0) {
                         convOp(input, kernel[right], grad[dim], bufferKernel, inputGradTensor);
                         if (positive)
@@ -400,7 +422,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
         }
 
         // factorized quaternion convolution fallback
-        else if (algebra == Algebra::QUATERNION && context.preferSpeedToMemory()) {
+        else if (algebra == Algebra::QUATERNION && device.getContext().preferSpeedToMemory()) {
             // split tensors along blades
             const TensorSplit<Device, const T, 4>
                 input(inputTensor),
@@ -409,23 +431,83 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorSplit<Device, T, 4> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
             // get temporary buffers
-            AllocatedTensor<Device, T>*inputLanes[8], *kernelLanes[8], *gradLanes[8], *kernelGradLanes[8], *inputGradLanes[8];
+            std::array<TemporaryTensor<Device, T>, 8> inputLanes{ {
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() },
+                { device, memory, input.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> kernelLanes{ {
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() },
+                { device, memory, kernel.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> gradLanes{ {
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() },
+                { device, memory, grad.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> kernelGradLanes{ {
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() },
+                { device, memory, kernelGrad.shape() }
+            } };
+
+            std::array<TemporaryTensor<Device, T>, 8> inputGradLanes{ {
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() },
+                { device, memory, inputGrad.shape() }
+            } };
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+
             for (int i = 0; i < 8; ++i) {
-                inputLanes[i] = &this->inputLanes[i].get(device, input.shape());
-                kernelLanes[i] = &this->kernelLanes[i].get(device, kernel.shape());
-                gradLanes[i] = &this->gradLanes[i].get(device, grad.shape());
-                kernelGradLanes[i] = &this->kernelGradLanes[i].get(device, kernelGrad.shape());
-                inputGradLanes[i] = &this->inputGradLanes[i].get(device, inputGrad.shape());
+                inputLanes[i].prepare();
+                kernelLanes[i].prepare();
+                gradLanes[i].prepare();
+                kernelGradLanes[i].prepare();
+                inputGradLanes[i].prepare();
             }
 
             // decompose - compute - recompose
-            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes, kernel, kernelLanes);
-            TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes);
+            TensorManipulations<Device>::decomposeQuaternionInputs(input, inputLanes.data(), kernel, kernelLanes.data());
+            TensorManipulations<Device>::decomposeQuaternionOutputGrad(grad, gradLanes.data());
 
             for (int i = 0; i < 8; ++i)
-                convOp(*inputLanes[i], *kernelLanes[i], *gradLanes[i], *kernelGradLanes[i], *inputGradLanes[i]);
+                convOp(inputLanes[i], kernelLanes[i], gradLanes[i], kernelGradLanes[i], inputGradLanes[i]);
 
-            TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes, inputGrad, kernelGradLanes, kernelGrad);
+            TensorManipulations<Device>::recomposeQuaternionInputsGrad(inputGradLanes.data(), inputGrad, kernelGradLanes.data(), kernelGrad);
         }
 
         // generic implementation
@@ -440,16 +522,24 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             TensorSplit<Device, T, CliffordProductSpec::DIMS> kernelGrad(kernelGradTensor), inputGrad(inputGradTensor);
 
             // allocate a temporary buffer
-            AllocatedTensor<Device, T>& bufferKernel(this->bufferKernel.get(device, kernelGrad.shape()));
-            AllocatedTensor<Device, T>& bufferInput(this->bufferInput.get(device, inputGrad.shape()));
+            TemporaryTensor<Device, T> bufferKernel(device, memory, kernelGrad.shape());
+            TemporaryTensor<Device, T> bufferInput(device, memory, inputGrad.shape());
+
+            // prepare the scalar operation
+            convOp.prepare(memory);
+
+            // submit memory request
+            memory.submit();
+            bufferKernel.prepare();
+            bufferInput.prepare();
 
             // compute the Clifford product
             BinaryOperation<CliffordProductSpec>::productBackprop(
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGrad](int left, int right, int dim) {
                     convOp(input[left], kernel[right], grad[dim], kernelGrad[right], inputGrad[left]);
                 },
 
-                [this, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
+                [this, &memory, &input, &kernel, &grad, &kernelGrad, &inputGrad, &bufferKernel, &bufferInput](int left, int right, int dim, bool positive) {
                     convOp(input[left], kernel[right], grad[dim], bufferKernel, bufferInput);
                     if (positive) {
                         kernelGrad[right] += bufferKernel;

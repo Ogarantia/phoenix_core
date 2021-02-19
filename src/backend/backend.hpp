@@ -11,12 +11,9 @@
 
 #pragma once
 
-#include <cstdint>
-#include <vector>
-#include <mutex>
 #include "../algebras.hpp"
 #include "tensor.hpp"
-
+#include "types.hpp"
 
 /**
  * @brief Defining UPSTRIDE_SAYS macro used for debugging.
@@ -26,17 +23,12 @@
  * in the compiled binary.
  */
 #ifdef UPSTRIDE_DEBUG
-#define UPSTRIDE_SAYS(CTX, FMT, ...) (CTX).verbosePrintf("\033[1;33m" FMT "\033[0m\n", ##__VA_ARGS__)
+#define UPSTRIDE_SAYS(FMT, ...) upstride::Context::verbosePrintf("\033[1;33m" FMT "\033[0m\n", ##__VA_ARGS__)
 #else
 #define UPSTRIDE_SAYS(...)
 #endif
 
 namespace upstride {
-
-/**
- * @brief A fairly generic integer tuple
- */
-typedef std::vector<int32_t> IntTuple;
 
 /**
  * @brief Specifies how convolutions are performed for 16-bit floating points inputs and outputs
@@ -48,63 +40,14 @@ enum class ConvFp16ComputePolicy {
 };
 
 /**
- * @brief A lightweight pair of integer numbers
- */
-class IntPair {
-   public:
-    int x, y;
-
-    IntPair() : x(0), y(0) {}
-    IntPair(int val) : x(val), y(val) {}
-    IntPair(int x, int y) : x(x), y(y) {}
-
-    /**
-     * @brief Construct an IntPair from a tuple.
-     * If the tuple contains a single element, it is assigned to the both elements of the tuple.
-     * If there are two elements, they are taken as is. Otherwise, an exception is thrown.
-     * @param tuple         The input tuple
-     */
-    IntPair(const IntTuple& tuple) {
-        if (tuple.size() == 1)
-            x = y = tuple[0];
-        else if (tuple.size() == 2) {
-            x = tuple[0];
-            y = tuple[1];
-        }
-        else
-            throw std::invalid_argument("Cannot construct an integer pair from a tuple of " + std::to_string(tuple.size()) + " elements");
-    }
-
-    inline IntPair operator+(const IntPair& another) const {
-        return IntPair(x + another.x, y + another.y);
-    }
-
-    inline bool operator==(const IntPair& another) const {
-        return x == another.x && y == another.y;
-    }
-
-    inline bool operator!=(const IntPair& another) const {
-        return !(*this == another);
-    }
-};
-
-/**
  * @brief Base class of a context shared between different operations
  */
 class Context {
    private:
-    const bool envVerbose;
     const bool envOptimizeMemoryUse;
     const ConvFp16ComputePolicy convFp16ComputePolicy;
-    uint32_t kernelCounter; //!< kernel reference counter.
-    std::mutex mutex;
    protected:
     Context();
-
-    /**
-     * @brief Called when the number of kernels references by the current context reach 0.
-     */
-    virtual void cleanUp() = 0;
 
    public:
     /**
@@ -122,26 +65,12 @@ class Context {
         return convFp16ComputePolicy == ConvFp16ComputePolicy::FULL_16;
     }
 
-    /**
-     * @brief Increase the number of kernels associated to the current context.
-     */
-    inline void increaseKernelCounter() {
-        std::lock_guard<std::mutex> lock(mutex);
-        kernelCounter++;
-    }
+    static void verbosePrintf(const char* format, ...);
 
     /**
-     * @brief Decrease the number of kernels associated to the current context and clean up memory if needed.
+     * @brief Releases all the resources managed within the current context.
      */
-    inline void decreaseKernelCounter() {
-        std::lock_guard<std::mutex> lock(mutex);
-        kernelCounter--;
-        if (kernelCounter == 0) {
-            cleanUp();
-        }
-    }
-
-    void verbosePrintf(const char* format, ...) const;
+    virtual void cleanUp() {}
 };
 
 /**
@@ -178,7 +107,6 @@ class ScalarDenseGradFunctor;
 
 
 namespace cuda {
-
 
 /**
  * @brief Generic manager for NCHW quaternion pointwise convolution kernels

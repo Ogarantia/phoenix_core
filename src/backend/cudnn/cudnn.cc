@@ -2,59 +2,23 @@
 
 using namespace upstride::cudnn;
 
-const int Context::MAX_BLOCK_DEPTH = 64;      //!< maximum number of CUDA threads per block along Z dimension
+const unsigned int Context::MAX_BLOCK_DEPTH = 64;      //!< maximum number of CUDA threads per block along Z dimension
 
 upstride::device::CUDA& Context::registerDevice(const cudaStream_t& stream) {
     std::lock_guard<std::mutex> lock(mutex);
     auto entry = devices.find(stream);
-    if (devices.find(stream) == devices.end()) {
-        return devices.emplace(stream, stream).first->second;
+    if (entry == devices.end()) {
+        return devices.emplace(std::piecewise_construct, std::forward_as_tuple(stream), std::forward_as_tuple(*this, stream)).first->second;
     }
     else {
         return entry->second;
     }
 }
 
+
 void Context::cleanUp() {
-    UPSTRIDE_SAYS(*this, "Clean up cuDNN context");
     std::lock_guard<std::mutex> lock(mutex);
+    for (auto& device : devices)
+        device.second.enableCudnnHandleDestruction();
     devices.clear();
-}
-
-Memory::Memory(size_t sizeBytes) : size(sizeBytes) {
-    auto status = cudaMalloc(&ptr, sizeBytes);
-    if (status != cudaError::cudaSuccess)
-        throw std::runtime_error(cudaGetErrorString(status));
-}
-
-Memory::Memory(Memory&& another) : ptr(another.ptr), size(another.size){
-    another.ptr = nullptr;
-    another.size = 0;
-}
-
-Memory& Memory::operator=(Memory&& another) {
-    free();
-    ptr = another.ptr;
-    size = another.size;
-    another.ptr = nullptr;
-    another.size = 0;
-    return *this;
-}
-
-Memory::~Memory() {
-    cudaFree(ptr);
-}
-
-void Memory::zero() {
-    auto status = cudaMemset(ptr, 0, size);
-    if (status != cudaError::cudaSuccess)
-        throw std::runtime_error(cudaGetErrorString(status));
-}
-
-void Memory::free() {
-    auto status = cudaFree(ptr);
-    if (status != cudaError::cudaSuccess)
-        throw std::runtime_error(cudaGetErrorString(status));
-    ptr = nullptr;
-    size = 0;
 }
