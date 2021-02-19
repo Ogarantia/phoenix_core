@@ -30,7 +30,7 @@ struct TensorManipulations<device::CUDA> {
 
     template <typename T>
     static inline void zero(Tensor<device::CUDA, T>& output) {
-        auto status = cudaMemset(output.getDataPtr(), 0, output.getShape().numel() * sizeof(T));
+        auto status = cudaMemsetAsync(output.getDataPtr(), 0, output.getShape().numel() * sizeof(T), output.getDevice().stream());
         if (status != cudaError::cudaSuccess)
             throw std::runtime_error(cudaGetErrorString(status));
     }
