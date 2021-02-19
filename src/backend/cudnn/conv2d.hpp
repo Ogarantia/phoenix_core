@@ -242,7 +242,7 @@ class ScalarConv2DFunctor<device::CUDA, T> : public ScalarConv2DBase {
     }
 
     /**
-     * @brief Executes the convolution operationif (useBuffer)
+     * @brief Executes the convolution operation
      * @param inputTensor       Input tensor
      * @param filterTensor      Filter tensor
      * @param biasTensor        Pointer to bias tensor; may be null
