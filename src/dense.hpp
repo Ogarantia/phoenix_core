@@ -223,8 +223,10 @@ namespace upstride {
                         Tensor<Device, T>& kernelGradTensor,
                         Tensor<Device, T>& inputGradTensor) {
             // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it.
-            if (inputTensor.getShape().empty())
+            if (inputTensor.getShape().empty()) {
+                kernelGradTensor.zero();
                 return;
+            }
 
             denseOp.configure(device,
                               inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
