@@ -9,6 +9,7 @@
 
 #include "../backend.hpp"
 #include "device.hpp"
+#include <cstring>
 
 namespace upstride {
 template <>

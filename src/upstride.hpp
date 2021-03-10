@@ -11,6 +11,7 @@
 #include "utils.hpp"
 #include "conv2d.hpp"
 #include "dense.hpp"
+#include "debug_utils.hpp"
 
 namespace upstride {
 
@@ -26,6 +27,9 @@ void conv2DFwd(Device& device,
     std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getConv2DFwdOperation<Device, UpstrideConv2DFunctor<Device, T>>(descriptor);
     op(allocator, inputTensor, filterTensor, biasTensor, outputTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
+#ifdef UPSTRIDE_DEVICE_DEBUG
+    conv2DFwdTest(device, inputTensor, filterTensor, biasTensor, outputTensor, descriptor);
+#endif
 }
 
 template <typename Device, typename T>
@@ -41,6 +45,9 @@ void conv2DBwd(Device& device,
     std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getConv2DBwdOperation<Device, UpstrideConv2DGradFunctor<Device, T>>(descriptor);
     op(allocator, inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor, descriptor.getPaddingBefore(), descriptor.getPaddingAfter(), descriptor.getGroups());
+#ifdef UPSTRIDE_DEVICE_DEBUG
+    conv2DBwdTest(device, inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor, descriptor);
+#endif
 }
 
 template <typename Device, typename T>
@@ -55,6 +62,9 @@ void denseFwd(Device& device,
     std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getDenseFwdOperation<Device, UpstrideDenseFunctor<Device, T>>(descriptor);
     op(allocator, inputTensor, filterTensor, biasTensor, outputTensor);
+#ifdef UPSTRIDE_DEVICE_DEBUG
+    denseFwdTest(device, inputTensor, filterTensor, biasTensor, outputTensor, descriptor);
+#endif
 }
 
 template <typename Device, typename T>
@@ -70,6 +80,9 @@ void denseBwd(Device& device,
     std::lock_guard<std::mutex> lock(device.getAccessControl());
     auto& op = device.template getDenseBwdOperation<Device, UpstrideDenseGradFunctor<Device, T>>(descriptor);
     op(allocator, inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor);
+#ifdef UPSTRIDE_DEVICE_DEBUG
+    denseBwdTest(device, inputTensor, filterTensor, gradTensor, filterGradTensor, inputGradTensor, descriptor);
+#endif
 }
 
 }

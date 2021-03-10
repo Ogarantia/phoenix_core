@@ -2,11 +2,12 @@ cmake_minimum_required(VERSION 3.18)
 
 project(UpStride)
 
-option(BUILD_TESTS    "Build tests" ON)
-option(WITH_ONEDNN    "Enable oneDNN backend (CPU)" ON)
-option(WITH_CUDNN     "Enable cuDNN backend (GPU)" OFF)
-option(WITH_FP16      "Enable fp16 support on GPU" ON)
-option(UPSTRIDE_DEBUG "Enable development features" ON)
+option(BUILD_TESTS           "Build tests" ON)
+option(WITH_ONEDNN           "Enable oneDNN backend (CPU)" ON)
+option(WITH_CUDNN            "Enable cuDNN backend (GPU)" OFF)
+option(WITH_FP16             "Enable fp16 support on GPU" ON)
+option(UPSTRIDE_DEBUG        "Enable development features" ON)
+option(UPSTRIDE_DEVICE_DEBUG "Enable development feature: comparison between GPU and CPU operations" OFF)
 set(ARCH "native" CACHE STRING "Enable optimization for specific arch (x86_64 / aarch64 / <spe_march>)")
 
 message("-- BUILD_TESTS: ${BUILD_TESTS}")
@@ -130,7 +131,12 @@ if (WITH_CUDNN)
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels.cu
       ${CPP_SOURCES_FOLDER}/backend/cudnn/kernels_quat.cu
   )
-
+  if (UPSTRIDE_DEVICE_DEBUG)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUPSTRIDE_DEVICE_DEBUG")
+    set(SOURCES ${SOURCES}
+      ${CPP_SOURCES_FOLDER}/debug_utils.cc
+    )
+  endif()
   # specify include path and link
   include_directories(${CUDAToolkit_INCLUDE_DIRS})
   link_directories(${CUDAToolkit_LIBRARY_DIR})
