@@ -37,6 +37,8 @@ class Shape {
     int* shape;
 
    public:
+    static const Shape EMPTY;
+
     /**
      * @brief Constructs a zero Shape object
      */
@@ -70,7 +72,7 @@ class Shape {
 
     /**
      * @brief Construct a new Shape object that creates a s size shape with all dimension to 0
-     * @param s 
+     * @param s
      */
     Shape(int s) : size(s) {
         shape = new int[s];
@@ -112,15 +114,15 @@ class Shape {
     const int* getShapePtr() const { return shape; }
 
     /**
-     * @brief return true if any value of the size or size is equal to 0 
+     * @brief return true if any value of the size or size is equal to 0
      */
-    inline bool empty() const { 
+    inline bool empty() const {
         for (int i=0; i<size; i++){
             if (shape[i] == 0) return true;
         }
         return (size == 0);
     }
-    
+
     /**
      * @brief Accesses shape dimension size by dimension index
      * @param i     A dimension index
@@ -131,10 +133,10 @@ class Shape {
 
     /**
      * @brief Overloaded "==" operator to compare two Shapes.
-     * 
+     *
      * @param another Shape
      * @return true if both Shape are equals; size and dimensions
-     * @return false 
+     * @return false
      */
     inline bool operator==(const Shape& another) const {
         if (size != another.size)
@@ -359,7 +361,7 @@ struct TensorManipulations {
 
 /**
  * @brief Tensor representation using its shape a tensor array
- * 
+ *
  * @tparam T Type of the tensor
  */
 template <typename Device, typename T>
@@ -388,7 +390,7 @@ class Tensor {
 
     /**
      * @brief Retrieves the shape of the Tensor instance
-     * @return const Shape& 
+     * @return const Shape&
      */
     const Shape& getShape() const { return shape; }
 

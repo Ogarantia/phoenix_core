@@ -31,7 +31,13 @@ namespace upstride {
         UpstrideDenseFunctor(Device& device, const DenseFwdDescriptor& descriptor):
             device(device),
             algebra(descriptor.getAlgebra()),
-            denseOp(device.getContext(), descriptor.getDataFormat(), descriptor.isBiasUsed())
+            denseOp(device.getContext(),
+                    device,
+                    descriptor.getDataFormat(),
+                    descriptor.getInputShape().split(MULTIVECTOR_DIM[algebra]),
+                    descriptor.getFilterShape().slice(-2),
+                    descriptor.getBiasShape().slice(-1),
+                    descriptor.getOutputShape().split(MULTIVECTOR_DIM[algebra]))
         {}
 
         /**
@@ -51,12 +57,6 @@ namespace upstride {
             // Sometimes TF sends us an empty tensor, cudnn is not allowed to managed this case so let's avoid it.
             if (inputTensor.getShape().empty())
                 return;
-
-            denseOp.configure(device,
-                              inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-                              kernelTensor.getShape().slice(-2),
-                              biasTensor ? biasTensor->getShape().split(MULTIVECTOR_DIM[algebra]) : Shape(),
-                              outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
             proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, biasTensor, outputTensor);
         }
@@ -188,22 +188,26 @@ namespace upstride {
     private:
         Device& device;                                                                                                   //!< the device instance the operation is attached to
         const Algebra algebra;
+        const bool requireInputGrad;
         ScalarDenseGradFunctor<Device, T> denseOp;                                                                        //!< scalar convolution operator to be used to implement other data types
-        bool requireInputGrad;                      //!< if `true`, the input gradient is computed
 
     public:
         /**
          * @brief Instantiates Dense layer gradient operator
          * @param device        A device instance
-         * @param algebra       Algebra used to compute the convolution. The inputs (tensor and filter) are interpreted as matrices of multivectors of this specific algebra.
-         * @param dataFormat    Expected tensors format
-         * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed as well
+         * @param descriptor    Operation descriptor
          */
         UpstrideDenseGradFunctor(Device& device, const DenseBwdDescriptor& descriptor):
             device(device),
             algebra(descriptor.getAlgebra()),
-            denseOp(device.getContext(), descriptor.getDataFormat(), descriptor.isInputGradientRequired()),
-            requireInputGrad(descriptor.isInputGradientRequired())
+            requireInputGrad(descriptor.isInputGradientRequired()),
+            denseOp(device.getContext(),
+                    device,
+                    descriptor.getDataFormat(),
+                    descriptor.getInputShape().split(MULTIVECTOR_DIM[algebra]),
+                    descriptor.getFilterShape().slice(-2),
+                    descriptor.getOutputShape().split(MULTIVECTOR_DIM[algebra]),
+                    requireInputGrad)
         {}
 
         /**
@@ -227,11 +231,6 @@ namespace upstride {
                 kernelGradTensor.zero();
                 return;
             }
-
-            denseOp.configure(device,
-                              inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-                              kernelTensor.getShape().slice(-2),
-                              gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]));
 
             proceedWithAlgebra(algebra, allocator, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
         }

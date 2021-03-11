@@ -170,6 +170,10 @@ public:
         return str.str();
     }
 
+    inline const Shape& getInputShape() const { return inputShape; }
+
+    inline const Shape& getFilterShape() const { return filterShape; }
+
     inline const IntPair& getStride() const { return stride; }
 
     inline const IntPair& getDilation() const { return dilation; }
@@ -260,6 +264,19 @@ public:
     }
 
     inline bool isBiasUsed() const { return useBias; }
+
+    inline const Shape getBiasShape() const {
+        if (!useBias)
+            return Shape::EMPTY;
+
+        // for real-valued compute the bias is a vector of `channels` entries
+        const int channels = filterShape[Conv2DKernelLayout::numOutputChannelsDim(algebra)];
+        if (algebra == Algebra::REAL)
+            return Shape{ channels };
+
+        // for other algebras it has 2 dimensions with the multivector dimension going outermost
+        return Shape{ MULTIVECTOR_DIM[algebra], channels };
+    }
 };
 
 

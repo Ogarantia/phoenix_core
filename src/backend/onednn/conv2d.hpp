@@ -123,58 +123,49 @@ class ScalarConv2DFunctor<device::CPU, T> {
    public:
     /**
      * @brief Instantiates a Conv2D operation.
-     * Sets main convolution parameters independent from the input, filter and output sizes.
      * @param device            A device the operation will be executed on
-     * @param tensorDataFormat  Expected tensors format
+     * @param tensorDataFormat  Memory layout of input and output tensors
      * @param stride            Convolution stride
      * @param dilation          Convolution dilation
-     * @param useBias           If `true`, the bias addition is enabled.
+     * @param inputShape        Input tensor shape
+     * @param filterShape       Filter tensor shape
+     * @param biasShape         Bias tensor shape (empty if no bias addition is enabled)
+     * @param outputShape       Output tensor shape
+     * @param padBefore         Number of zero samples to add to the input tensor on top/left
+     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups for depthwise / grouped convolutions
      */
-    ScalarConv2DFunctor(device::CPU& device, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool useBias) :
+    ScalarConv2DFunctor(
+        device::CPU& device,
+        DataFormat tensorDataFormat,
+        const IntPair& stride,
+        const IntPair& dilation,
+        const Shape& inputShape,
+        const Shape& filterShape,
+        const Shape& biasShape,
+        const Shape& outputShape,
+        const IntPair& padBefore,
+        const IntPair& padAfter,
+        int groups
+    ) :
         device(device),
         formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
-        useBias(useBias) {}
-
-    /**
-     * @brief Performs backend-related operation configuration
-     * @param inputShape        Input tensor shape
-     * @param kernelShape       kernel tensor shape
-     * @param biasShape         Bias tensor shape
-     * @param padBefore         Number of zero samples to add to the input tensor on top/left
-     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
-     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
-     */
-    void configure(const Shape& inputShape,
-                   const Shape& kernelShape,
-                   const Shape& biasShape,
-                   const Shape& outputShape,
-                   const IntPair& padBefore,
-                   const IntPair& padAfter,
-                   const int groups = 1) {
-        // check if up-to-date
-        if (this->inputShape == inputShape && this->kernelShape == kernelShape &&
-            (!useBias || this->biasShape == biasShape) && this->outputShape == outputShape &&
-            this->padBefore == padBefore && this->padAfter == padAfter)
-            return;
-
-        // cache shapes for further up-to-dateness checks
-        this->inputShape = inputShape;
-        this->kernelShape = kernelShape;
-        if (useBias)
-            this->biasShape = biasShape;
-        this->outputShape = outputShape;
-        this->padBefore = padBefore;
-        this->padAfter = padAfter;
-
+        useBias(!biasShape.empty())
+    {
         // configure in an isolated thread
-        device.call(this, &ScalarConv2DFunctor<device::CPU, T>::doConfigure, inputShape, kernelShape, biasShape, outputShape, padBefore, padAfter, groups);
+        device.call(this, &ScalarConv2DFunctor<device::CPU, T>::doConfigure,
+            inputShape,
+            filterShape,
+            biasShape,
+            outputShape,
+            padBefore,
+            padAfter,
+            groups);
     }
 
-
     inline void prepare(MemoryRequest& memory) {}
-
 
     /**
      * @brief Executes the convolution operation
@@ -208,7 +199,6 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
     Shape inputShape, kernelShape, gradShape;
     IntPair padBefore;  //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
     IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
-
 
     /**
      * @brief Performs backend-related operation configuration.
@@ -320,48 +310,49 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
     }
 
    public:
+    /**
+     * @brief Instantiates a Conv2D backward operation.
+     * @param device            A device the operation will be executed on
+     * @param tensorDataFormat  Memory layout of input and output tensors
+     * @param stride            Convolution stride
+     * @param dilation          Convolution dilation
+     * @param inputShape        Input tensor shape
+     * @param filterShape       Filter tensor shape
+     * @param outputShape       Output tensor shape
+     * @param padBefore         Number of zero samples to add to the input tensor on top/left
+     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
+     * @param groups            Number of groups for depthwise / grouped convolutions
+     * @param requireInputGrad  If `true`, the gradient with respect to the input tensor is computed
+     */
     ScalarConv2DGradFunctor(
-        device::CPU& device, DataFormat tensorDataFormat, const IntPair& stride, const IntPair& dilation, bool requireInputGrad) :
+        device::CPU& device,
+        DataFormat tensorDataFormat,
+        const IntPair& stride,
+        const IntPair& dilation,
+        const Shape& inputShape,
+        const Shape& filterShape,
+        const Shape& outputShape,
+        const IntPair& padBefore,
+        const IntPair& padAfter,
+        int groups,
+        bool requireInputGrad
+    ) :
         device(device),
         formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
-        requireInputGrad(requireInputGrad) {}
-
-    /**
-     * @brief Performs backend-related operation configuration
-     * @param inputShape        Input tensor shape
-     * @param kernelShape       kernel tensor shape
-     * @param gradShape         grad tensor shape
-     * @param padBefore         Number of zero samples to add to the input tensor on top/left
-     * @param padAfter          Number of zero samples to add to the input tensor on bottom/right
-     * @param groups            Number of groups in order to manage groups convolutions and mostly the depthwise convolution (groups == Input channels), 1 by default (regular convolution)
-     */
-    void configure(const Shape& inputShape,
-                   const Shape& kernelShape,
-                   const Shape& gradShape,
-                   const IntPair& padBefore,
-                   const IntPair& padAfter,
-                   const int groups = 1) {
-        // check if up-to-date
-        if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->gradShape == gradShape &&
-            this->padBefore == padBefore && this->padAfter == padAfter)
-            return;
-
-        // cache shapes for further up-to-dateness checks
-        this->inputShape = inputShape;
-        this->kernelShape = kernelShape;
-        this->gradShape = gradShape;
-        this->padBefore = padBefore;
-        this->padAfter = padAfter;
-
-        // configure in an isolated thread
-        device.call(this, &ScalarConv2DGradFunctor<device::CPU, T>::doConfigure, inputShape, kernelShape, gradShape, padBefore, padAfter, groups);
+        requireInputGrad(requireInputGrad)
+    {
+        device.call(this, &ScalarConv2DGradFunctor<device::CPU, T>::doConfigure,
+            inputShape,
+            filterShape,
+            outputShape,
+            padBefore,
+            padAfter,
+            groups);
     }
 
-
     inline void prepare(MemoryRequest& memory) {}
-
 
     /**
      * @brief Executes the convolution operation

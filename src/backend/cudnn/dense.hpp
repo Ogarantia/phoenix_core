@@ -67,26 +67,30 @@ namespace upstride {
     private:
         cudnn::Context& context;
         const DataFormat kernelDataFormat;
-        Shape inputShape, filterShape, outputShape;
 
     public:
         /**
          * @brief Sets main dense parameters independent from the input, filter and output sizes
          * @param context             A context instance
+         * @param device              A device instance the operation is performed on
          * @param kernelDataFormat    Expected tensors format
-         * @param useBias             If `true`, the bias addition is enabled.
+         * @param inputShape          Input tensor shape
+         * @param kernelShape         kernel tensor shape
+         * @param biasShape           Bias tensor shape; empty if the bias addition is disabled
+         * @param outputShape         Output tensor shape
          */
-        ScalarDenseFunctor(upstride::Context& context, DataFormat kernelDataFormat, bool useBias) : context(static_cast<cudnn::Context&>(context)),
-                                                                                              kernelDataFormat(kernelDataFormat) { }
-
-        /**
-         * @brief Performs backend-related operation configuration
-         * @param device            A device instance
-         * @param inputShape        Input tensor shape
-         * @param filterShape       Filter tensor shape
-         * @param outputTensor      Output tensor shape
-         */
-        void configure(device::CUDA& device, const Shape &inputShape, const Shape &filterShape, const Shape &biasShape, const Shape &outputShape) { }
+        ScalarDenseFunctor(
+            upstride::Context &context,
+            device::CUDA& device,
+            DataFormat kernelDataFormat,
+            const Shape &inputShape,
+            const Shape &kernelShape,
+            const Shape &biasShape,
+            const Shape &outputShape
+        ):
+            context(static_cast<cudnn::Context&>(context)),
+            kernelDataFormat(kernelDataFormat)
+        { }
 
         /**
          * @brief Executes the convolution operation
@@ -142,31 +146,31 @@ namespace upstride {
         cudnn::Context& context;
         const DataFormat kernelDataFormat;
         const bool requireInputGrad;  //!< Used to determine if inputGrad needs to be computed or not
-        Shape inputShape, kernelShape, gradShape;
 
     public:
         /**
-         * @brief Sets main dense parameters independent from the input, filter and output sizes
+         * @brief Instantiates dense layer gradient operation
          * @param context                 A context instance
+         * @param device                  A device instance the operation is performed on
          * @param kernelDataFormat        Expected tensors format
+         * @param inputShape              Input tensor shape
+         * @param kernelShape             kernel tensor shape
+         * @param outputShape             Output tensor shape
          * @param requireInputGrad        If `true`, the computation of the gradient w.r.t the input is enabled.
          */
-        ScalarDenseGradFunctor(upstride::Context& context, DataFormat kernelDataFormat, bool requireInputGrad) :
-                                                                                    context(static_cast<cudnn::Context&>(context)),
-                                                                                    kernelDataFormat(kernelDataFormat),
-                                                                                    requireInputGrad(requireInputGrad) { }
-
-        /**
-         * @brief Performs backend-related operation configuration
-         * @param device            A device the operation will be executed on
-         * @param inputShape        Input tensor shape
-         * @param kernelShape       kernel tensor shape
-         * @param gradShape         grad tensor shape
-         */
-        void configure(device::CUDA& device,
-                       const Shape& inputShape,
-                       const Shape& kernelShape,
-                       const Shape& gradShape) { }
+        ScalarDenseGradFunctor(
+            upstride::Context& context,
+            device::CUDA& device,
+            DataFormat kernelDataFormat,
+            const Shape &inputShape,
+            const Shape &kernelShape,
+            const Shape &outputShape,
+            bool requireInputGrad
+        ):
+            context(static_cast<cudnn::Context&>(context)),
+            kernelDataFormat(kernelDataFormat),
+            requireInputGrad(requireInputGrad)
+        { }
 
         /**
         * @brief Executes the operation

@@ -24,7 +24,33 @@ public:
     inline bool operator==(const DenseDescriptor& another) const {
         return algebra == another.algebra && dataFormat == another.dataFormat;
     }
+
+    inline int getOutputChannels() const {
+        // the outermost dimension in the filter tensor is multivector dimension
+        const int idx = algebra == Algebra::REAL ? 0 : 1;
+        switch (dataFormat) {
+        case DataFormat::IO:
+            return filterShape[idx + 1];
+        case DataFormat::OI:
+            return filterShape[idx];
+        }
+        throw std::runtime_error("Invalid data format");
+    }
     
+    inline Shape getInputShape() const { return inputShape; }
+
+    inline Shape getFilterShape() const { return filterShape; }
+
+    inline Shape getOutputShape() const {
+        return Shape{ inputShape[0], getOutputChannels() };
+    }
+
+    inline Shape getBiasShape() const {
+        if (algebra == Algebra::REAL)
+            return Shape{ getOutputChannels() };
+        return Shape{ MULTIVECTOR_DIM[algebra], getOutputChannels() };
+    }
+
     inline Algebra getAlgebra() const { return algebra; }
 
     inline DataFormat getDataFormat() const { return dataFormat; }

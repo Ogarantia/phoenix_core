@@ -7,6 +7,8 @@ using namespace upstride;
 const IntPair IntPair::ZEROS(0, 0);
 const IntPair IntPair::ONES(1, 1);
 
+const Shape Shape::EMPTY;
+
 /**
  * @brief Retrieves value of an environment variable.
  * @param variable      The variable

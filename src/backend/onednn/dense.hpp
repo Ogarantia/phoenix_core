@@ -21,13 +21,10 @@ namespace upstride
     class ScalarDenseFunctor<device::CPU, T> {
     private:
         onednn::Context& context;
-        device::CPU* device;
         dnnl::memory::desc inputMemDesc, kernelMemDesc, biasMemDesc, outputMemDesc;
         dnnl::matmul densePrim, densePrimNoBias;
         const dnnl::memory::format_tag formatTag;
         const bool useBias; //!< if `true`, a bias tensor is added to the dense output
-
-        Shape inputShape, kernelShape, biasShape, outputShape;
 
         /**
          * @brief Performs backend-related operation configuration
@@ -99,38 +96,26 @@ namespace upstride
         /**
          * @brief Sets main dense parameters independent from the input, filter and output sizes
          * @param context             A context instance
+         * @param device              A device instance the operation is performed on
          * @param kernelDataFormat    Expected tensors format
-         * @param useBias             If `true`, the bias addition is enabled.
+         * @param inputShape          Input tensor shape
+         * @param kernelShape         kernel tensor shape
+         * @param biasShape           Bias tensor shape; empty if the bias addition is disabled
+         * @param outputShape         Output tensor shape
          */
-        ScalarDenseFunctor(upstride::Context &context, DataFormat kernelDataFormat, bool useBias) :
+        ScalarDenseFunctor(
+            upstride::Context &context,
+            device::CPU& device,
+            DataFormat kernelDataFormat,
+            const Shape &inputShape,
+            const Shape &kernelShape,
+            const Shape &biasShape,
+            const Shape &outputShape
+        ) :
             context(static_cast<onednn::Context &>(context)),
-            device(nullptr),
             formatTag(onednn::dataFormatToFormatTag(kernelDataFormat)),
-            useBias(useBias) {}
-
-        /**
-         * @brief Performs backend-related operation configuration
-         * @param device            A device instance
-         * @param inputShape        Input tensor shape
-         * @param kernelShape       kernel tensor shape
-         * @param biasShape         Bias tensor shape; may be empty if the bias addition is not enabled by `useBias`
-         * @param outputTensor      Output tensor shape
-         */
-        void configure(device::CPU &device, const Shape &inputShape, const Shape &kernelShape, const Shape &biasShape, const Shape &outputShape) {
-            // check if up-to-date
-            if (this->inputShape == inputShape && this->kernelShape == kernelShape && (!useBias || this->biasShape == biasShape) &&
-                this->outputShape == outputShape)
-                return;
-
-            // cache shapes for further up-to-dateness checks
-            this->device = &device;
-            this->inputShape = inputShape;
-            this->kernelShape = kernelShape;
-            if (useBias)
-                this->biasShape = biasShape;
-            this->outputShape = outputShape;
-
-            // configure in an isolated thread
+            useBias(!biasShape.empty())
+        {
             device.call(this, &ScalarDenseFunctor<device::CPU, T>::doConfigure, inputShape, kernelShape, biasShape, outputShape);
         }
 
@@ -146,9 +131,8 @@ namespace upstride
                         const Tensor<device::CPU, const T> *biasTensor,
                         Tensor<device::CPU, T> &outputTensor)
         {
-            if (!device)
-                throw std::runtime_error("Forward Dense operation is called but not configured");
-            device->call(this, &ScalarDenseFunctor<device::CPU, T>::doCompute, inputTensor, kernelTensor, biasTensor, outputTensor);
+            outputTensor.getDevice().call(this, &ScalarDenseFunctor<device::CPU, T>::doCompute,
+                inputTensor, kernelTensor, biasTensor, outputTensor);
         }
     };
 
@@ -162,12 +146,10 @@ namespace upstride
     class ScalarDenseGradFunctor<device::CPU, T> {
     private:
         onednn::Context& context;
-        device::CPU* device;
         dnnl::memory::desc inputMemDescTransposed, kernelMemDescTransposed, gradMemDesc, kernelGradMemDesc, inputGradMemDesc;
         dnnl::matmul denseBackDataPrim, denseBackWeightPrim;
         const dnnl::memory::format_tag formatTag;
         const bool requireInputGrad;  //!< Used to determine if inputGrad needs to be computed or not
-        Shape inputShape, kernelShape, gradShape;
 
         /**
          * @brief Performs backend-related operation configuration
@@ -230,40 +212,30 @@ namespace upstride
 
     public:
         /**
-         * @brief Instantiates dense layer gradient operation
+         * @brief Instantiates dense layer gradient operation.
          * @param context                 A context instance
+         * @param device                  A device instance the operation is performed on
          * @param kernelDataFormat        Expected tensors format
+         * @param inputShape              Input tensor shape
+         * @param kernelShape             kernel tensor shape
+         * @param outputShape             Output tensor shape
          * @param requireInputGrad        If `true`, the computation of the gradient w.r.t the input is enabled.
          */
-        ScalarDenseGradFunctor(upstride::Context& context, DataFormat kernelDataFormat, bool requireInputGrad):
-                               context(static_cast<onednn::Context&>(context)),
-                               device(nullptr),
-                               formatTag(onednn::dataFormatToFormatTag(kernelDataFormat)),
-                               requireInputGrad(requireInputGrad) { }
-
-        /**
-         * @brief Performs backend-related operation configuration
-         * @param device            A device the operation will be executed on
-         * @param inputShape        Input tensor shape
-         * @param kernelShape       kernel tensor shape
-         * @param gradShape         grad tensor shape
-         */
-        void configure(device::CPU& device,
-                       const Shape& inputShape,
-                       const Shape& kernelShape,
-                       const Shape& gradShape) {
-            // check if up-to-date
-            if (this->inputShape == inputShape && this->kernelShape == kernelShape && this->gradShape == gradShape)
-                return;
-
-            // cache shapes for further up-to-dateness checks
-            this->device = &device;
-            this->inputShape = inputShape;
-            this->kernelShape = kernelShape;
-            this->gradShape = gradShape;
-
-            // configure in an isolated thread
-            device.call(this, &ScalarDenseGradFunctor<device::CPU, T>::doConfigure, inputShape, kernelShape, gradShape);
+        ScalarDenseGradFunctor(
+            upstride::Context& context,
+            device::CPU& device,
+            DataFormat kernelDataFormat,
+            const Shape &inputShape,
+            const Shape &kernelShape,
+            const Shape &outputShape,
+            bool requireInputGrad
+        ):
+            context(static_cast<onednn::Context&>(context)),
+            formatTag(onednn::dataFormatToFormatTag(kernelDataFormat)),
+            requireInputGrad(requireInputGrad)
+        {
+            device.call(this, &ScalarDenseGradFunctor<device::CPU, T>::doConfigure,
+                inputShape, kernelShape, outputShape);
         }
 
         /**
@@ -280,10 +252,8 @@ namespace upstride
                         Tensor<device::CPU, T>& kernelGradTensor,
                         Tensor<device::CPU, T>& inputGradTensor)
         {
-            if (!device)
-                throw std::runtime_error("Backward Dense operation is called but not configured");
-            device->call(
-                this, &ScalarDenseGradFunctor<device::CPU, T>::doCompute, inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
+            kernelGradTensor.getDevice().call(this, &ScalarDenseGradFunctor<device::CPU, T>::doCompute,
+                inputTensor, kernelTensor, gradTensor, kernelGradTensor, inputGradTensor);
         }
     };
 } // namespace upstride

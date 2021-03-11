@@ -27,9 +27,9 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
    private:
     Device& device;                             //!< the device instance the operation is attached to
     const Algebra algebra;
+    const bool realValuedInput;                 //!< if `true`, the input tensor is real-valued (contains the real part only)
     ScalarConv2DFunctor<Device, T> convOp;      //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvForwardFunctor<Device, T> quatKernelOp;       //!< custom kernels operator for quaternionic pointwise convolution
-    const bool realValuedInput;                 //!< if `true`, the input tensor is real-valued (contains the real part only)
 
    public:
     /**
@@ -40,9 +40,20 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
     UpstrideConv2DFunctor(Device& device, const Conv2DFwdDescriptor& descriptor):
         device(device),
         algebra(descriptor.getAlgebra()),
-        convOp(device, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isBiasUsed()),
-        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
-        realValuedInput(descriptor.isRealValuedInput())
+        realValuedInput(descriptor.isRealValuedInput()),
+        convOp(device,
+            descriptor.getDataFormat(),
+            descriptor.getStride(),
+            descriptor.getDilation(),
+            realValuedInput ? descriptor.getInputShape() : descriptor.getInputShape().split(MULTIVECTOR_DIM[algebra]),
+            descriptor.getFilterShape().slice(-4),
+            descriptor.getBiasShape().slice(-1),
+            descriptor.getOutputShape().split(MULTIVECTOR_DIM[algebra]),
+            descriptor.getPaddingBefore(),
+            descriptor.getPaddingAfter(),
+            descriptor.getGroups()
+        ),
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation())
     {}
 
     /**
@@ -68,15 +79,6 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         // Sometimes TF sends us an empty tensor, cudnn does not digest this well
         if (inputTensor.getShape().empty())
             return;
-
-        convOp.configure(
-            realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-            kernelTensor.getShape().slice(-4),
-            biasTensor ? Shape{biasTensor->getShape().numel() / MULTIVECTOR_DIM[algebra]} : Shape(),
-            outputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-            padBefore,
-            padAfter,
-            groups);
 
         if (algebra == Algebra::QUATERNION && !realValuedInput) {
             quatKernelOp.configure(
@@ -280,10 +282,10 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
    private:
     Device& device;                                             //!< the device instance the operation is attached to
     const Algebra algebra;
+    const bool realValuedInput;                                 //!< if `true`, the input tensor is real-valued (contains the real part only)
+    const bool requireInputGrad;                                //!< if `true`, the gradient with respect to the input tensor is computed as well
     ScalarConv2DGradFunctor<Device, T> convOp;                  //!< scalar convolution operator to be used to implement other data types
     cuda::QuatKernelPointwiseConvBackwardFunctor<Device, T> quatKernelOp;              //!< custom kernels operator for quaternionic pointwise convolution
-    const bool requireInputGrad;                                //!< if `true`, the gradient with respect to the input tensor is computed as well
-    const bool realValuedInput;                                 //!< if `true`, the input tensor is real-valued (contains the real part only)
 
    public:
     /**
@@ -294,10 +296,21 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
     UpstrideConv2DGradFunctor(Device& device, const Conv2DBwdDescriptor& descriptor):
         device(device),
         algebra(descriptor.getAlgebra()),
-        convOp(device, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation(), descriptor.isInputGradientRequired()),
-        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation()),
+        realValuedInput(descriptor.isRealValuedInput()),
         requireInputGrad(descriptor.isInputGradientRequired()),
-        realValuedInput(descriptor.isRealValuedInput())
+        convOp(device,
+            descriptor.getDataFormat(),
+            descriptor.getStride(),
+            descriptor.getDilation(),
+            realValuedInput ? descriptor.getInputShape() : descriptor.getInputShape().split(MULTIVECTOR_DIM[algebra]),
+            descriptor.getFilterShape().slice(-4),
+            descriptor.getOutputShape().split(MULTIVECTOR_DIM[algebra]),
+            descriptor.getPaddingBefore(),
+            descriptor.getPaddingAfter(),
+            descriptor.getGroups(),
+            descriptor.isInputGradientRequired()
+        ),
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation())
     {}
 
     /**
@@ -327,14 +340,6 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             kernelGradTensor.zero();
             return;
         }
-
-        convOp.configure(
-            realValuedInput ? inputTensor.getShape() : inputTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-            kernelTensor.getShape().slice(-4),
-            gradTensor.getShape().split(MULTIVECTOR_DIM[algebra]),
-            padBefore,
-            padAfter,
-            groups);
 
         if (algebra == Algebra::QUATERNION && !realValuedInput) {
             quatKernelOp.configure(
