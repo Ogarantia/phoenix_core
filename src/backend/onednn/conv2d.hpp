@@ -5,12 +5,57 @@
 
 namespace upstride {
 
-/**
- * @brief Conv2D kernel memory layout required by oneDNN
- */
-static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT = dnnl::memory::format_tag::oihw;
-static const dnnl::memory::format_tag KERNEL_MEMORY_LAYOUT_DW = dnnl::memory::format_tag::goihw;
-static const dnnl::memory::format_tag BIAS_CONV2D_MEMORY_LAYOUT = dnnl::memory::format_tag::x;
+namespace onednn {
+    template<typename T>
+    inline void setTensorMemoryDescriptor(dnnl::memory::desc& desc, const Shape& shape, const DataFormat format) {
+        desc = dnnl::memory::desc(
+            { shape[0], shape.depth(format), shape.height(format), shape.width(format) },
+            onednn::getDataType<T>(),
+            onednn::dataFormatToFormatTag(format));
+    }
+
+
+    template<typename T>
+    inline void setFilterMemoryDescriptor(dnnl::memory::desc& desc, const Shape& shape, const FilterLayout layout, int groups) {
+        const Conv2DFilterLayout filter(layout);
+        if (groups == 1) {
+            desc = dnnl::memory::desc(
+                { filter.numOutputChannels(shape), filter.numInputChannels(shape), filter.height(shape), filter.width(shape) },
+                onednn::getDataType<T>(),
+                onednn::filterLayoutToFormatTag(layout));
+        } else {
+            // check validity of the number of groups
+            if (filter.numOutputChannels(shape) % groups != 0)
+                throw std::invalid_argument("Number of output channels is not evenly divisible in groups");
+
+            // get filter memory tag
+            dnnl::memory::format_tag memoryTag;
+            switch (layout) {
+            case FilterLayout::OHWI:
+                memoryTag = dnnl::memory::format_tag::gohwi;
+                break;
+            case FilterLayout::OIHW:
+                memoryTag = dnnl::memory::format_tag::goihw;
+                break;
+            default:
+                throw std::invalid_argument("Cannot infer group conv2d filter layout");
+            }
+
+            desc = dnnl::memory::desc(
+                { groups, filter.numOutputChannels(shape) / groups, filter.numInputChannels(shape), filter.height(shape), filter.width(shape) },
+                onednn::getDataType<T>(),
+                memoryTag);
+        }
+    }
+
+    template<typename T>
+    inline void setBiasMemoryDescriptor(dnnl::memory::desc& desc, const Shape& shape) {
+        desc = dnnl::memory::desc(
+            dnnl::memory::dims{ shape.numel() },
+            onednn::getDataType<T>(),
+            dnnl::memory::format_tag::x);
+    }
+}
 
 /**
  * @brief 2D convolution implementation using oneDNN
@@ -20,23 +65,20 @@ template <typename T>
 class ScalarConv2DFunctor<device::CPU, T> {
    private:
     device::CPU& device;
-    dnnl::memory::desc inputMemDesc, kernelMemDesc, biasMemDesc, outputMemDesc;
+    dnnl::memory::desc inputMemDesc, filterMemDesc, biasMemDesc, outputMemDesc;
     dnnl::convolution_forward convPrim, convPrimNoBias;
-    const dnnl::memory::format_tag formatTag;
     const IntPair stride, dilation;
     const bool useBias;  //!< if `true`, a bias tensor is added to the convolution output
-
-    Shape inputShape, kernelShape, biasShape, outputShape;
-    IntPair padBefore;  //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
-    IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
 
     /**
      * @brief Performs backend-related operation configuration
      * Warning: this function needs to be called in an isolated thread since it performs oneDNN resource management.
      * Calling it form a user thread may end up with a segmentation fault.
      */
-    void doConfigure(const Shape& inputShape,
-                     const Shape& kernelShape,
+    void doConfigure(DataFormat dataFormat,
+                     FilterLayout filterLayout,
+                     const Shape& inputShape,
+                     const Shape& filterShape,
                      const Shape& biasShape,
                      const Shape& outputShape,
                      const IntPair& padBefore,
@@ -45,22 +87,11 @@ class ScalarConv2DFunctor<device::CPU, T> {
         auto& engine = static_cast<onednn::Context&>(device.getContext()).getEngine();
 
         // set up oneDNN memory descriptors
-        inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), onednn::getDataType<T>(), formatTag);
-        if (groups == 1) {
-            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
-        } else {
-            // converting OIHW shape into GOIHW
-            Shape kernelShapeExpanded = kernelShape.expandDim(0);
-            kernelShapeExpanded[0] = groups;
-            kernelShapeExpanded[1] /= groups;
-            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShapeExpanded), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT_DW);
-        }
-
-        // bias vector must be of the output channel size, otherwise that mean that we don't use a bias
+        onednn::setTensorMemoryDescriptor<T>(inputMemDesc, inputShape, dataFormat);
+        onednn::setFilterMemoryDescriptor<T>(filterMemDesc, filterShape, filterLayout, groups);
         if (useBias)
-            biasMemDesc = dnnl::memory::desc(dnnl::memory::dims{biasShape.numel()}, onednn::getDataType<T>(), BIAS_CONV2D_MEMORY_LAYOUT);
-
-        outputMemDesc = dnnl::memory::desc(onednn::shapeToDims(outputShape), onednn::getDataType<T>(), formatTag);
+            onednn::setBiasMemoryDescriptor<T>(biasMemDesc, biasShape);
+        onednn::setTensorMemoryDescriptor<T>(outputMemDesc, outputShape, dataFormat);
 
         // set up convolution operation-related descriptors
         if (useBias) {
@@ -68,7 +99,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
             convPrim = dnnl::convolution_forward(dnnl::convolution_forward::primitive_desc(
                 dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
                                                 dnnl::algorithm::convolution_auto,
-                                                inputMemDesc, kernelMemDesc, biasMemDesc, outputMemDesc,
+                                                inputMemDesc, filterMemDesc, biasMemDesc, outputMemDesc,
                                                 dnnl::memory::dims({stride.x, stride.y}),
                                                 dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
                                                 dnnl::memory::dims({padBefore.x, padBefore.y}),
@@ -80,7 +111,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
         convPrimNoBias = dnnl::convolution_forward(dnnl::convolution_forward::primitive_desc(
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
                                             dnnl::algorithm::convolution_auto,
-                                            inputMemDesc, kernelMemDesc, outputMemDesc,
+                                            inputMemDesc, filterMemDesc, outputMemDesc,
                                             dnnl::memory::dims({stride.x, stride.y}),
                                             dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
                                             dnnl::memory::dims({padBefore.x, padBefore.y}),
@@ -101,7 +132,7 @@ class ScalarConv2DFunctor<device::CPU, T> {
         auto& context = static_cast<onednn::Context&>(device.getContext());
         auto& engine = context.getEngine();
         dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));
-        dnnl::memory kernel(kernelMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
+        dnnl::memory kernel(filterMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
         dnnl::memory output(outputMemDesc, engine, outputTensor.getDataPtr());
 
         if (biasTensor) {
@@ -124,7 +155,8 @@ class ScalarConv2DFunctor<device::CPU, T> {
     /**
      * @brief Instantiates a Conv2D operation.
      * @param device            A device the operation will be executed on
-     * @param tensorDataFormat  Memory layout of input and output tensors
+     * @param dataFormat        Memory layout of input and output tensors
+     * @param filterLayout      Convolution filter layout
      * @param stride            Convolution stride
      * @param dilation          Convolution dilation
      * @param inputShape        Input tensor shape
@@ -137,7 +169,8 @@ class ScalarConv2DFunctor<device::CPU, T> {
      */
     ScalarConv2DFunctor(
         device::CPU& device,
-        DataFormat tensorDataFormat,
+        DataFormat dataFormat,
+        FilterLayout filterLayout,
         const IntPair& stride,
         const IntPair& dilation,
         const Shape& inputShape,
@@ -149,13 +182,14 @@ class ScalarConv2DFunctor<device::CPU, T> {
         int groups
     ) :
         device(device),
-        formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
         useBias(!biasShape.empty())
     {
         // configure in an isolated thread
         device.call(this, &ScalarConv2DFunctor<device::CPU, T>::doConfigure,
+            dataFormat,
+            filterLayout,
             inputShape,
             filterShape,
             biasShape,
@@ -190,23 +224,21 @@ template <typename T>
 class ScalarConv2DGradFunctor<device::CPU, T> {
    private:
     device::CPU& device;
-    dnnl::memory::desc inputMemDesc, kernelMemDesc, gradMemDesc, kernelGradMemDesc, inputGradMemDesc;
+    dnnl::memory::desc inputMemDesc, filterMemDesc, gradMemDesc, filterGradMemDesc, inputGradMemDesc;
     dnnl::convolution_backward_data convBackDataPrim;
     dnnl::convolution_backward_weights convBackWeightsPrim;
-    const dnnl::memory::format_tag formatTag;
     const IntPair stride, dilation;
     const bool requireInputGrad;  //!< Used to determine if inputGrad needs to be computed or not
-    Shape inputShape, kernelShape, gradShape;
-    IntPair padBefore;  //!< zero padding: number of zeros to add at the beginning to every input spatial dimension
-    IntPair padAfter;   //!< zero padding: number of zeros to add at the end to every input spatial dimension
 
     /**
      * @brief Performs backend-related operation configuration.
      * Warning: this function needs to be called in an isolated thread since it performs oneDNN resource management.
      * Calling it form a user thread may end up with a segmentation fault.
      */
-    void doConfigure(const Shape& inputShape,
-                     const Shape& kernelShape,
+    void doConfigure(DataFormat dataFormat,
+                     FilterLayout filterLayout,
+                     const Shape& inputShape,
+                     const Shape& filterShape,
                      const Shape& gradShape,
                      const IntPair& padBefore,
                      const IntPair& padAfter,
@@ -215,27 +247,17 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
         auto& context = static_cast<onednn::Context&>(device.getContext());
 
         // set up oneDNN memory descriptors
-        // for inputs
-        inputMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), onednn::getDataType<T>(), formatTag);
-        if (groups == 1) {
-            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
-        } else {
-            // converting OIHW shape into GOIHW
-            Shape kernelShapeExpanded = kernelShape.expandDim(0);
-            kernelShapeExpanded[0] = groups;
-            kernelShapeExpanded[1] /= groups;
-            kernelMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShapeExpanded), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT_DW);
-        }
-        gradMemDesc = dnnl::memory::desc(onednn::shapeToDims(gradShape), onednn::getDataType<T>(), formatTag);
-        // for output
-        kernelGradMemDesc = dnnl::memory::desc(onednn::shapeToDims(kernelShape), onednn::getDataType<T>(), KERNEL_MEMORY_LAYOUT);
-        inputGradMemDesc = dnnl::memory::desc(onednn::shapeToDims(inputShape), onednn::getDataType<T>(), formatTag);
+        onednn::setTensorMemoryDescriptor<T>(inputMemDesc, inputShape, dataFormat);
+        onednn::setFilterMemoryDescriptor<T>(filterMemDesc, filterShape, filterLayout, groups);
+        onednn::setFilterMemoryDescriptor<T>(filterGradMemDesc, filterShape, filterLayout, groups);
+        onednn::setTensorMemoryDescriptor<T>(gradMemDesc, gradShape, dataFormat);
+        onednn::setTensorMemoryDescriptor<T>(inputGradMemDesc, inputShape, dataFormat);
 
         // Re-computation of the convolution forward primitive descriptor
         dnnl::convolution_forward::primitive_desc convPd(
             dnnl::convolution_forward::desc(dnnl::prop_kind::forward_training,
                                             dnnl::algorithm::convolution_auto,
-                                            inputMemDesc, kernelMemDesc, gradMemDesc,
+                                            inputMemDesc, filterMemDesc, gradMemDesc,
                                             dnnl::memory::dims({stride.x, stride.y}),
                                             dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
                                             dnnl::memory::dims({padBefore.x, padBefore.y}),
@@ -248,7 +270,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                 dnnl::convolution_backward_weights::desc(
                     dnnl::algorithm::convolution_auto,
                     inputMemDesc,   // conv_diff_dst_md
-                    kernelMemDesc,  // conv_diff_weights_md
+                    filterMemDesc,  // conv_diff_weights_md
                     gradMemDesc,    //  conv_bwd_src_md
                     dnnl::memory::dims({stride.x, stride.y}),
                     dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
@@ -264,7 +286,7 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
                     dnnl::convolution_backward_data::desc(
                         dnnl::algorithm::convolution_direct,
                         inputMemDesc,   // conv_diff_dst_md
-                        kernelMemDesc,  // conv_diff_weights_md
+                        filterMemDesc,  // conv_diff_weights_md
                         gradMemDesc,    //  conv_bwd_src_md
                         dnnl::memory::dims({stride.x, stride.y}),
                         dnnl::memory::dims({dilation.x - 1, dilation.y - 1}),
@@ -290,10 +312,10 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
         auto& engine = context.getEngine();
 
         dnnl::memory input(inputMemDesc, engine, const_cast<T*>(inputTensor.getDataPtr()));
-        dnnl::memory kernel(kernelMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
+        dnnl::memory kernel(filterMemDesc, engine, const_cast<T*>(kernelTensor.getDataPtr()));
         dnnl::memory grad(gradMemDesc, engine, const_cast<T*>(gradTensor.getDataPtr()));
 
-        dnnl::memory kernelGrad(kernelGradMemDesc, engine, kernelGradTensor.getDataPtr());
+        dnnl::memory kernelGrad(filterGradMemDesc, engine, kernelGradTensor.getDataPtr());
         dnnl::memory inputGrad(inputGradMemDesc, engine, inputGradTensor.getDataPtr());
 
         // g-g-go
@@ -313,7 +335,8 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
     /**
      * @brief Instantiates a Conv2D backward operation.
      * @param device            A device the operation will be executed on
-     * @param tensorDataFormat  Memory layout of input and output tensors
+     * @param dataFormat        Memory layout of input and output tensors
+     * @param filterLayout      Convolution filter layout
      * @param stride            Convolution stride
      * @param dilation          Convolution dilation
      * @param inputShape        Input tensor shape
@@ -326,7 +349,8 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
      */
     ScalarConv2DGradFunctor(
         device::CPU& device,
-        DataFormat tensorDataFormat,
+        DataFormat dataFormat,
+        FilterLayout filterLayout,
         const IntPair& stride,
         const IntPair& dilation,
         const Shape& inputShape,
@@ -338,12 +362,13 @@ class ScalarConv2DGradFunctor<device::CPU, T> {
         bool requireInputGrad
     ) :
         device(device),
-        formatTag(onednn::dataFormatToFormatTag(tensorDataFormat)),
         stride(stride),
         dilation(dilation),
         requireInputGrad(requireInputGrad)
     {
         device.call(this, &ScalarConv2DGradFunctor<device::CPU, T>::doConfigure,
+            dataFormat,
+            filterLayout,
             inputShape,
             filterShape,
             outputShape,

@@ -4,8 +4,13 @@
 using namespace upstride;
 
 
-cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::Conv2DConfigDescriptor(const cudnnConvolutionDescriptor_t& convDesc, const cudnnTensorDescriptor_t& input, const cudnnFilterDescriptor_t& kernel):
-    inputShape(4), kernelShape(4)
+cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::Conv2DConfigDescriptor(
+    const cudnnConvolutionDescriptor_t& convDesc,
+    const cudnnTensorDescriptor_t& input,
+    const cudnnTensorFormat_t inputFormat,
+    const cudnnFilterDescriptor_t& kernel
+):
+    tensorFormat(inputFormat), inputShape(4), kernelShape(4)
 {
     // extract convolution geometry description from cuDNN descriptors
     cudnnConvolutionMode_t mode;
@@ -36,13 +41,14 @@ bool cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::operator==(const Co
         pad == other.pad &&
         stride == other.stride &&
         dilation == other.dilation &&
+        tensorFormat == other.tensorFormat &&
         mathType == other.mathType;
 }
 
 
 void cudnn::Conv2DAlgorithmSelector::Conv2DConfigDescriptor::printOut() const {
-    UPSTRIDE_SAYS("  %d/%d types, %d*%d*%d*%d x %d*%d*%d*%d, %d*%d strides, %d*%d pad, %d*%d dilation",
-                  computeType, tensorType,
+    UPSTRIDE_SAYS("  %d/%d types, %d I/O format, %d*%d*%d*%d x %d*%d*%d*%d, %d*%d strides, %d*%d pad, %d*%d dilation",
+                  computeType, tensorType, tensorFormat,
                   inputShape[0], inputShape[1], inputShape[2], inputShape[3],
                   kernelShape[0], kernelShape[1], kernelShape[2], kernelShape[3],
                   stride.x, stride.y, pad.x, pad.y, dilation.x, dilation.y);
@@ -54,13 +60,14 @@ cudnnConvolutionFwdAlgo_t cudnn::Conv2DAlgorithmSelector::selectForwardAlgo(cons
                                                                             const cudnnTensorDescriptor_t& input,
                                                                             const cudnnFilterDescriptor_t& kernel,
                                                                             const cudnnTensorDescriptor_t& output,
+                                                                            const cudnnTensorFormat_t tensorFormat,
                                                                             float& executionTime,
                                                                             size_t& scratchpadSize,
                                                                             cudnnMathType_t& mathType) {
     std::lock_guard<std::mutex> lock(accessControl);
 
     // build the descriptor
-    const Conv2DConfigDescriptor desc(convDesc, input, kernel);
+    const Conv2DConfigDescriptor desc(convDesc, input, tensorFormat, kernel);
 
     // check if a cached result is available
     for (const auto& entry : forwardAlgorithms)
@@ -107,13 +114,14 @@ cudnnConvolutionBwdFilterAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardFi
                                                                                          const cudnnTensorDescriptor_t& input,
                                                                                          const cudnnTensorDescriptor_t& grad,
                                                                                          const cudnnFilterDescriptor_t& kernel,
+                                                                                         const cudnnTensorFormat_t tensorFormat,
                                                                                          float& executionTime,
                                                                                          size_t& scratchpadSize,
                                                                                          cudnnMathType_t& mathType) {
     std::lock_guard<std::mutex> lock(accessControl);
 
     // build the descriptor
-    Conv2DConfigDescriptor desc(convDesc, input, kernel);
+    Conv2DConfigDescriptor desc(convDesc, input, tensorFormat, kernel);
 
     // check if a cached result is available
     for (const auto& entry : backwardFilterAlgorithms)
@@ -160,13 +168,14 @@ cudnnConvolutionBwdDataAlgo_t cudnn::Conv2DAlgorithmSelector::selectBackwardData
                                                                                      const cudnnTensorDescriptor_t& input,
                                                                                      const cudnnTensorDescriptor_t& grad,
                                                                                      const cudnnFilterDescriptor_t& kernel,
+                                                                                     const cudnnTensorFormat_t tensorFormat,
                                                                                      float& executionTime,
                                                                                      size_t& scratchpadSize,
                                                                                      cudnnMathType_t& mathType) {
     std::lock_guard<std::mutex> lock(accessControl);
 
     // build the descriptor
-    Conv2DConfigDescriptor desc(convDesc, input, kernel);
+    Conv2DConfigDescriptor desc(convDesc, input, tensorFormat, kernel);
 
     // check if a cached result is available
     for (const auto& entry : backwardDataAlgorithms)

@@ -31,6 +31,7 @@ private:
     private:
         cudnnDataType_t computeType;    //!< datatype used to perform the computation
         cudnnDataType_t tensorType;     //!< input, kernel and output tensor elements datatype (may differ from computeType)
+        cudnnTensorFormat_t tensorFormat;
         Shape inputShape, kernelShape;
         IntPair pad, stride, dilation;
         int groups;
@@ -40,9 +41,13 @@ private:
          * @brief Construct a new Conv 2D descriptor object
          * @param convDesc  cuDNN 2D convolution operation descriptor
          * @param input     cuDNN 2D convolution input tensor descriptor
+         * @param input     cuDNN 2D convolution input/output tensors memory layout
          * @param kernel    cuDNN 2D convolution kernel tensor descriptor
          */
-        Conv2DConfigDescriptor(const cudnnConvolutionDescriptor_t& convDesc, const cudnnTensorDescriptor_t& input, const cudnnFilterDescriptor_t& kernel);
+        Conv2DConfigDescriptor(const cudnnConvolutionDescriptor_t& convDesc,
+                               const cudnnTensorDescriptor_t& input,
+                               const cudnnTensorFormat_t inputFormat,
+                               const cudnnFilterDescriptor_t& kernel);
 
         /**
          * @brief Compares the descriptor to another descriptor.
@@ -113,6 +118,7 @@ public:
                                                 const cudnnTensorDescriptor_t& input,
                                                 const cudnnFilterDescriptor_t& kernel,
                                                 const cudnnTensorDescriptor_t& output,
+                                                const cudnnTensorFormat_t tensorFormat,
                                                 float& executionTime,
                                                 size_t& scratchpadSize,
                                                 cudnnMathType_t& mathType);
@@ -137,6 +143,7 @@ public:
                                                              const cudnnTensorDescriptor_t& input,
                                                              const cudnnTensorDescriptor_t& grad,
                                                              const cudnnFilterDescriptor_t& kernel,
+                                                             const cudnnTensorFormat_t tensorFormat,
                                                              float& executionTime,
                                                              size_t& scratchpadSize,
                                                              cudnnMathType_t& mathType);
@@ -161,6 +168,7 @@ public:
                                                          const cudnnTensorDescriptor_t& input,
                                                          const cudnnTensorDescriptor_t& grad,
                                                          const cudnnFilterDescriptor_t& kernel,
+                                                         const cudnnTensorFormat_t tensorFormat,
                                                          float& executionTime,
                                                          size_t& scratchpadSize,
                                                          cudnnMathType_t& mathType);

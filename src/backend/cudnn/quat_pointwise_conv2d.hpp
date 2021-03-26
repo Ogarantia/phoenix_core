@@ -22,11 +22,12 @@ public:
      *
      * @param algebra                       manager is only used with quaternions
      * @param dataFormat                    manager is only used with NCHW data format
+     * @param filterLayout                  convolution filter layout
      * @param stride                        convolution stride
      * @param dilation                      convolution dilation
      */
     QuatKernelPointwiseConvManager(
-        const Algebra algebra, const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+        const Algebra algebra, const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
     );
 
     // default destructor, copy and assignment functions for both reference and move semantics
@@ -76,6 +77,7 @@ private:
 
     Shape inputShape {};                    //!< shape of the input data tensor
     Shape weightsShape {};                  //!< shape of the weights tensor
+    FilterLayout filterLayout;              //!< convolution filter layout
 };
 
 
@@ -107,12 +109,13 @@ public:
      * @param context                       global context
      * @param algebra                       algebra used to compute the convolution
      * @param dataFormat                    manager is only used with NCHW data format
+     * @param filterLayou                   convolution filter layout
      * @param stride                        convolution stride
      * @param dilation                      convolution dilation
      */
     QuatKernelPointwiseConvForwardFunctor(
         const upstride::Context& context, const Algebra algebra,
-        const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+        const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
     );
 
     // default destructor, copy and assignment functions for both reference and move semantics
@@ -222,12 +225,13 @@ public:
      * @param context                       global context
      * @param algebra                       algebra used to compute the convolution
      * @param dataFormat                    manager is only used with NCHW data format
+     * @param filterLayout                  convolution filter layout
      * @param stride                        convolution stride
      * @param dilation                      convolution dilation
      */
     QuatKernelPointwiseConvBackwardFunctor(
         const upstride::Context& context, const Algebra algebra,
-        const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+        const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
     );
 
     // default destructor, copy and assignment functions for both reference and move semantics

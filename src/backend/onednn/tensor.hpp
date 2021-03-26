@@ -15,6 +15,20 @@ namespace upstride {
 template <>
 struct TensorManipulations<device::CPU> {
     template <typename T>
+    static void assignContents(Tensor<device::CPU, T>& tensor, const std::vector<T>& contents) {
+        if (tensor.getShape().numel() != contents.size())
+            throw std::invalid_argument("Cannot assign tensor contents: size mismatch");
+        memcpy(tensor.getDataPtr(), contents.data(), contents.size() * sizeof(T));
+    }
+
+    template <typename tensor_t, typename vector_t>
+    static void getContents(const Tensor<device::CPU, tensor_t>& tensor, std::vector<vector_t>& contents) {
+        contents.resize(tensor.getShape().numel());
+        static_assert(sizeof(tensor_t) == sizeof(vector_t), "Scalar datatype mismatch when copying a tensor content into a vector");
+        memcpy(contents.data(), tensor.getDataPtr(), contents.size() * sizeof(vector_t));
+    }
+
+    template <typename T>
     static void accumulateAdd(const Tensor<device::CPU, T>& input, Tensor<device::CPU, T>& output) {
         const int shapeNumel = input.getShape().numel();
         T* outputPtr = output.getDataPtr();
@@ -168,6 +182,8 @@ class AllocatedTensor<device::CPU, T> : public Tensor<device::CPU, T> {
     using Tensor<device::CPU, T>::shape;
 
    public:
+    using Tensor<device::CPU, T>::operator=;
+
     AllocatedTensor(device::CPU& device, const Shape& shape) : Tensor<device::CPU, T>(device, shape, nullptr) {
         tensor = (T*)malloc(shape.numel() * sizeof(T));
     }

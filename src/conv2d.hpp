@@ -43,6 +43,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
         realValuedInput(descriptor.isRealValuedInput()),
         convOp(device,
             descriptor.getDataFormat(),
+            descriptor.getFilterLayout(),
             descriptor.getStride(),
             descriptor.getDilation(),
             realValuedInput ? descriptor.getInputShape() : descriptor.getInputShape().split(MULTIVECTOR_DIM[algebra]),
@@ -53,7 +54,7 @@ class UpstrideConv2DFunctor : public AlgebraSelectionMixin<UpstrideConv2DFunctor
             descriptor.getPaddingAfter(),
             descriptor.getGroups()
         ),
-        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation())
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getFilterLayout(), descriptor.getStride(), descriptor.getDilation())
     {}
 
     /**
@@ -300,6 +301,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
         requireInputGrad(descriptor.isInputGradientRequired()),
         convOp(device,
             descriptor.getDataFormat(),
+            descriptor.getFilterLayout(),
             descriptor.getStride(),
             descriptor.getDilation(),
             realValuedInput ? descriptor.getInputShape() : descriptor.getInputShape().split(MULTIVECTOR_DIM[algebra]),
@@ -310,7 +312,7 @@ class UpstrideConv2DGradFunctor : public AlgebraSelectionMixin<UpstrideConv2DGra
             descriptor.getGroups(),
             descriptor.isInputGradientRequired()
         ),
-        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getStride(), descriptor.getDilation())
+        quatKernelOp(device.getContext(), algebra, descriptor.getDataFormat(), descriptor.getFilterLayout(), descriptor.getStride(), descriptor.getDilation())
     {}
 
     /**

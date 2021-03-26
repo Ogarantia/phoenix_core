@@ -8,12 +8,34 @@
 namespace upstride {
 
 /**
- * @brief Specifies memory layout for a convolution kernel
- *   OIHW for real algebra
- *   nOIHW for a non-real algebra containing n-dimensional multivectors.
+ * @brief Helper class manipulating with memory layout of convolution kernels.
  */
-class Conv2DKernelLayout {
-   public:
+class Conv2DFilterLayout {
+    int o, i, h, w;
+public:
+    inline Conv2DFilterLayout(FilterLayout layout, Algebra algebra = Algebra::REAL) {
+        switch (layout) {
+        case FilterLayout::OIHW:
+            o = 0;
+            i = 1;
+            h = 2;
+            w = 3;
+            break;
+        case FilterLayout::OHWI:
+            o = 0;
+            h = 1;
+            w = 2;
+            i = 3;
+            break;
+        default:
+            throw std::invalid_argument("Unsupported Conv2D filter layout");
+        }
+        // for non-real algebras the outermost kernel dimension is reserved for the multivector dimension
+        if (algebra != Algebra::REAL) {
+            o++; i++; h++; w++;
+        }
+    }
+
     /**
      * @brief Returns number of dimensions in the kernel tensor for a specific algebra
      */
@@ -22,31 +44,59 @@ class Conv2DKernelLayout {
     }
 
     /**
-     * @brief Returns dimension number containing the number of output channels in the convolution kernel for a specific algebra.
+     * @brief Returns dimension number containing the number of output channels in the convolution kernel.
      */
-    static inline int numOutputChannelsDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 0 : 1;
+    inline int numOutputChannelsDim() const {
+        return o;
     }
 
     /**
-     * @brief Returns dimension number containing the number of input channels in the convolution kernel for a specific algebra.
+     * @brief Returns dimension number containing the number of input channels in the convolution kernel.
      */
-    static inline int numInputChannelsDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 1 : 2;
+    inline int numInputChannelsDim() const {
+        return i;
     }
 
     /**
-     * @brief Returns dimension number containing the height of the convolution kernel for a specific algebra.
+     * @brief Returns dimension number containing the height of the convolution kernel.
      */
-    static inline int heightDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 2 : 3;
+    inline int heightDim() const {
+        return h;
     }
 
     /**
-     * @brief Returns dimension number containing the width of the convolution kernel for a specific algebra.
+     * @brief Returns dimension number containing the width of the convolution kernel.
      */
-    static inline int widthDim(Algebra algebra) {
-        return algebra == Algebra::REAL ? 3 : 4;
+    inline int widthDim() const {
+        return w;
+    }
+
+    /**
+     * @brief Returns number of output channels in a convolution kernel of a given shape.
+     */
+    inline int numOutputChannels(const Shape& shape) const {
+        return shape[o];
+    }
+
+    /**
+     * @brief Returns number of input channels in a convolution kernel of a given shape.
+     */
+    inline int numInputChannels(const Shape& shape) const {
+        return shape[i];
+    }
+
+    /**
+     * @brief Returns height of a convolution kernel of a given shape.
+     */
+    inline int height(const Shape& shape) const {
+        return shape[h];
+    }
+
+    /**
+     * @brief Returns width of a convolution kernel of a given shape.
+     */
+    inline int width(const Shape& shape) const {
+        return shape[w];
     }
 };
 
@@ -63,6 +113,7 @@ protected:
     const int groups;                   //!< number of groups (for group convolutions)
     const Algebra algebra;              //!< algebra corresponding to UpStride datatype
     const DataFormat dataFormat;        //!< input and output tensors data format (channels-first or channels-last)
+    const FilterLayout filterLayout;    //!< filter tensor layout spec
     const bool realValuedInput;         //!< if `true`, the input tensor is real-valued
     IntPair padBefore;                  //!< top-left zero-padding applied to the input along H and W dimensions in pixels
     IntPair padAfter;                   //!< bottom-right zero-padding applied to the input along H and W dimensions in pixels
@@ -78,10 +129,12 @@ public:
         int groups,
         Algebra algebra,
         DataFormat dataFormat,
+        FilterLayout filterLayout,
         bool realValuedInput = false
     ):
         inputShape(inputShape), filterShape(filterShape),
-        stride(stride), dilation(dilation), groups(groups), algebra(algebra), dataFormat(dataFormat), realValuedInput(realValuedInput)
+        stride(stride), dilation(dilation), groups(groups), algebra(algebra), dataFormat(dataFormat), filterLayout(filterLayout),
+        realValuedInput(realValuedInput)
     {
         // Perform shape checks
         if (inputShape.getSize() != 4)
@@ -101,13 +154,15 @@ public:
         }
 
         // compute padding
+        Conv2DFilterLayout filter(filterLayout, algebra);
+
         upstride::computeWindowedOutputSizeAndPadding(
-            inputShape.height(dataFormat), filterShape[Conv2DKernelLayout::heightDim(algebra)],
+            inputShape.height(dataFormat), filter.height(filterShape),
             dilation.x, stride.x, paddingPreset,
             padBefore.x, padAfter.x);
 
         upstride::computeWindowedOutputSizeAndPadding(
-            inputShape.width(dataFormat), filterShape[Conv2DKernelLayout::widthDim(algebra)],
+            inputShape.width(dataFormat), filter.width(filterShape),
             dilation.y, stride.y, paddingPreset,
             padBefore.y, padAfter.y);
     }
@@ -117,18 +172,19 @@ public:
      */
     inline Shape getOutputShape() const {
         // Set up the resulting shape
+        Conv2DFilterLayout filter(filterLayout, algebra);
         Shape outputShape(4);
         outputShape[0] = inputShape[0];
-        outputShape.depth(dataFormat) = filterShape[Conv2DKernelLayout::numOutputChannelsDim(algebra)];
+        outputShape.depth(dataFormat) = filter.numOutputChannels(filterShape);
 
         // compute output size
         outputShape.height(dataFormat) = upstride::computeWindowedOutputSizeAndPadding(
-            inputShape.height(dataFormat), filterShape[Conv2DKernelLayout::heightDim(algebra)],
+            inputShape.height(dataFormat), filter.height(filterShape),
             dilation.x, stride.x,
             padBefore.x, padAfter.x);
 
         outputShape.width(dataFormat) = upstride::computeWindowedOutputSizeAndPadding(
-            inputShape.width(dataFormat), filterShape[Conv2DKernelLayout::widthDim(algebra)],
+            inputShape.width(dataFormat), filter.width(filterShape),
             dilation.y, stride.y,
             padBefore.y, padAfter.y);
 
@@ -154,7 +210,7 @@ public:
 
     inline std::string toString() const {
         std::ostringstream str;
-        str << inputShape << "x" << filterShape << " " << dataFormatToString(dataFormat);
+        str << inputShape << "x" << filterShape << " " << dataFormatToString(dataFormat) << " " << filterLayoutToString(filterLayout);
         if (algebra != Algebra::REAL)
             str << ", type " << algebra;
         if (stride != IntPair::ONES)
@@ -184,6 +240,8 @@ public:
 
     inline DataFormat getDataFormat() const { return dataFormat; }
 
+    inline FilterLayout getFilterLayout() const { return filterLayout; }
+
     inline bool isRealValuedInput() const { return realValuedInput; }
 
     inline IntPair getPaddingBefore() const { return padBefore; }
@@ -205,10 +263,11 @@ public:
         int groups,
         Algebra algebra,
         DataFormat dataFormat,
+        FilterLayout filterLayout,
         bool useBias,
         bool realValuedInput = false
     ):
-        Conv2DDescriptor(inputShape, filterShape, stride, dilation, paddingPreset, explicitPadding, groups, algebra, dataFormat, realValuedInput),
+        Conv2DDescriptor(inputShape, filterShape, stride, dilation, paddingPreset, explicitPadding, groups, algebra, dataFormat, filterLayout, realValuedInput),
         useBias(useBias)
     {}
 
@@ -270,7 +329,8 @@ public:
             return Shape::EMPTY;
 
         // for real-valued compute the bias is a vector of `channels` entries
-        const int channels = filterShape[Conv2DKernelLayout::numOutputChannelsDim(algebra)];
+        Conv2DFilterLayout filter(filterLayout, algebra);
+        const int channels = filter.numOutputChannels(filterShape);
         if (algebra == Algebra::REAL)
             return Shape{ channels };
 
@@ -294,10 +354,11 @@ public:
         int groups,
         Algebra algebra,
         DataFormat dataFormat,
+        FilterLayout filterLayout,
         bool requireInputGrad = true,
         bool realValuedInput = false
     ):
-        Conv2DDescriptor(inputShape, filterShape, stride, dilation, paddingPreset, explicitPadding, groups, algebra, dataFormat, realValuedInput),
+        Conv2DDescriptor(inputShape, filterShape, stride, dilation, paddingPreset, explicitPadding, groups, algebra, dataFormat, filterLayout, realValuedInput),
         requireInputGrad(requireInputGrad)
     {}
 

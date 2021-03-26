@@ -85,6 +85,12 @@ enum class Padding {
 enum class DataFormat {
     NCHW,  // channel-first
     NHWC,  // channel-last
+    NC
+};
+
+enum class FilterLayout {
+    OIHW,  // cuDNN default channels-first conv2D kernel layout, https://docs.nvidia.com/deeplearning/cudnn/api/index.html#cudnnSetFilter4dDescriptor
+    OHWI,  // cuDNN channels-last conv2D kernel layout
     IO,    // input features-outermost 2D tensor
     OI     // output features-outermost 2D tensor
 };
@@ -125,12 +131,41 @@ inline const char* dataFormatToString(const DataFormat format) {
             return "NCHW";
         case DataFormat::NHWC:
             return "NHWC";
-        case DataFormat::IO:
-            return "IO";
-        case DataFormat::OI:
-            return "OI";
     }
     return "";
 }
+
+/**
+ * @brief Retrieves data format value from a string.
+ * Raises an exception if unable to interpret the string.
+ * @param dataFormatString     The string
+ * @return corresponding data format value.
+ */
+inline FilterLayout filterLayoutFromString(const std::string& filterLayoutString) {
+    if (filterLayoutString == "OIHW")
+        return FilterLayout::OIHW;
+    if (filterLayoutString == "OHWI")
+        return FilterLayout::OHWI;
+    if (filterLayoutString == "OI")
+        return FilterLayout::OI;
+    if (filterLayoutString == "IO")
+        return FilterLayout::IO;
+    throw std::invalid_argument("Invalid filter layout encountered: " + filterLayoutString);
+}
+
+inline const char* filterLayoutToString(const FilterLayout format) {
+    switch (format) {
+        case FilterLayout::OIHW:
+            return "OIHW";
+        case FilterLayout::OHWI:
+            return "OHWI";
+        case FilterLayout::OI:
+            return "OI";
+        case FilterLayout::IO:
+            return "IO";
+    }
+    return "";
+}
+
 
 }

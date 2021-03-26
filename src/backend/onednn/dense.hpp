@@ -97,7 +97,7 @@ namespace upstride
          * @brief Sets main dense parameters independent from the input, filter and output sizes
          * @param context             A context instance
          * @param device              A device instance the operation is performed on
-         * @param kernelDataFormat    Expected tensors format
+         * @param weightsLayout       Weights matrix layout
          * @param inputShape          Input tensor shape
          * @param kernelShape         kernel tensor shape
          * @param biasShape           Bias tensor shape; empty if the bias addition is disabled
@@ -106,14 +106,14 @@ namespace upstride
         ScalarDenseFunctor(
             upstride::Context &context,
             device::CPU& device,
-            DataFormat kernelDataFormat,
+            FilterLayout weightsLayout,
             const Shape &inputShape,
             const Shape &kernelShape,
             const Shape &biasShape,
             const Shape &outputShape
         ) :
             context(static_cast<onednn::Context &>(context)),
-            formatTag(onednn::dataFormatToFormatTag(kernelDataFormat)),
+            formatTag(onednn::filterLayoutToFormatTag(weightsLayout)),
             useBias(!biasShape.empty())
         {
             device.call(this, &ScalarDenseFunctor<device::CPU, T>::doConfigure, inputShape, kernelShape, biasShape, outputShape);
@@ -215,7 +215,7 @@ namespace upstride
          * @brief Instantiates dense layer gradient operation.
          * @param context                 A context instance
          * @param device                  A device instance the operation is performed on
-         * @param kernelDataFormat        Expected tensors format
+         * @param weightsLayout           Weights matrix layout
          * @param inputShape              Input tensor shape
          * @param kernelShape             kernel tensor shape
          * @param outputShape             Output tensor shape
@@ -224,14 +224,14 @@ namespace upstride
         ScalarDenseGradFunctor(
             upstride::Context& context,
             device::CPU& device,
-            DataFormat kernelDataFormat,
+            FilterLayout weightsLayout,
             const Shape &inputShape,
             const Shape &kernelShape,
             const Shape &outputShape,
             bool requireInputGrad
         ):
             context(static_cast<onednn::Context&>(context)),
-            formatTag(onednn::dataFormatToFormatTag(kernelDataFormat)),
+            formatTag(onednn::filterLayoutToFormatTag(weightsLayout)),
             requireInputGrad(requireInputGrad)
         {
             device.call(this, &ScalarDenseGradFunctor<device::CPU, T>::doConfigure,

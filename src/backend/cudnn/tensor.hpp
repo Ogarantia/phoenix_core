@@ -19,6 +19,24 @@ namespace upstride {
 template <>
 struct TensorManipulations<device::CUDA> {
     template <typename T>
+    static void assignContents(Tensor<device::CUDA, T>& tensor, const std::vector<T>& contents) {
+        if (tensor.getShape().numel() != contents.size())
+            throw std::invalid_argument("Cannot assign tensor contents: size mismatch");
+        cudnn::Context::raiseIfError(
+            cudaMemcpyAsync(tensor.getDataPtr(), contents.data(), contents.size() * sizeof(T), cudaMemcpyHostToDevice, tensor.getDevice().stream()));
+        cudnn::Context::raiseIfError(cudaStreamSynchronize(tensor.getDevice().stream()));
+    }
+
+    template <typename tensor_t, typename vector_t>
+    static void getContents(const Tensor<device::CUDA, tensor_t>& tensor, std::vector<vector_t>& contents) {
+        contents.resize(tensor.getShape().numel());
+        static_assert(sizeof(tensor_t) == sizeof(vector_t), "Scalar datatype mismatch when copying a tensor content into a vector");
+        cudnn::Context::raiseIfError(
+            cudaMemcpyAsync(contents.data(), tensor.getDataPtr(), contents.size() * sizeof(vector_t), cudaMemcpyDeviceToHost, tensor.getDevice().stream()));
+        cudnn::Context::raiseIfError(cudaStreamSynchronize(tensor.getDevice().stream()));
+    }
+
+    template <typename T>
     static void accumulateAdd(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output) {
         cudnn::accumulateAdd(output.getDevice(), output.getDataPtr(), input.getDataPtr(), input.getShape().numel());
     }
@@ -72,6 +90,8 @@ class AllocatedTensor<device::CUDA, T> : public Tensor<device::CUDA, T> {
     int capacity;
 
    public:
+    using Tensor<device::CUDA, T>::operator=;
+
     AllocatedTensor(device::CUDA& device, const Shape& shape) : Tensor<device::CUDA, T>(device, shape, nullptr), capacity(shape.numel()) {
         tensor = device.template malloc<T>(shape.numel() * sizeof(T));
     }

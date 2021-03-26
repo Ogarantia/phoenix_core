@@ -58,8 +58,6 @@ class Context : public upstride::Context {
     std::mutex mutex;
 
    public:
-    static const unsigned int MAX_BLOCK_DEPTH;      //!< maximum number of CUDA threads per block along Z dimension
-
     Context() {}
     ~Context() {}
 

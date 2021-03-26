@@ -30,9 +30,21 @@ static inline dnnl::memory::format_tag dataFormatToFormatTag(DataFormat df) {
             return dnnl::memory::format_tag::nchw;
         case DataFormat::NHWC:
             return dnnl::memory::format_tag::nhwc;
-        case DataFormat::IO:
+        default:
+            throw std::invalid_argument("Unimplemented valid DataFormat.");
+    }
+}
+
+
+static inline dnnl::memory::format_tag filterLayoutToFormatTag(FilterLayout layout) {
+    switch (layout) {
+        case FilterLayout::OIHW:
+            return dnnl::memory::format_tag::oihw;
+        case FilterLayout::OHWI:
+            return dnnl::memory::format_tag::ohwi;
+        case FilterLayout::IO:
             return dnnl::memory::format_tag::ab;
-        case DataFormat::OI:
+        case FilterLayout::OI:
             return dnnl::memory::format_tag::ba;
         default:
             throw std::invalid_argument("Unimplemented valid DataFormat.");

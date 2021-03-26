@@ -19,9 +19,11 @@ using BackwardFunctor = QuatKernelPointwiseConvBackwardFunctor<device::CUDA, T>;
 // Generic Manager
 
 ConvManager::QuatKernelPointwiseConvManager(
-        const Algebra algebra, const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
-) {
-    if (algebra == Algebra::QUATERNION && stride.x == 1 && stride.y == 1 && dataFormat == DataFormat::NCHW) {
+        const Algebra algebra, const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
+): filterLayout(filterLayout)
+{
+    if (algebra == Algebra::QUATERNION && stride.x == 1 && stride.y == 1 && dataFormat == DataFormat::NCHW &&
+        (filterLayout == FilterLayout::OHWI || filterLayout == FilterLayout::OIHW)) {
         // the only place where eligibleToRun is set
         eligibleToRun = true;
     }
@@ -51,9 +53,11 @@ void ConvManager::configure(
 
         cached = false;
 
+        Conv2DFilterLayout filter(filterLayout, Algebra::QUATERNION);
+
         // check if the convolution is a pointwise one, by inspecting convolution filter size
-        auto weightsHeight = weightsShape[Conv2DKernelLayout::heightDim(Algebra::QUATERNION)];
-        auto weightsWidth = weightsShape[Conv2DKernelLayout::widthDim(Algebra::QUATERNION)];
+        auto weightsHeight = filter.height(weightsShape);
+        auto weightsWidth = filter.width(weightsShape);
         auto weightsSize = weightsHeight * weightsWidth;
         pointwiseConv = (weightsSize == 1);
 
@@ -64,8 +68,8 @@ void ConvManager::configure(
             this->weightsShape = weightsShape;
 
             // fully specify the convolution descriptor
-            convDesc.outputChannels = weightsShape[Conv2DKernelLayout::numOutputChannelsDim(Algebra::QUATERNION)];
-            convDesc.inputChannels = weightsShape[Conv2DKernelLayout::numInputChannelsDim(Algebra::QUATERNION)];
+            convDesc.outputChannels = filter.numOutputChannels(weightsShape);
+            convDesc.inputChannels = filter.numInputChannels(weightsShape);
             convDesc.imageSize = inputShape.width(DataFormat::NCHW) * inputShape.height(DataFormat::NCHW);
             convDesc.batchSize = inputShape[0] / 4;
         }
@@ -101,8 +105,8 @@ void ConvManager::validateRun() const {
 template<typename T>
 ForwardFunctor<T>::QuatKernelPointwiseConvForwardFunctor(
         const upstride::Context& context, const Algebra algebra,
-        const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation)
-    : ConvManager(algebra, dataFormat, stride, dilation),
+        const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation)
+    : ConvManager(algebra, dataFormat, filterLayout, stride, dilation),
     ConvKernelProfiler<ForwardKernelPtr, T>(context)
 {}
 
@@ -163,8 +167,8 @@ void ForwardFunctor<T>::operator()(
 template<typename T>
 BackwardFunctor<T>::QuatKernelPointwiseConvBackwardFunctor(
         const upstride::Context& context, const Algebra algebra,
-        const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
-) : ConvManager(algebra, dataFormat, stride, dilation),
+        const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
+) : ConvManager(algebra, dataFormat, filterLayout, stride, dilation),
     ConvKernelProfiler<BackwardKernelPtr, T>(context)
 {}
 
@@ -277,12 +281,12 @@ void BackwardFunctor<T>::operator()(
 
 template ForwardFunctor<float>::QuatKernelPointwiseConvForwardFunctor(
     const upstride::Context& context, const Algebra algebra,
-    const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+    const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
 );
 
 template BackwardFunctor<float>::QuatKernelPointwiseConvBackwardFunctor(
     const upstride::Context& context, const Algebra algebra,
-    const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+    const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
 );
 
 template void ForwardFunctor<float>::operator()(
@@ -302,12 +306,12 @@ template void BackwardFunctor<float>::operator()(
 
 template ForwardFunctor<half>::QuatKernelPointwiseConvForwardFunctor(
     const upstride::Context& context, const Algebra algebra,
-    const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+    const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
 );
 
 template BackwardFunctor<half>::QuatKernelPointwiseConvBackwardFunctor(
     const upstride::Context& context, const Algebra algebra,
-    const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+    const DataFormat dataFormat, const FilterLayout filterLayout, const IntPair& stride, const IntPair& dilation
 );
 
 template void ForwardFunctor<half>::operator()(

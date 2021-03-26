@@ -20,6 +20,8 @@ class CUDA : public Device {
     cublasHandle_t cublasHandle;
     int registersPerThreadBlock;                        //!< maximum number of registers per thread block
     size_t alignmentConstraint;                         //!< number of bytes used to aligned pointers for this specific device
+    dim3 maxThreadBlockSize;                            //!< maximum allowed thread block dimensions
+    unsigned int maxThreadsPerBlock;                    //!< maximum number of threads per block
     bool bypassCudnnHandleDestruction;                  //!< if `true`, cuDNN handle is not destroyed to avoid a segfault
 
     CUDA(const CUDA&) = delete;  // disable copying
@@ -46,7 +48,7 @@ class CUDA : public Device {
     void internalFree(void* memory);
 
    public:
-    CUDA(Context& context, const cudaStream_t& stream);
+    CUDA(Context& context, const cudaStream_t& stream = nullptr);
 
     inline ~CUDA() {
         freeWorkspaceMemory();
@@ -94,10 +96,11 @@ class CUDA : public Device {
                                                        const cudnnTensorDescriptor_t& input,
                                                        const cudnnFilterDescriptor_t& kernel,
                                                        const cudnnTensorDescriptor_t& output,
+                                                       const cudnnTensorFormat_t tensorFormat,
                                                        float& executionTime,
                                                        size_t& scratchpadSize,
                                                        cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectForwardAlgo(cudnnHandle, convDesc, input, kernel, output, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectForwardAlgo(cudnnHandle, convDesc, input, kernel, output, tensorFormat, executionTime, scratchpadSize, mathType);
     }
 
     /**
@@ -116,10 +119,11 @@ class CUDA : public Device {
                                                                     const cudnnTensorDescriptor_t& input,
                                                                     const cudnnTensorDescriptor_t& grad,
                                                                     const cudnnFilterDescriptor_t& kernel,
+                                                                    const cudnnTensorFormat_t tensorFormat,
                                                                     float& executionTime,
                                                                     size_t& scratchpadSize,
                                                                     cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectBackwardFilterAlgo(cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectBackwardFilterAlgo(cudnnHandle, convDesc, input, grad, kernel, tensorFormat, executionTime, scratchpadSize, mathType);
     }
 
     /**
@@ -138,10 +142,11 @@ class CUDA : public Device {
                                                                 const cudnnTensorDescriptor_t& input,
                                                                 const cudnnTensorDescriptor_t& grad,
                                                                 const cudnnFilterDescriptor_t& kernel,
+                                                                const cudnnTensorFormat_t tensorFormat,
                                                                 float& executionTime,
                                                                 size_t& scratchpadSize,
                                                                 cudnnMathType_t& mathType) {
-        return conv2dAlgorithms.selectBackwardDataAlgo(cudnnHandle, convDesc, input, grad, kernel, executionTime, scratchpadSize, mathType);
+        return conv2dAlgorithms.selectBackwardDataAlgo(cudnnHandle, convDesc, input, grad, kernel, tensorFormat, executionTime, scratchpadSize, mathType);
     }
 
     /**
@@ -187,6 +192,16 @@ class CUDA : public Device {
      * @brief Get the number of registers available per thread block for either the current device or across all devices
      */
     inline int getRegistersPerThreadBlock() const { return registersPerThreadBlock; }
+
+    /**
+     * @brief Returns per-axis thread block size limit.
+     */
+    inline const dim3& getMaxBlockSize() const { return maxThreadBlockSize; }
+
+    /**
+     * @brief Returns maximum number of thread per block allowed by the device.
+     */
+    inline unsigned int getMaxThreadsPerBlock() const { return maxThreadsPerBlock; }
 
     /**
      * @brief Allocates GPU memory.

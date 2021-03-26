@@ -122,12 +122,13 @@ public:
      * @param context                       global context
      * @param algebra                       manager is only used with quaternions
      * @param dataFormat                    manager is only used with NCHW data format
+     * @param filterLayout                  convolution filter layout
      * @param stride                        convolution stride
      * @param dilation                      convolution dilation
      */
     QuatKernelPointwiseConvManager(
         const upstride::Context& context, const Algebra algebra,
-        const DataFormat dataFormat, const IntPair& stride, const IntPair& dilation
+        const DataFormat dataFormat, const FilterLayout, const IntPair& stride, const IntPair& dilation
     ) {}
 
     /**

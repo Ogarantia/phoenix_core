@@ -13,30 +13,30 @@ protected:
     const Shape inputShape;             //!< operation input tensor shape
     const Shape filterShape;            //!< operation filter tensor shape
     Algebra algebra;
-    DataFormat dataFormat;
+    FilterLayout filterLayout;
 public:
-    inline DenseDescriptor(const Shape& inputShape, const Shape& filterShape, Algebra algebra, DataFormat dataFormat):
-        inputShape(inputShape), filterShape(filterShape), algebra(algebra), dataFormat(dataFormat)
+    inline DenseDescriptor(const Shape& inputShape, const Shape& filterShape, Algebra algebra, FilterLayout filterLayout):
+        inputShape(inputShape), filterShape(filterShape), algebra(algebra), filterLayout(filterLayout)
     {
         //TODO: check if shapes match according to the data format
     }
 
     inline bool operator==(const DenseDescriptor& another) const {
-        return algebra == another.algebra && dataFormat == another.dataFormat;
+        return algebra == another.algebra && filterLayout == another.filterLayout;
     }
 
     inline int getOutputChannels() const {
         // the outermost dimension in the filter tensor is multivector dimension
         const int idx = algebra == Algebra::REAL ? 0 : 1;
-        switch (dataFormat) {
-        case DataFormat::IO:
+        switch (filterLayout) {
+        case FilterLayout::IO:
             return filterShape[idx + 1];
-        case DataFormat::OI:
+        case FilterLayout::OI:
             return filterShape[idx];
         }
         throw std::runtime_error("Invalid data format");
     }
-    
+
     inline Shape getInputShape() const { return inputShape; }
 
     inline Shape getFilterShape() const { return filterShape; }
@@ -53,7 +53,7 @@ public:
 
     inline Algebra getAlgebra() const { return algebra; }
 
-    inline DataFormat getDataFormat() const { return dataFormat; }
+    inline FilterLayout getFilterLayout() const { return filterLayout; }
 
     inline std::string toString() const { return ""; }
 };
@@ -62,8 +62,8 @@ public:
 class DenseFwdDescriptor : public DenseDescriptor {
     bool useBias;
 public:
-    inline DenseFwdDescriptor(const Shape& inputShape, const Shape& filterShape, Algebra algebra, DataFormat dataFormat, bool useBias): 
-        DenseDescriptor(inputShape, filterShape, algebra, dataFormat), useBias(useBias) 
+    inline DenseFwdDescriptor(const Shape& inputShape, const Shape& filterShape, Algebra algebra, FilterLayout filterLayout, bool useBias):
+        DenseDescriptor(inputShape, filterShape, algebra, filterLayout), useBias(useBias)
     {}
 
     inline bool operator==(const DenseFwdDescriptor& another) const {
@@ -82,15 +82,15 @@ public:
         if (algebra < another.algebra) return true;
         if (another.algebra < algebra) return false;
 
-        if (dataFormat < another.dataFormat) return true;
-        if (another.dataFormat < dataFormat) return false;
+        if (filterLayout < another.filterLayout) return true;
+        if (another.filterLayout < filterLayout) return false;
 
         if (useBias < another.useBias) return true;
         if (another.useBias < useBias) return true;
-        
+
         return false;
     }
-    
+
     inline bool isBiasUsed() const { return useBias; }
 };
 
@@ -98,10 +98,10 @@ public:
 class DenseBwdDescriptor : public DenseDescriptor {
     bool requireInputGrad;
 public:
-    inline DenseBwdDescriptor(const Shape& inputShape, const Shape& filterShape, Algebra algebra, DataFormat dataFormat, bool requireInputGrad): 
-        DenseDescriptor(inputShape, filterShape, algebra, dataFormat), requireInputGrad(requireInputGrad) 
+    inline DenseBwdDescriptor(const Shape& inputShape, const Shape& filterShape, Algebra algebra, FilterLayout filterLayout, bool requireInputGrad):
+        DenseDescriptor(inputShape, filterShape, algebra, filterLayout), requireInputGrad(requireInputGrad)
     {}
-    
+
     inline bool operator==(const DenseBwdDescriptor& another) const {
         return this->operator==(another) && requireInputGrad == another.requireInputGrad;
     }
@@ -118,8 +118,8 @@ public:
         if (algebra < another.algebra) return true;
         if (another.algebra < algebra) return false;
 
-        if (dataFormat < another.dataFormat) return true;
-        if (another.dataFormat < dataFormat) return false;
+        if (filterLayout < another.filterLayout) return true;
+        if (another.filterLayout < filterLayout) return false;
 
         if (requireInputGrad < another.requireInputGrad) return true;
         if (another.requireInputGrad < requireInputGrad) return false;

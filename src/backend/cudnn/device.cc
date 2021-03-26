@@ -48,6 +48,8 @@ CUDA::CUDA(Context& context, const cudaStream_t& stream) : Device(context), cuda
     cudnn::Context::raiseIfError("cudaGetDeviceProperties failed");
     registersPerThreadBlock = deviceProp.regsPerBlock;
     alignmentConstraint = deviceProp.textureAlignment;
+    maxThreadBlockSize = dim3(deviceProp.maxThreadsDim[0], deviceProp.maxThreadsDim[1], deviceProp.maxThreadsDim[2]);
+    maxThreadsPerBlock = deviceProp.maxThreadsPerBlock;
 }
 
 

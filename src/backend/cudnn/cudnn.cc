@@ -2,8 +2,6 @@
 
 using namespace upstride::cudnn;
 
-const unsigned int Context::MAX_BLOCK_DEPTH = 64;      //!< maximum number of CUDA threads per block along Z dimension
-
 upstride::device::CUDA& Context::registerDevice(const cudaStream_t& stream) {
     std::lock_guard<std::mutex> lock(mutex);
     auto entry = devices.find(stream);

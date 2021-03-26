@@ -26,24 +26,27 @@ namespace upstride {
 namespace cudnn {
 
 /**
- * @brief Crops a tensor along W and H dimensions
- *
- * @tparam  tensor datatype
+ * @brief Crops a tensor along W and H dimensions.
+ * A part of input tensor shifted from its origin by `offset` samples is copied to the output tensor.
+ * The size of the coped area equals to the output tensor size.
+ * @tparam T            tensor datatype
  * @param input         input tensor
  * @param output        output tensor
  * @param dataFormat    input and output data format
+ * @param offset        (H,W) offset counted from the input image origin specifying the output content origin
  */
 template <typename T>
 extern void crop(const Tensor<device::CUDA, T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);
 
 /**
- * @brief Insert a tensor into another bigger tensor with a potential offset along the spatial dimensions H and W
- *
- * @tparam T the tensor datatype
+ * @brief Insert a tensor into another bigger tensor with a potential offset along the spatial dimensions H and W.
+ * A part of output tensor is filled with the input tensor contents. The filled area is shifted from the input origin by `offset` samples.
+ * The size of the coped area equals to the output tensor size.
+ * @tparam T            tensor datatype
  * @param input         input tensor
  * @param output        output tensor
  * @param dataFormat    input and output tensors data format
- * @param offset        position of the topleft corner of the input inside the output
+ * @param offset        (H,W) offset counted from the output image origin specifying the origin of the copied content
  */
 template <typename T>
 extern void insert(const Tensor<device::CUDA, const T>& input, Tensor<device::CUDA, T>& output, DataFormat dataFormat, const IntPair& offset);

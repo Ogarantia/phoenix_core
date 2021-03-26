@@ -25,7 +25,7 @@ inline int getHeightDimensionNumber(const DataFormat& dataFormat) {
 }
 
 inline int getDepthDimensionNumber(const DataFormat& dataFormat) {
-    static int DIM_NUMBERS[] = {1, 3, 1, 0};  // Dimension numbers matching DataFormat enumeration
+    static int DIM_NUMBERS[] = {1, 3};  // Dimension numbers matching DataFormat enumeration
     return DIM_NUMBERS[static_cast<int>(dataFormat)];
 }
 
@@ -296,6 +296,26 @@ class AllocatedTensor;
 template <typename Device>
 struct TensorManipulations {
     /**
+     * @brief Assigns a vector contents to the tensor.
+     * The vector needs to contain the same number of entries as the tensor.
+     * @tparam T        scalar datatype
+     * @param tensor    the tensor instance to assign the contents to
+     * @param contents  the vector containing the data to be assigned to the tensor
+     */
+    template <typename T>
+    static inline void assignContents(Tensor<Device, T>& tensor, const std::vector<T>& contents);
+
+    /**
+     * @brief Copies tensor contents to a vector.
+     * @tparam tensor_t     input tensor contents scalar datatype
+     * @tparam vector_t     output vector scalar datatype
+     * @param tensor        the input tensor to copy the data from
+     * @param contents      the output vector to copy the data to
+     */
+    template <typename tensor_t, typename vector_t>
+    static inline void getContents(const Tensor<Device, tensor_t>& tensor, std::vector<vector_t>& contents);
+
+    /**
      * @brief Accumulate a tensor (b) to another tensor (a) by addition: a = a + b
      * @tparam T scalar datatype
      * @param input   the tensor values to be added (b)
@@ -356,7 +376,6 @@ struct TensorManipulations {
     template <typename T>
     static inline void recomposeQuaternionInputsGrad(TemporaryTensor<Device, T>* inLeftGradLanes, TensorSplit<Device, T, 4>& outLeftGradQuats,
                                                      TemporaryTensor<Device, T>* inRightGradLanes, TensorSplit<Device, T, 4>& outRightGradQuats);
-
 };  // namespace tensor_arithmetics
 
 /**
@@ -417,6 +436,21 @@ class Tensor {
         TensorManipulations<Device>::accumulateSub(another, *this);
         return *this;
     }
+
+
+    inline Tensor& operator=(const std::vector<T>& contents) {
+        TensorManipulations<Device>::assignContents(*this, contents);
+        return *this;
+    }
+
+
+    template <typename vector_t>
+    inline operator std::vector<vector_t>() const {
+        std::vector<vector_t> contents;
+        TensorManipulations<Device>::getContents(*this, contents);
+        return contents;
+    }
+
 
     /**
      * @brief Sets all Tensor elements to zero
