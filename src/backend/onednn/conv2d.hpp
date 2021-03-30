@@ -21,6 +21,7 @@ namespace onednn {
         if (groups == 1) {
             desc = dnnl::memory::desc(
                 { filter.numOutputChannels(shape), filter.numInputChannels(shape), filter.height(shape), filter.width(shape) },
+                    // dimensions are ordered in the same way regardless the filter layout
                 onednn::getDataType<T>(),
                 onednn::filterLayoutToFormatTag(layout));
         } else {
@@ -36,6 +37,9 @@ namespace onednn {
                 break;
             case FilterLayout::OIHW:
                 memoryTag = dnnl::memory::format_tag::goihw;
+                break;
+            case FilterLayout::HWIO:
+                memoryTag = dnnl::memory::format_tag::hwigo;
                 break;
             default:
                 throw std::invalid_argument("Cannot infer group conv2d filter layout");

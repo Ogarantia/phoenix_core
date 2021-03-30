@@ -91,6 +91,7 @@ enum class DataFormat {
 enum class FilterLayout {
     OIHW,  // cuDNN default channels-first conv2D kernel layout, https://docs.nvidia.com/deeplearning/cudnn/api/index.html#cudnnSetFilter4dDescriptor
     OHWI,  // cuDNN channels-last conv2D kernel layout
+    HWIO,  // oneDNN channels-last optimized conv2D kernel layout
     IO,    // input features-outermost 2D tensor
     OI     // output features-outermost 2D tensor
 };
@@ -146,6 +147,8 @@ inline FilterLayout filterLayoutFromString(const std::string& filterLayoutString
         return FilterLayout::OIHW;
     if (filterLayoutString == "OHWI")
         return FilterLayout::OHWI;
+    if (filterLayoutString == "HWIO")
+        return FilterLayout::HWIO;
     if (filterLayoutString == "OI")
         return FilterLayout::OI;
     if (filterLayoutString == "IO")
@@ -159,6 +162,8 @@ inline const char* filterLayoutToString(const FilterLayout format) {
             return "OIHW";
         case FilterLayout::OHWI:
             return "OHWI";
+        case FilterLayout::HWIO:
+            return "HWIO";
         case FilterLayout::OI:
             return "OI";
         case FilterLayout::IO:

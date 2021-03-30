@@ -102,7 +102,7 @@ TEST_CASE("Test:Shape") {
     }
 
     SUBCASE("Shape slicing and splitting") {
-        std::cout << " Shape slicing and splitting" << std::endl;
+        std::cout << " -- Shape slicing and splitting" << std::endl;
         const upstride::Shape testShape{0, 1, 2, 3, 4, 5, 6};
 
         CHECK((testShape.slice(0, 3) == upstride::Shape{0, 1, 2}));
@@ -481,6 +481,65 @@ TEST_CASE_TEMPLATE("Test:Conv2D channels-last", Device,
                                            nullptr,
                                            testOutput,
                                            descriptor);
+
+        // compare
+        CHECK(compareTensors(refOutput, testOutput));
+    }
+}
+
+
+
+TEST_CASE("Test:Conv2D channels-last on CPU with HWIO layout") {
+    static upstride::onednn::Context context;
+    static upstride::device::CPU device(context);
+
+    SUBCASE("Conv2D real") {
+        std::cout << " -- Conv2D channels-last on CPU with HWIO layout" << std::endl;
+
+        // convolving a 3x2x2 CHW real tensor with a 1x1 convolution kernel with 2 channels on output
+        using namespace upstride;
+        using Tensor = AllocatedTensor<upstride::device::CPU, float>;
+
+        // set up input tensor
+        Tensor input(device, {1, 2, 2, 3});
+        input = { 0, -1,  1,
+                  0,  0,  2,
+                  0,  0,  3,
+                  1,  0,  4 };
+
+        // set up filter tensor
+        Tensor kernel(device, {1, 1, 3, 2}); // "HWIO"
+        kernel = { 1, 0,
+                   1, 0,
+                   1, 2 };
+
+        // set up the expected output
+        Tensor refOutput(device, {1, 2, 2, 2});
+        refOutput = { 0, 2,
+                      2, 4,
+                      3, 6,
+                      5, 8 };
+
+        // compute the test output
+        Tensor testOutput(device, {1, 2, 2, 2});
+
+        upstride::Conv2DFwdDescriptor descriptor(input.getShape(),
+                                                 kernel.getShape(),
+                                                 1,                        //stride
+                                                 1,                        //dilation
+                                                 upstride::Padding::VALID, //padding preset
+                                                 {},                       //explicit padding
+                                                 1,                        //groups
+                                                 Algebra::REAL,            //algebra
+                                                 DataFormat::NHWC,         //dataformat
+                                                 FilterLayout::HWIO,       //filter layout
+                                                 false);                   //use bias
+        upstride::conv2DFwd<upstride::device::CPU, float>(device, device,
+                                                          input,
+                                                          kernel,
+                                                          nullptr,
+                                                          testOutput,
+                                                          descriptor);
 
         // compare
         CHECK(compareTensors(refOutput, testOutput));

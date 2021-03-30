@@ -42,6 +42,8 @@ static inline dnnl::memory::format_tag filterLayoutToFormatTag(FilterLayout layo
             return dnnl::memory::format_tag::oihw;
         case FilterLayout::OHWI:
             return dnnl::memory::format_tag::ohwi;
+        case FilterLayout::HWIO:
+            return dnnl::memory::format_tag::hwio;
         case FilterLayout::IO:
             return dnnl::memory::format_tag::ab;
         case FilterLayout::OI:

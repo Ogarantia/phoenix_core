@@ -27,6 +27,12 @@ public:
             w = 2;
             i = 3;
             break;
+        case FilterLayout::HWIO:
+            h = 0;
+            w = 1;
+            i = 2;
+            o = 3;
+            break;
         default:
             throw std::invalid_argument("Unsupported Conv2D filter layout");
         }
