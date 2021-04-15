@@ -36,14 +36,14 @@ static inline dnnl::memory::format_tag dataFormatToFormatTag(DataFormat df) {
 }
 
 
-static inline dnnl::memory::format_tag filterLayoutToFormatTag(FilterLayout layout) {
+static inline dnnl::memory::format_tag filterLayoutToFormatTag(FilterLayout layout, bool grouped = false) {
     switch (layout) {
         case FilterLayout::OIHW:
-            return dnnl::memory::format_tag::oihw;
+            return grouped ? dnnl::memory::format_tag::goihw : dnnl::memory::format_tag::oihw;
         case FilterLayout::OHWI:
-            return dnnl::memory::format_tag::ohwi;
+            return grouped ? dnnl::memory::format_tag::gohwi : dnnl::memory::format_tag::ohwi;
         case FilterLayout::HWIO:
-            return dnnl::memory::format_tag::hwio;
+            return grouped ? dnnl::memory::format_tag::hwigo : dnnl::memory::format_tag::hwio;
         case FilterLayout::IO:
             return dnnl::memory::format_tag::ab;
         case FilterLayout::OI:
